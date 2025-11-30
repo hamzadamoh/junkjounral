@@ -127,18 +127,15 @@ const App: React.FC = () => {
       ? generateWithReplicate
       : generateWithMidjourney;
 
-    // For Replicate, use batching to respect rate limits (6 requests/minute without payment method)
-    // For other services, generate in parallel
+    // For Replicate, use sequential processing to respect rate limits
+    // Rate limit: 6 requests/minute with burst of 1 (without payment method)
+    // This means we can only send 1 request at a time, with ~10s delay between requests
     if (settings.imageService === 'replicate') {
-      const batchSize = 5; // Process 5 at a time to stay under rate limit
-      const delayBetweenBatches = 11000; // 11 seconds between batches (slightly more than 10s rate limit reset)
+      const delayBetweenRequests = 12000; // 12 seconds between requests (slightly more than 10s rate limit reset)
       
-      for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
-        const batchEnd = Math.min(batchStart + batchSize, total);
-        console.log(`Processing Replicate batch ${Math.floor(batchStart / batchSize) + 1}: images ${batchStart + 1}-${batchEnd}`);
-        
-        const batchPromises = Array.from({ length: batchEnd - batchStart }, async (_, batchIdx) => {
-          const i = batchStart + batchIdx;
+      // Process one image at a time sequentially
+      for (let i = 0; i < total; i++) {
+        console.log(`Processing Replicate image ${i + 1}/${total}...`);
           try {
             const base64Url = await generateFunction(
               selectedTheme, 
@@ -165,27 +162,23 @@ const App: React.FC = () => {
             ));
             
             setCurrentProgress((prev) => {
-              const completed = prev + (100 / total);
+              const completed = ((i + 1) / total) * 100;
               return Math.min(completed, 100);
             });
 
-            return { success: true, index: i };
+            console.log(`✓ Completed image ${i + 1}/${total}`);
           } catch (err: any) {
             console.error(`Generation failed for page ${i + 1}:`, err);
             setErrorMsg(err.message || "Failed to generate some pages.");
             setGeneratedImages(prev => prev.map((img, idx) => 
               idx === i ? { ...img, status: 'error' as const } : img
             ));
-            return { success: false, index: i, error: err };
           }
-        });
         
-        await Promise.allSettled(batchPromises);
-        
-        // Wait before next batch (except for the last batch)
-        if (batchEnd < total) {
-          console.log(`Waiting ${delayBetweenBatches / 1000} seconds before next batch...`);
-          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+        // Wait before next request (except for the last one)
+        if (i < total - 1) {
+          console.log(`Waiting ${delayBetweenRequests / 1000} seconds before next request...`);
+          await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
         }
       }
     } else {

@@ -123,7 +123,7 @@ export const generateJournalPage = async (
     
     // Retry logic for rate limiting (429 errors)
     let retryCount = 0;
-    const maxRetries = 5;
+    const maxRetries = 10; // Increased retries for rate limits
     let response: Response;
     let prediction: ReplicateResponse & { id?: string };
     
@@ -158,8 +158,9 @@ export const generateJournalPage = async (
             const errorMsg = errorData.detail || response.statusText || errorText;
             
             if (retryCount < maxRetries) {
-              console.warn(`[Replicate] Rate limited (429). Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
-              await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000)); // Add 1 second buffer
+              const waitTime = (retryAfter + 2) * 1000; // Add 2 second buffer for safety
+              console.warn(`[Replicate] Rate limited (429). Retrying after ${retryAfter + 2} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
               retryCount++;
               continue; // Retry the request
             } else {
