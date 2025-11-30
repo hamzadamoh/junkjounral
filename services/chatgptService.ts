@@ -30,9 +30,19 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
-  const systemPrompt = `You are a creative prompt engineer specializing in junk journal page descriptions. Generate detailed, unique prompts for AI image generation that are specific, visually rich, and varied.`;
+  const systemPrompt = `You are a creative prompt engineer specializing in FLAT, PRINTABLE junk journal page descriptions. CRITICAL: Generate prompts for FLAT DIGITAL DESIGNS only - NOT 3D photography, NOT still life photos, NOT objects with depth or shadows. The output must be a flat, printable scrapbook page design that can be printed and used in a journal.`;
 
-  const userPrompt = `Create a unique prompt for variation #${variationNumber} of a ${theme} junk journal page. Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}Make it unique with specific visual details, colors, lighting, and mood. 2-3 sentences. Return ONLY the prompt.`;
+  const userPrompt = `Create a unique prompt for variation #${variationNumber} of a ${theme} junk journal page. Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
+
+CRITICAL REQUIREMENTS:
+- FLAT printable page design (like a digital scrapbook page)
+- NO 3D objects, NO depth, NO shadows, NO realistic photography
+- NO still life compositions, NO objects placed around the page
+- Top-down view, flat illustration style
+- Digital design suitable for printing
+- Think of it as a flat collage on paper, not a photograph of objects
+
+Make it unique with specific visual details, colors, and mood. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
   try {
     const response = await fetch(OPENAI_API_URL, {

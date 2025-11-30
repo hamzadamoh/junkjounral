@@ -72,7 +72,14 @@ export const generateJournalPage = async (
 
   try {
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
-    const prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
+    let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
+    
+    // CRITICAL: Always append flat printable page constraints to ensure no 3D photography
+    // This is especially important for ChatGPT-generated prompts which might not include these constraints
+    if (customPrompt) {
+      prompt = `${prompt}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design.`;
+    }
+    
     const { width, height } = getAspectRatioDimensions(aspectRatio);
 
     // Get the model from settings
