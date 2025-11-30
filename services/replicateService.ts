@@ -121,13 +121,11 @@ export const generateJournalPage = async (
     
     console.log('[Replicate] Creating prediction...');
     
-    // Direct fetch to Replicate API
-    // Note: This will fail in browsers due to CORS restrictions
-    // Use Pollinations or Midjourney for browser-based generation
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
+    // Use Vercel serverless function proxy (no CORS issues)
+    // The API route runs on the server and forwards to Replicate
+    const response = await fetch('/api/replicate/predictions', {
       method: 'POST',
       headers: {
-        'Authorization': `Token ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -226,9 +224,9 @@ const pollReplicatePrediction = async (
 
   while (attempts < maxAttempts) {
     try {
-      const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      // Use Vercel serverless function proxy (no CORS issues)
+      const response = await fetch(`/api/replicate/predictions/${predictionId}`, {
         headers: {
-          'Authorization': `Token ${apiKey}`,
           'Content-Type': 'application/json',
         }
       });
@@ -318,11 +316,10 @@ const pollReplicatePrediction = async (
  */
 const getModelVersion = async (model: string): Promise<string> => {
     // Try to get the latest version for the model
-    const apiKey = getReplicateApiKey();
     try {
-      const response = await fetch(`https://api.replicate.com/v1/models/${model}/versions`, {
+      // Use Vercel serverless function proxy (no CORS issues)
+      const response = await fetch(`/api/replicate/models/${model}/versions`, {
         headers: {
-          'Authorization': `Token ${apiKey}`,
           'Content-Type': 'application/json',
         }
       });

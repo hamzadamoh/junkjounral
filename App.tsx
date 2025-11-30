@@ -548,7 +548,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 gap-2">
                   {[
                     { value: 'pollinations', label: 'Pollinations (Free)', desc: 'Fast, free, no API key' },
-                    { value: 'replicate', label: 'Replicate', desc: 'Multiple models, requires API key' },
+                    { value: 'replicate', label: 'Replicate', desc: 'Multiple models, works via Vercel proxy' },
                     { value: 'midjourney', label: 'Midjourney', desc: 'Premium quality, requires API key' }
                   ].map((service) => (
                     <button
@@ -584,8 +584,8 @@ const App: React.FC = () => {
                     <option value="google/imagen-4-fast">Imagen 4 Fast</option>
                     <option value="bytedance/seedream-4">Seedream 4</option>
                   </select>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Select the AI model for image generation
+                  <p className="text-xs text-slate-400 mt-1">
+                    ✓ Replicate works via Vercel serverless functions (no CORS issues)
                   </p>
                 </div>
               ) : (

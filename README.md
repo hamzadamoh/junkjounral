@@ -20,11 +20,20 @@ View your app in AI Studio: https://ai.studio/apps/drive/1HntWJdqPDsoWOcmUcp1p56
    ```
    VITE_GOAPI_API_KEY=your_goapi_api_key_here (for Midjourney)
    VITE_OPENAI_API_KEY=your_openai_api_key_here (for ChatGPT prompts)
-   VITE_REPLICATE_API_KEY=your_replicate_api_key_here (for Replicate models - note: requires backend due to CORS)
+   VITE_REPLICATE_API_KEY=your_replicate_api_key_here (for Replicate models)
    ```
    Note: Pollinations is free and doesn't require an API key!
 
 3. Run the app:
    `npm run dev`
-   
-   **Note**: Replicate API doesn't work directly from browsers due to CORS restrictions. Use Pollinations or Midjourney for browser-based generation.
+
+## Deployment on Vercel
+
+When deploying to Vercel, the app includes serverless functions in the `api/` directory that proxy Replicate API calls. This solves CORS issues and keeps your API keys secure on the server.
+
+**Important**: Make sure to add your API keys in Vercel's Environment Variables:
+- Go to your Vercel project settings
+- Navigate to "Environment Variables"
+- Add `VITE_REPLICATE_API_KEY` (or `REPLICATE_API_TOKEN`) with your Replicate API key
+
+The serverless functions will automatically use these environment variables.
