@@ -129,9 +129,9 @@ const App: React.FC = () => {
 
     // For Replicate, use sequential processing to respect rate limits
     // Rate limit: 6 requests/minute with burst of 1 (without payment method)
-    // This means we can only send 1 request at a time, with ~10s delay between requests
+    // This means we can send 1 request at a time, with 10s delay = 6 requests per minute
     if (settings.imageService === 'replicate') {
-      const delayBetweenRequests = 12000; // 12 seconds between requests (slightly more than 10s rate limit reset)
+      const delayBetweenRequests = 10000; // 10 seconds between requests = 6 requests per minute
       
       // Process one image at a time sequentially
       for (let i = 0; i < total; i++) {
