@@ -148,7 +148,7 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
   const options: RequestInit = {
     method: 'GET',
     headers: {
-      'X-API-KEY': GOAPI_API_KEY,
+      'X-API-KEY': apiKey,
       'Content-Type': 'application/json'
     }
   };
