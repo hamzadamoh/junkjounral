@@ -127,15 +127,30 @@ const App: React.FC = () => {
       ? generateWithReplicate
       : generateWithMidjourney;
 
-    // For Replicate, use sequential processing to respect rate limits
-    // Rate limit: 6 requests/minute with burst of 1 (without payment method)
-    // This means we can send 1 request at a time, with 10s delay = 6 requests per minute
+    // For Replicate, maximize the 6 requests/minute limit
+    // Rate limit: 6 requests/minute = 1 request every 10 seconds
+    // Send requests at 10s intervals without waiting for completion to maximize throughput
     if (settings.imageService === 'replicate') {
-      const delayBetweenRequests = 10000; // 10 seconds between requests = 6 requests per minute
+      const requestsPerMinute = 6;
+      const delayBetweenRequests = (60 * 1000) / requestsPerMinute; // Exactly 10 seconds between requests
       
-      // Process one image at a time sequentially
+      console.log(`Sending ${total} Replicate requests at ${requestsPerMinute} requests/minute (${delayBetweenRequests / 1000}s intervals)...`);
+      
+      // Start all requests with proper timing to maximize rate limit usage
+      const requestPromises: Promise<void>[] = [];
+      
       for (let i = 0; i < total; i++) {
-        console.log(`Processing Replicate image ${i + 1}/${total}...`);
+        // Calculate delay for this request (staggered starts)
+        const startDelay = i * delayBetweenRequests;
+        
+        const requestPromise = (async () => {
+          // Wait for the staggered start time
+          if (startDelay > 0) {
+            await new Promise(resolve => setTimeout(resolve, startDelay));
+          }
+          
+          console.log(`Starting Replicate request ${i + 1}/${total}...`);
+          
           try {
             const base64Url = await generateFunction(
               selectedTheme, 
@@ -174,13 +189,13 @@ const App: React.FC = () => {
               idx === i ? { ...img, status: 'error' as const } : img
             ));
           }
+        })();
         
-        // Wait before next request (except for the last one)
-        if (i < total - 1) {
-          console.log(`Waiting ${delayBetweenRequests / 1000} seconds before next request...`);
-          await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
-        }
+        requestPromises.push(requestPromise);
       }
+      
+      // Wait for all requests to complete
+      await Promise.allSettled(requestPromises);
     } else {
       // For Pollinations and Midjourney, generate in parallel
       const imagePromises = Array.from({ length: total }, async (_, i) => {
