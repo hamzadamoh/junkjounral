@@ -63,7 +63,8 @@ export const generateJournalPage = async (
   processMode: string = 'fast',
   onProgress?: (status: string) => void,
   variationIndex?: number,
-  customPrompt?: string
+  customPrompt?: string,
+  keyIndex?: number // For API key rotation
 ): Promise<string> => {
   const apiKey = getReplicateApiKey();
   if (!apiKey) {
@@ -138,7 +139,8 @@ export const generateJournalPage = async (
           },
           body: JSON.stringify({
             version: modelIdentifier,
-            input: inputParams
+            input: inputParams,
+            keyIndex: keyIndex !== undefined ? keyIndex : 0 // Pass key index for rotation
           })
         });
 

@@ -8,21 +8,48 @@ export default async function handler(req, res) {
   }
 
   try {
-    // In Vercel serverless functions, use REPLICATE_API_TOKEN (not VITE_ prefix)
-    // VITE_ variables are only available in the frontend build
-    const apiKey = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY;
+    // Support multiple API keys for rotation
+    // Option 1: Comma-separated keys in REPLICATE_API_TOKENS
+    // Option 2: Individual keys REPLICATE_API_TOKEN_1, REPLICATE_API_TOKEN_2, etc.
+    // Option 3: Single key REPLICATE_API_TOKEN (fallback)
     
-    if (!apiKey) {
+    let apiKeys = [];
+    
+    // Check for comma-separated keys
+    if (process.env.REPLICATE_API_TOKENS) {
+      apiKeys = process.env.REPLICATE_API_TOKENS.split(',').map(k => k.trim()).filter(k => k);
+    } else {
+      // Check for numbered keys (REPLICATE_API_TOKEN_1, REPLICATE_API_TOKEN_2, etc.)
+      let keyIndex = 1;
+      while (process.env[`REPLICATE_API_TOKEN_${keyIndex}`]) {
+        apiKeys.push(process.env[`REPLICATE_API_TOKEN_${keyIndex}`]);
+        keyIndex++;
+      }
+    }
+    
+    // Fallback to single key
+    if (apiKeys.length === 0) {
+      const singleKey = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY;
+      if (singleKey) {
+        apiKeys = [singleKey];
+      }
+    }
+    
+    if (apiKeys.length === 0) {
       console.error('Replicate API key missing. Available env vars:', Object.keys(process.env).filter(k => k.includes('REPLICATE')));
       return res.status(500).json({ 
-        error: 'Replicate API key not configured. Set REPLICATE_API_TOKEN in Vercel environment variables.' 
+        error: 'Replicate API key not configured. Set REPLICATE_API_TOKEN or REPLICATE_API_TOKENS in Vercel environment variables.' 
       });
     }
     
-    console.log('Using Replicate API key (first 10 chars):', apiKey.substring(0, 10) + '...');
-
-    // Get the request body from the frontend
-    const { version, input } = req.body;
+    // Get key index from request body (for rotation) or use first key
+    const { version, input, keyIndex } = req.body;
+    const selectedKeyIndex = (keyIndex !== undefined && keyIndex >= 0 && keyIndex < apiKeys.length) 
+      ? keyIndex 
+      : 0;
+    const apiKey = apiKeys[selectedKeyIndex];
+    
+    console.log(`Using Replicate API key ${selectedKeyIndex + 1}/${apiKeys.length} (first 10 chars):`, apiKey.substring(0, 10) + '...');
 
     if (!version || !input) {
       return res.status(400).json({ error: 'Missing version or input parameters' });
