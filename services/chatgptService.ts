@@ -1,9 +1,5 @@
-// Get API key from localStorage first, then fall back to environment variable
+// Get API key from environment variable only
 const getOpenAIApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('api_key_openai');
-    if (stored) return stored;
-  }
   return import.meta.env.VITE_OPENAI_API_KEY || '';
 };
 
@@ -31,7 +27,7 @@ export const generatePromptWithChatGPT = async (
 ): Promise<string> => {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
-    throw new Error('OpenAI API key is not configured. Please set it in the API Keys Configuration section.');
+    throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
   const systemPrompt = `You are a creative prompt engineer specializing in junk journal page descriptions. Generate detailed, unique prompts for AI image generation that are specific, visually rich, and varied.`;

@@ -1,11 +1,7 @@
 import { Theme, GenerationSettings } from '../types';
 
-// Get API key from localStorage first, then fall back to environment variable
+// Get API key from environment variable only
 const getReplicateApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('api_key_replicate');
-    if (stored) return stored;
-  }
   return import.meta.env.VITE_REPLICATE_API_KEY || '';
 };
 
@@ -211,7 +207,7 @@ export const generateJournalPage = async (
 ): Promise<string> => {
   const apiKey = getReplicateApiKey();
   if (!apiKey) {
-    throw new Error('Replicate API key is not configured. Please set it in the API Keys Configuration section.');
+    throw new Error('Replicate API key is not configured. Please set VITE_REPLICATE_API_KEY in your environment variables.');
   }
 
   try {

@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   Printer,
   FileDown,
-  Key,
   Archive,
   FileText
 } from 'lucide-react';
@@ -44,23 +43,6 @@ const App: React.FC = () => {
   const [currentProgress, setCurrentProgress] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // API Keys state (loaded from localStorage or env)
-  const [apiKeys, setApiKeys] = useState({
-    goapi: '',
-    openai: '',
-    replicate: '',
-  });
-
-  // Load API keys from localStorage or env on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setApiKeys({
-        goapi: localStorage.getItem('api_key_goapi') || import.meta.env.VITE_GOAPI_API_KEY || '',
-        openai: localStorage.getItem('api_key_openai') || import.meta.env.VITE_OPENAI_API_KEY || '',
-        replicate: localStorage.getItem('api_key_replicate') || import.meta.env.VITE_REPLICATE_API_KEY || '',
-      });
-    }
-  }, []);
 
   // --- Handlers ---
 
@@ -678,65 +660,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: API Keys Configuration */}
-          <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
-            <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
-              <Key size={18} /> API Keys Configuration
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">GoAPI Key (Midjourney)</label>
-                <input
-                  type="password"
-                  value={apiKeys.goapi}
-                  onChange={(e) => {
-                    const newKey = e.target.value;
-                    setApiKeys(prev => ({ ...prev, goapi: newKey }));
-                    localStorage.setItem('api_key_goapi', newKey);
-                  }}
-                  placeholder="Enter your GoAPI key"
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">OpenAI Key (ChatGPT Prompts)</label>
-                <input
-                  type="password"
-                  value={apiKeys.openai}
-                  onChange={(e) => {
-                    const newKey = e.target.value;
-                    setApiKeys(prev => ({ ...prev, openai: newKey }));
-                    localStorage.setItem('api_key_openai', newKey);
-                  }}
-                  placeholder="Enter your OpenAI API key"
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Replicate API Key</label>
-                <input
-                  type="password"
-                  value={apiKeys.replicate}
-                  onChange={(e) => {
-                    const newKey = e.target.value;
-                    setApiKeys(prev => ({ ...prev, replicate: newKey }));
-                    localStorage.setItem('api_key_replicate', newKey);
-                  }}
-                  placeholder="Enter your Replicate API key"
-                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors"
-                />
-              </div>
-              
-              <p className="text-xs text-slate-500 mt-1">
-                API keys are stored locally in your browser and are not sent to any server.
-              </p>
-            </div>
-          </div>
-
-          {/* Section 3: Elements */}
+          {/* Section 2: Elements */}
           <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
              <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
               <Sparkles size={18} /> Optional Elements

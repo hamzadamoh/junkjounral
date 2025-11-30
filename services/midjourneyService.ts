@@ -2,12 +2,8 @@ import { Theme, GenerationSettings } from '../types';
 
 const GOAPI_BASE_URL = 'https://api.goapi.ai';
 
-// Get API key from localStorage first, then fall back to environment variable
+// Get API key from environment variable only
 const getGoApiKey = (): string => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('api_key_goapi');
-    if (stored) return stored;
-  }
   return import.meta.env.VITE_GOAPI_API_KEY || '';
 };
 
@@ -103,7 +99,7 @@ const sendTaskToGoApi = async (
 ): Promise<string | null> => {
   const apiKey = getGoApiKey();
   if (!apiKey) {
-    throw new Error('Go API key is not configured. Please set it in the API Keys Configuration section.');
+    throw new Error('Go API key is not configured. Please set VITE_GOAPI_API_KEY in your environment variables.');
   }
 
   const data = {
