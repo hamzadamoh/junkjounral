@@ -119,62 +119,121 @@ const App: React.FC = () => {
       prompt: generatedPrompts[idx]
     })));
 
-    // STEP 2: Generate all images in parallel (much faster!)
-    console.log('Generating all images in parallel...');
+    // STEP 2: Generate all images
+    console.log('Generating all images...');
     const generateFunction = settings.imageService === 'pollinations' 
       ? generateWithPollinations 
       : settings.imageService === 'replicate'
       ? generateWithReplicate
       : generateWithMidjourney;
 
-    const imagePromises = Array.from({ length: total }, async (_, i) => {
-      try {
-        const base64Url = await generateFunction(
-          selectedTheme, 
-          settings,
-          settings.parametersForMJ,
-          settings.aspectRatio || '1:1',
-          settings.midjourneyMode || 'fast',
-          (status) => {
-            console.log(`Page ${i + 1} status: ${status}`);
-            // Update the specific image's status
+    // For Replicate, use batching to respect rate limits (6 requests/minute without payment method)
+    // For other services, generate in parallel
+    if (settings.imageService === 'replicate') {
+      const batchSize = 5; // Process 5 at a time to stay under rate limit
+      const delayBetweenBatches = 11000; // 11 seconds between batches (slightly more than 10s rate limit reset)
+      
+      for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
+        const batchEnd = Math.min(batchStart + batchSize, total);
+        console.log(`Processing Replicate batch ${Math.floor(batchStart / batchSize) + 1}: images ${batchStart + 1}-${batchEnd}`);
+        
+        const batchPromises = Array.from({ length: batchEnd - batchStart }, async (_, batchIdx) => {
+          const i = batchStart + batchIdx;
+          try {
+            const base64Url = await generateFunction(
+              selectedTheme, 
+              settings,
+              settings.parametersForMJ,
+              settings.aspectRatio || '1:1',
+              settings.midjourneyMode || 'fast',
+              (status) => {
+                console.log(`Page ${i + 1} status: ${status}`);
+                setGeneratedImages(prev => prev.map((img, idx) => 
+                  idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
+                ));
+              },
+              i,
+              generatedPrompts[i]
+            );
+            
             setGeneratedImages(prev => prev.map((img, idx) => 
-              idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
+              idx === i ? { 
+                ...img, 
+                url: base64Url, 
+                status: 'completed' as const 
+              } : img
             ));
-          },
-          i, // Pass variation index
-          generatedPrompts[i] // Pass the ChatGPT-generated prompt
-        );
-        
-        // Update the image with the generated URL
-        setGeneratedImages(prev => prev.map((img, idx) => 
-          idx === i ? { 
-            ...img, 
-            url: base64Url, 
-            status: 'completed' as const 
-          } : img
-        ));
-        
-        // Update progress
-        setCurrentProgress((prev) => {
-          const completed = prev + (100 / total);
-          return Math.min(completed, 100);
+            
+            setCurrentProgress((prev) => {
+              const completed = prev + (100 / total);
+              return Math.min(completed, 100);
+            });
+
+            return { success: true, index: i };
+          } catch (err: any) {
+            console.error(`Generation failed for page ${i + 1}:`, err);
+            setErrorMsg(err.message || "Failed to generate some pages.");
+            setGeneratedImages(prev => prev.map((img, idx) => 
+              idx === i ? { ...img, status: 'error' as const } : img
+            ));
+            return { success: false, index: i, error: err };
+          }
         });
-
-        return { success: true, index: i };
-      } catch (err: any) {
-        console.error(`Generation failed for page ${i + 1}:`, err);
-        setErrorMsg(err.message || "Failed to generate some pages.");
-        // Mark this image as error
-        setGeneratedImages(prev => prev.map((img, idx) => 
-          idx === i ? { ...img, status: 'error' as const } : img
-        ));
-        return { success: false, index: i, error: err };
+        
+        await Promise.allSettled(batchPromises);
+        
+        // Wait before next batch (except for the last batch)
+        if (batchEnd < total) {
+          console.log(`Waiting ${delayBetweenBatches / 1000} seconds before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+        }
       }
-    });
+    } else {
+      // For Pollinations and Midjourney, generate in parallel
+      const imagePromises = Array.from({ length: total }, async (_, i) => {
+        try {
+          const base64Url = await generateFunction(
+            selectedTheme, 
+            settings,
+            settings.parametersForMJ,
+            settings.aspectRatio || '1:1',
+            settings.midjourneyMode || 'fast',
+            (status) => {
+              console.log(`Page ${i + 1} status: ${status}`);
+              setGeneratedImages(prev => prev.map((img, idx) => 
+                idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
+              ));
+            },
+            i,
+            generatedPrompts[i]
+          );
+          
+          setGeneratedImages(prev => prev.map((img, idx) => 
+            idx === i ? { 
+              ...img, 
+              url: base64Url, 
+              status: 'completed' as const 
+            } : img
+          ));
+          
+          setCurrentProgress((prev) => {
+            const completed = prev + (100 / total);
+            return Math.min(completed, 100);
+          });
 
-    // Wait for all images to complete
-    await Promise.allSettled(imagePromises);
+          return { success: true, index: i };
+        } catch (err: any) {
+          console.error(`Generation failed for page ${i + 1}:`, err);
+          setErrorMsg(err.message || "Failed to generate some pages.");
+          setGeneratedImages(prev => prev.map((img, idx) => 
+            idx === i ? { ...img, status: 'error' as const } : img
+          ));
+          return { success: false, index: i, error: err };
+        }
+      });
+
+      await Promise.allSettled(imagePromises);
+    }
 
     setStatus(GenerationStatus.COMPLETED);
     setCurrentProgress(100);

@@ -121,40 +121,81 @@ export const generateJournalPage = async (
     
     console.log('[Replicate] Creating prediction...');
     
-    // Use Vercel serverless function proxy (no CORS issues)
-    // The API route runs on the server and forwards to Replicate
-    const response = await fetch('/api/replicate/predictions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        version: modelIdentifier,
-        input: inputParams
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      console.error('[Replicate] API error response:', errorText);
-      let errorData: any = {};
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        // Not JSON
-      }
-      const errorMsg = errorData.detail || response.statusText || errorText;
-      throw new Error(`Replicate API error: ${response.status} ${errorMsg}`);
-    }
-
+    // Retry logic for rate limiting (429 errors)
+    let retryCount = 0;
+    const maxRetries = 5;
+    let response: Response;
     let prediction: ReplicateResponse & { id?: string };
-    try {
-      const responseText = await response.text();
-      console.log('[Replicate] Prediction response:', responseText.substring(0, 200));
-      prediction = JSON.parse(responseText);
-    } catch (parseError: any) {
-      console.error('[Replicate] Failed to parse prediction response:', parseError);
-      throw new Error('Failed to parse Replicate API response');
+    
+    while (retryCount <= maxRetries) {
+      try {
+        // Use Vercel serverless function proxy (no CORS issues)
+        // The API route runs on the server and forwards to Replicate
+        response = await fetch('/api/replicate/predictions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            version: modelIdentifier,
+            input: inputParams
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'Unknown error');
+          console.error('[Replicate] API error response:', errorText);
+          let errorData: any = {};
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            // Not JSON
+          }
+          
+          // Handle rate limiting (429) with retry
+          if (response.status === 429) {
+            const retryAfter = errorData.retry_after || 10; // Default to 10 seconds
+            const errorMsg = errorData.detail || response.statusText || errorText;
+            
+            if (retryCount < maxRetries) {
+              console.warn(`[Replicate] Rate limited (429). Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000)); // Add 1 second buffer
+              retryCount++;
+              continue; // Retry the request
+            } else {
+              throw new Error(`Replicate API error: ${response.status} ${errorMsg}`);
+            }
+          }
+          
+          // For other errors, throw immediately
+          const errorMsg = errorData.detail || response.statusText || errorText;
+          throw new Error(`Replicate API error: ${response.status} ${errorMsg}`);
+        }
+        
+        // Success - parse response and break out of retry loop
+        try {
+          const responseText = await response.text();
+          console.log('[Replicate] Prediction response:', responseText.substring(0, 200));
+          prediction = JSON.parse(responseText);
+        } catch (parseError: any) {
+          console.error('[Replicate] Failed to parse prediction response:', parseError);
+          throw new Error('Failed to parse Replicate API response');
+        }
+        
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        // If it's not a 429 error, don't retry
+        if (!error.message?.includes('429') && !error.message?.includes('Rate limited')) {
+          throw error;
+        }
+        // If we've exhausted retries, throw
+        if (retryCount >= maxRetries) {
+          throw error;
+        }
+        // For 429 errors, we already handled the retry in the if block above
+        // This catch is for any other unexpected errors during retry
+        throw error;
+      }
     }
     
     if (prediction.error) {
