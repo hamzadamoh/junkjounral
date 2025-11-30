@@ -127,34 +127,15 @@ const App: React.FC = () => {
       ? generateWithReplicate
       : generateWithMidjourney;
 
-    // For Replicate, use sequential processing with API key rotation
-    // Rate limit: 6 requests/minute per API key
-    // With multiple keys, we can process faster by rotating between them
+    // For Replicate, use sequential processing to respect rate limits
+    // Rate limit: 6 requests/minute with burst of 1 (without payment method)
+    // This means we can send 1 request at a time, with 10s delay = 6 requests per minute
     if (settings.imageService === 'replicate') {
-      // Get number of available keys from server
-      let keyCount = 1; // Default to 1 key
-      try {
-        const keysResponse = await fetch('/api/replicate/keys');
-        if (keysResponse.ok) {
-          const keysData = await keysResponse.json();
-          keyCount = keysData.keyCount || 1;
-          console.log(`Detected ${keyCount} Replicate API key(s) for rotation`);
-        }
-      } catch (err) {
-        console.warn('Could not fetch key count, defaulting to 1:', err);
-      }
+      const delayBetweenRequests = 10000; // 10 seconds between requests = 6 requests per minute
       
-      const requestsPerKeyPerMinute = 6;
-      const totalRequestsPerMinute = keyCount * requestsPerKeyPerMinute;
-      const delayBetweenRequests = Math.max(1000, (60 * 1000) / totalRequestsPerMinute); // Distribute requests across keys
-      
-      console.log(`Using ${keyCount} key(s): ${totalRequestsPerMinute} requests/minute, ${(delayBetweenRequests / 1000).toFixed(1)}s delay between requests`);
-      
-      let currentKeyIndex = 0;
-      
-      // Process images sequentially, rotating API keys
+      // Process one image at a time sequentially
       for (let i = 0; i < total; i++) {
-        console.log(`Processing Replicate image ${i + 1}/${total} with key ${currentKeyIndex + 1}...`);
+        console.log(`Processing Replicate image ${i + 1}/${total}...`);
           try {
             const base64Url = await generateFunction(
               selectedTheme, 
@@ -169,12 +150,8 @@ const App: React.FC = () => {
                 ));
               },
               i,
-              generatedPrompts[i],
-              currentKeyIndex // Pass key index for rotation
+              generatedPrompts[i]
             );
-            
-            // Rotate to next key for next request
-            currentKeyIndex = (currentKeyIndex + 1) % keyCount;
             
             setGeneratedImages(prev => prev.map((img, idx) => 
               idx === i ? { 
