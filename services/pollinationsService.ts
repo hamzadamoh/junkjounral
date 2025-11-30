@@ -126,10 +126,32 @@ export const generateJournalPage = async (
     
     console.log(`Generating image with Pollinations.AI: ${imageUrl.substring(0, 100)}...`);
 
-    // Fetch the image
-    const imageResponse = await fetch(imageUrl);
+    // Fetch the image with retry logic for rate limiting
+    let imageResponse: Response;
+    let retryCount = 0;
+    const maxRetries = 5;
     
-    if (!imageResponse.ok) {
+    while (retryCount <= maxRetries) {
+      imageResponse = await fetch(imageUrl);
+      
+      if (imageResponse.ok) {
+        break; // Success, exit retry loop
+      }
+      
+      // Handle rate limiting (429) with retry
+      if (imageResponse.status === 429) {
+        if (retryCount < maxRetries) {
+          const retryAfter = 5; // Pollinations typically resets quickly, wait 5 seconds
+          console.warn(`[Pollinations] Rate limited (429). Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          retryCount++;
+          continue; // Retry the request
+        } else {
+          throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}`);
+        }
+      }
+      
+      // For other errors, throw immediately
       throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}`);
     }
 

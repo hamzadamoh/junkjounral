@@ -196,8 +196,70 @@ const App: React.FC = () => {
       
       // Wait for all requests to complete
       await Promise.allSettled(requestPromises);
+    } else if (settings.imageService === 'pollinations') {
+      // For Pollinations, use throttled batch processing to avoid rate limits
+      // Pollinations has rate limits, so we'll process in smaller batches with delays
+      const batchSize = 10; // Process 10 at a time
+      const delayBetweenBatches = 2000; // 2 seconds between batches
+      
+      console.log(`Processing ${total} Pollinations images in batches of ${batchSize}...`);
+      
+      for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
+        const batchEnd = Math.min(batchStart + batchSize, total);
+        console.log(`Processing Pollinations batch: images ${batchStart + 1}-${batchEnd}`);
+        
+        const batchPromises = Array.from({ length: batchEnd - batchStart }, async (_, batchIdx) => {
+          const i = batchStart + batchIdx;
+          try {
+            const base64Url = await generateFunction(
+              selectedTheme, 
+              settings,
+              settings.parametersForMJ,
+              settings.aspectRatio || '1:1',
+              settings.midjourneyMode || 'fast',
+              (status) => {
+                console.log(`Page ${i + 1} status: ${status}`);
+                setGeneratedImages(prev => prev.map((img, idx) => 
+                  idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
+                ));
+              },
+              i,
+              generatedPrompts[i]
+            );
+            
+            setGeneratedImages(prev => prev.map((img, idx) => 
+              idx === i ? { 
+                ...img, 
+                url: base64Url, 
+                status: 'completed' as const 
+              } : img
+            ));
+            
+            setCurrentProgress((prev) => {
+              const completed = ((i + 1) / total) * 100;
+              return Math.min(completed, 100);
+            });
+
+            return { success: true, index: i };
+          } catch (err: any) {
+            console.error(`Generation failed for page ${i + 1}:`, err);
+            setErrorMsg(err.message || "Failed to generate some pages.");
+            setGeneratedImages(prev => prev.map((img, idx) => 
+              idx === i ? { ...img, status: 'error' as const } : img
+            ));
+            return { success: false, index: i, error: err };
+          }
+        });
+        
+        await Promise.allSettled(batchPromises);
+        
+        // Wait before next batch (except for the last batch)
+        if (batchEnd < total) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+        }
+      }
     } else {
-      // For Pollinations and Midjourney, generate in parallel
+      // For Midjourney, generate in parallel
       const imagePromises = Array.from({ length: total }, async (_, i) => {
         try {
           const base64Url = await generateFunction(
