@@ -1,7 +1,15 @@
 import { Theme, GenerationSettings } from '../types';
 
 const GOAPI_BASE_URL = 'https://api.goapi.ai';
-const GOAPI_API_KEY = import.meta.env.VITE_GOAPI_API_KEY || '';
+
+// Get API key from localStorage first, then fall back to environment variable
+const getGoApiKey = (): string => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('api_key_goapi');
+    if (stored) return stored;
+  }
+  return import.meta.env.VITE_GOAPI_API_KEY || '';
+};
 
 interface GoApiTaskResponse {
   status: string;
@@ -19,7 +27,7 @@ interface GoApiTaskStatus {
   };
 }
 
-const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersForMJ?: string): string => {
+const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersForMJ?: string, variationIndex?: number): string => {
   const texture = getTexturePrompt(settings.textureIntensity);
   
   let layoutPrompt = '';
@@ -40,8 +48,34 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     settings.includeBorders ? 'decorative borders' : ''
   ].filter(Boolean).join(', ');
 
+  // Add variation modifiers to make each image unique
+  const variationModifiers = [
+    'unique composition', 'different arrangement', 'varied layout', 'distinctive style',
+    'alternative perspective', 'original design', 'creative variation', 'individual character',
+    'unique details', 'distinct elements', 'original arrangement', 'creative composition'
+  ];
+  
+  const styleVariations = [
+    'slightly different lighting', 'varied color tones', 'different texture pattern',
+    'alternative color palette', 'unique shading', 'distinctive mood', 'varied atmosphere',
+    'different depth', 'alternative focus', 'unique perspective', 'distinctive angle'
+  ];
+
+  const variationMod = variationIndex !== undefined 
+    ? variationModifiers[variationIndex % variationModifiers.length]
+    : '';
+  const styleVar = variationIndex !== undefined
+    ? styleVariations[variationIndex % styleVariations.length]
+    : '';
+
   // Construct the final detailed prompt
-  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. Flat lay, top down view, high resolution junk journal printable.`;
+  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+  
+  // Add seed for additional variation
+  if (variationIndex !== undefined) {
+    const seed = Math.floor(Math.random() * 1000000) + variationIndex * 1000;
+    prompt += ` seed:${seed}`;
+  }
   
   // Add additional parameters if provided
   if (parametersForMJ) {
@@ -67,8 +101,9 @@ const sendTaskToGoApi = async (
   aspectRatio: string = '1:1',
   processMode: string = 'fast'
 ): Promise<string | null> => {
-  if (!GOAPI_API_KEY) {
-    throw new Error('Go API key is not configured. Please set VITE_GOAPI_API_KEY in your environment variables.');
+  const apiKey = getGoApiKey();
+  if (!apiKey) {
+    throw new Error('Go API key is not configured. Please set it in the API Keys Configuration section.');
   }
 
   const data = {
@@ -84,7 +119,7 @@ const sendTaskToGoApi = async (
   const options: RequestInit = {
     method: 'POST',
     headers: {
-      'X-API-KEY': GOAPI_API_KEY,
+      'X-API-KEY': apiKey,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(data)
@@ -109,7 +144,8 @@ const sendTaskToGoApi = async (
  * Gets the status and result of a task from Go API
  */
 const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> => {
-  if (!GOAPI_API_KEY) {
+  const apiKey = getGoApiKey();
+  if (!apiKey) {
     throw new Error('Go API key is not configured.');
   }
 
@@ -213,10 +249,13 @@ export const generateJournalPage = async (
   parametersForMJ?: string,
   aspectRatio: string = '1:1',
   processMode: string = 'fast',
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  variationIndex?: number,
+  customPrompt?: string
 ): Promise<string> => {
   try {
-    const prompt = constructPrompt(theme, settings, parametersForMJ);
+    // Use custom prompt if provided (from ChatGPT), otherwise construct one
+    const prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
 
     // Send task to Go API
     const taskId = await sendTaskToGoApi(prompt, aspectRatio, processMode);

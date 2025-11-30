@@ -24,6 +24,8 @@ export interface GenerationSettings {
   aspectRatio?: string;
   midjourneyMode?: string;
   parametersForMJ?: string;
+  imageService?: 'midjourney' | 'pollinations' | 'replicate';
+  replicateModel?: string;
 }
 
 export interface GeneratedImage {
@@ -31,4 +33,6 @@ export interface GeneratedImage {
   url: string; // Base64 data URL
   prompt: string;
   timestamp: number;
+  status?: 'generating' | 'completed' | 'error';
+  variationNumber?: number;
 }
