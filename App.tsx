@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { THEMES, OPTIONAL_ELEMENTS, APP_NAME } from './constants';
 import { Theme, GenerationSettings, GenerationStatus, GeneratedImage } from './types';
-import { generateJournalPage } from './services/geminiService';
+import { generateJournalPage } from './services/midjourneyService';
 
 const App: React.FC = () => {
   // --- State ---
@@ -25,6 +25,9 @@ const App: React.FC = () => {
     elements: [],
     includeFrames: false,
     includeBorders: false,
+    aspectRatio: '1:1',
+    midjourneyMode: 'fast',
+    parametersForMJ: '',
   });
   const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -68,7 +71,16 @@ const App: React.FC = () => {
     // Loop for "Batch" processing simulation
     for (let i = 0; i < total; i++) {
       try {
-        const base64Url = await generateJournalPage(selectedTheme, settings);
+        const base64Url = await generateJournalPage(
+          selectedTheme, 
+          settings,
+          settings.parametersForMJ,
+          settings.aspectRatio || '1:1',
+          settings.midjourneyMode || 'fast',
+          (status) => {
+            console.log(`Page ${i + 1} status: ${status}`);
+          }
+        );
         
         const newImage: GeneratedImage = {
           id: crypto.randomUUID(),
@@ -219,6 +231,60 @@ const App: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Aspect Ratio</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['1:1', '16:9', '9:16', '4:3', '3:4', '21:9'].map((ratio) => (
+                    <button
+                      key={ratio}
+                      onClick={() => handleSettingChange('aspectRatio', ratio)}
+                      className={`px-3 py-2 rounded-lg text-sm transition-all ${
+                        settings.aspectRatio === ratio 
+                          ? 'bg-gothic-accent/20 border-gothic-accent text-white border' 
+                          : 'bg-slate-900 border-transparent text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      {ratio}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Midjourney Mode</label>
+                <div className="flex bg-slate-900 rounded-lg p-1">
+                  {['fast', 'relax'].map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleSettingChange('midjourneyMode', mode)}
+                      className={`flex-1 py-2 text-sm rounded-md transition-all capitalize ${
+                        settings.midjourneyMode === mode 
+                          ? 'bg-gothic-700 text-white shadow-lg' 
+                          : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Additional Parameters (optional)
+                </label>
+                <input
+                  type="text"
+                  value={settings.parametersForMJ || ''}
+                  onChange={(e) => handleSettingChange('parametersForMJ', e.target.value)}
+                  placeholder="e.g., --iw 2, --v 6, --style raw"
+                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Add Midjourney parameters that will be appended to the prompt
+                </p>
+              </div>
             </div>
           </div>
 
@@ -299,7 +365,7 @@ const App: React.FC = () => {
               Generate Pages
             </button>
             <p className="text-xs text-center mt-3 text-slate-500">
-              Estimated time: {settings.pageCount * 5}s - 300 DPI Quality
+              Estimated time: {settings.pageCount * 2}-{settings.pageCount * 5} minutes per page - 300 DPI Quality
             </p>
           </div>
         </div>
@@ -316,7 +382,7 @@ const App: React.FC = () => {
       </div>
       <h2 className="text-2xl font-serif text-white mb-2">Weaving Magic...</h2>
       <p className="text-slate-400 mb-8 max-w-md">
-        The AI is crafting your {selectedTheme?.name} journal pages. This process involves high-resolution texture synthesis.
+        Midjourney is crafting your {selectedTheme?.name} journal pages. This process may take a few minutes as we generate high-resolution images.
       </p>
       
       <div className="w-full max-w-md bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -326,6 +392,11 @@ const App: React.FC = () => {
         />
       </div>
       <p className="mt-4 text-gothic-gold font-mono text-sm">{Math.round(currentProgress)}% Completed</p>
+      {status === GenerationStatus.GENERATING && (
+        <p className="mt-2 text-slate-500 text-xs">
+          Status: Processing... This may take 2-10 minutes per image
+        </p>
+      )}
       
       {errorMsg && (
         <div className="mt-8 p-4 bg-red-900/30 border border-red-800 text-red-200 rounded-lg max-w-md">
@@ -417,7 +488,7 @@ const App: React.FC = () => {
             <h1 className="text-xl font-serif font-bold text-slate-100 tracking-wide">{APP_NAME}</h1>
           </div>
           <div className="text-xs text-slate-500 font-mono hidden md:block">
-            AI-POWERED • V.1.0 • GEMINI FLASH
+            AI-POWERED • V.1.0 • MIDJOURNEY
           </div>
         </div>
       </header>

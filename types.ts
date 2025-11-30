@@ -21,6 +21,9 @@ export interface GenerationSettings {
   elements: string[];
   includeFrames: boolean;
   includeBorders: boolean;
+  aspectRatio?: string;
+  midjourneyMode?: string;
+  parametersForMJ?: string;
 }
 
 export interface GeneratedImage {
