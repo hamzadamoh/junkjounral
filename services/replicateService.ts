@@ -5,146 +5,6 @@ const getReplicateApiKey = (): string => {
   return import.meta.env.VITE_REPLICATE_API_KEY || '';
 };
 
-// CORS proxy for browser requests (Replicate API doesn't allow direct browser access)
-// IMPORTANT: Most public CORS proxies strip Authorization headers
-// For production, use a backend proxy server (see REPLICATE_PROXY_SOLUTION.md)
-// For now, we'll try direct fetch first, then fallback to proxies
-const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?',
-  'https://api.codetabs.com/v1/proxy?quest='
-];
-
-// Check if we have a custom backend proxy URL (set via environment variable)
-const BACKEND_PROXY_URL = import.meta.env.VITE_REPLICATE_PROXY_URL || '';
-
-// Alternative: Use a proxy that supports custom headers via query params
-// This is a workaround since most proxies strip Authorization headers
-const createProxiedRequest = async (url: string, options: RequestInit, apiKey: string): Promise<Response> => {
-  // For POST requests, we need to include auth in a way the proxy can forward it
-  // Since proxies strip headers, we'll try embedding it in the request body metadata
-  // But Replicate doesn't support this, so we need a proxy that forwards headers
-  
-  // Try allorigins.win with proper header forwarding
-  try {
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl, {
-      method: options.method || 'GET',
-      headers: {
-        ...options.headers,
-        // allorigins might forward these
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-      body: options.body,
-    });
-    
-    if (response.ok) {
-      // Check if the response is actually from Replicate or an error from the proxy
-      const text = await response.text();
-      try {
-        const json = JSON.parse(text);
-        // If it's a Replicate error about auth, the header wasn't forwarded
-        if (json.detail && json.detail.includes('authentication token')) {
-          throw new Error('Proxy did not forward Authorization header');
-        }
-        // Return a new Response with the parsed JSON
-        return new Response(text, { status: response.status, headers: response.headers });
-      } catch (e) {
-        return new Response(text, { status: response.status, headers: response.headers });
-      }
-    }
-    return response;
-  } catch (e) {
-    throw e;
-  }
-};
-
-// Function to create a timeout signal
-const createTimeoutSignal = (timeoutMs: number): AbortSignal => {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), timeoutMs);
-  return controller.signal;
-};
-
-// Function to try fetching with CORS proxy
-const fetchWithCorsProxy = async (url: string, options: RequestInit = {}, proxyIndex: number = 0): Promise<Response> => {
-  const errors: string[] = [];
-  const timeoutMs = 30000; // 30 second timeout
-  
-  // Try direct fetch first (might work for some endpoints)
-  try {
-    const directResponse = await fetch(url, {
-      ...options,
-      signal: createTimeoutSignal(timeoutMs)
-    } as RequestInit);
-    if (directResponse.ok) {
-      return directResponse;
-    }
-    errors.push(`Direct fetch returned ${directResponse.status}`);
-  } catch (e: any) {
-    // Direct fetch failed, try proxy
-    if (e.name !== 'AbortError') {
-      errors.push(`Direct fetch failed: ${e.message}`);
-    }
-  }
-
-  // Try with CORS proxy
-  // Note: Most CORS proxies don't forward Authorization headers for security reasons
-  // We need to pass the auth token in the URL or request body for some proxies
-  for (let i = proxyIndex; i < CORS_PROXIES.length; i++) {
-    try {
-      const proxy = CORS_PROXIES[i];
-      let proxyUrl: string;
-      let proxyOptions: RequestInit = {
-        ...options,
-        signal: createTimeoutSignal(timeoutMs)
-      };
-      
-      // Handle different proxy formats
-      if (proxy.includes('allorigins.win')) {
-        // allorigins.win supports headers via X-Requested-With
-        proxyUrl = proxy + encodeURIComponent(url);
-        proxyOptions.headers = {
-          ...options.headers,
-          'X-Requested-With': 'XMLHttpRequest'
-        };
-      } else if (proxy.includes('corsproxy.io')) {
-        // corsproxy.io - try to include auth in URL if it's a GET, or keep headers for POST
-        proxyUrl = proxy + encodeURIComponent(url);
-        // For POST requests, try to keep headers
-        if (options.method === 'POST' && options.headers) {
-          proxyOptions.headers = options.headers;
-        }
-      } else {
-        // Other proxies
-        proxyUrl = proxy + encodeURIComponent(url);
-        // Try to keep headers
-        proxyOptions.headers = options.headers;
-      }
-      
-      const response = await fetch(proxyUrl, proxyOptions);
-      
-      if (response.ok) {
-        return response;
-      }
-      
-      // Check if it's an auth error from Replicate (not the proxy)
-      const responseText = await response.text().catch(() => '');
-      if (responseText.includes('Unauthenticated') || responseText.includes('authentication token')) {
-        errors.push(`Proxy ${i + 1} (${proxy}) - Auth header not forwarded (Replicate returned 401)`);
-      } else {
-        errors.push(`Proxy ${i + 1} (${proxy}) returned ${response.status}`);
-      }
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
-        errors.push(`Proxy ${i + 1} (${CORS_PROXIES[i]}) failed: ${e.message}`);
-      }
-      // Continue to next proxy
-    }
-  }
-  
-  throw new Error(`All CORS proxy attempts failed. Errors: ${errors.join('; ')}`);
-};
 
 interface ReplicateResponse {
   output?: string | string[];
@@ -260,106 +120,21 @@ export const generateJournalPage = async (
     }
     
     console.log('[Replicate] Creating prediction...');
-    console.log('[Replicate] API Key present:', apiKey ? 'Yes' : 'No');
-    console.log('[Replicate] Model:', model);
     
-    // Try different approaches in order:
-    // 1. Backend proxy (if configured)
-    // 2. Direct fetch (might work in some browsers)
-    // 3. Public CORS proxy (will likely fail due to auth header stripping)
-    
-    let response: Response | null = null;
-    let lastError: Error | null = null;
-    
-    // Option 1: Use backend proxy if configured
-    if (BACKEND_PROXY_URL) {
-      try {
-        console.log('[Replicate] Using backend proxy:', BACKEND_PROXY_URL);
-        response = await fetch(`${BACKEND_PROXY_URL}/v1/predictions`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            version: modelIdentifier,
-            input: inputParams
-          })
-        });
-        
-        if (response.ok) {
-          console.log('[Replicate] Backend proxy succeeded!');
-        } else {
-          console.log('[Replicate] Backend proxy failed with status:', response.status);
-        }
-      } catch (error: any) {
-        console.warn('[Replicate] Backend proxy error:', error.message);
-        lastError = error;
-      }
-    }
-    
-    // Option 2: Try direct fetch
-    if (!response || !response.ok) {
-      try {
-        console.log('[Replicate] Attempting direct fetch...');
-        response = await fetch('https://api.replicate.com/v1/predictions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            version: modelIdentifier,
-            input: inputParams
-          })
-        });
-        
-        if (response.ok) {
-          console.log('[Replicate] Direct fetch succeeded!');
-        } else {
-          console.log('[Replicate] Direct fetch failed with status:', response.status);
-          lastError = new Error(`Direct fetch returned ${response.status}`);
-        }
-      } catch (error: any) {
-        console.log('[Replicate] Direct fetch CORS error (expected):', error.message);
-        lastError = error;
-      }
-    }
-    
-    // Option 3: Try public CORS proxy (will likely fail due to auth header stripping)
-    if (!response || !response.ok) {
-      try {
-        console.log('[Replicate] Trying public CORS proxy (may fail due to auth header stripping)...');
-        response = await fetchWithCorsProxy('https://api.replicate.com/v1/predictions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            version: modelIdentifier,
-            input: inputParams
-          })
-        });
-        console.log('[Replicate] CORS proxy fetch completed, status:', response.status);
-      } catch (error: any) {
-        console.error('[Replicate] CORS proxy failed:', error);
-        lastError = error;
-      }
-    }
-    
-    // If all attempts failed
-    if (!response || !response.ok) {
-      const errorMsg = lastError?.message || 'All fetch attempts failed';
-      if (errorMsg.includes('Unauthenticated') || errorMsg.includes('authentication token')) {
-        throw new Error(`Replicate authentication failed: Public CORS proxies strip Authorization headers. To use Replicate from the browser, you need a backend proxy server. See REPLICATE_PROXY_SOLUTION.md for setup instructions. Alternatively, use Pollinations (free, no API key) which works directly from browsers.`);
-      }
-      throw new Error(`Failed to create Replicate prediction: ${errorMsg}`);
-    }
-    
-    if (!response) {
-      throw new Error('No response received from Replicate API');
-    }
+    // Direct fetch to Replicate API
+    // Note: This will fail in browsers due to CORS restrictions
+    // Use Pollinations or Midjourney for browser-based generation
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        version: modelIdentifier,
+        input: inputParams
+      })
+    });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
@@ -370,7 +145,8 @@ export const generateJournalPage = async (
       } catch (e) {
         // Not JSON
       }
-      throw new Error(`Replicate API error: ${response.status} ${errorData.detail || response.statusText || errorText}`);
+      const errorMsg = errorData.detail || response.statusText || errorText;
+      throw new Error(`Replicate API error: ${response.status} ${errorMsg}`);
     }
 
     let prediction: ReplicateResponse & { id?: string };
@@ -403,24 +179,9 @@ export const generateJournalPage = async (
     console.log(`Fetching image from URL: ${imageUrl}`);
 
     // Convert the image URL to a data URL
-    // Try direct fetch first, if CORS fails, use proxy
-    let imageResponse: Response;
-    try {
-      imageResponse = await fetch(imageUrl);
-      if (!imageResponse.ok) {
-        throw new Error(`Failed to fetch image: ${imageResponse.status}`);
-      }
-    } catch (error: any) {
-      // If direct fetch fails (CORS), try with proxy
-      console.warn('Direct fetch failed, trying with CORS proxy:', error.message);
-      try {
-        imageResponse = await fetchWithCorsProxy(imageUrl);
-        if (!imageResponse.ok) {
-          throw new Error(`Failed to fetch image via proxy: ${imageResponse.status}`);
-        }
-      } catch (proxyError: any) {
-        throw new Error(`Failed to fetch image: ${error.message} (proxy also failed: ${proxyError.message})`);
-      }
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to fetch image: ${imageResponse.status}`);
     }
     
     const blob = await imageResponse.blob();
@@ -465,7 +226,7 @@ const pollReplicatePrediction = async (
 
   while (attempts < maxAttempts) {
     try {
-      const response = await fetchWithCorsProxy(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
         headers: {
           'Authorization': `Token ${apiKey}`,
           'Content-Type': 'application/json',
@@ -525,12 +286,11 @@ const pollReplicatePrediction = async (
       delay = Math.min(delay * 1.2, 15000); // Increase delay more aggressively
       attempts++;
     } catch (error: any) {
-      // If it's a network error or CORS proxy error, retry
+      // If it's a network error, retry
       const isRetryableError = 
         error.message?.includes('fetch') || 
         error.message?.includes('network') ||
         error.message?.includes('CORS') ||
-        error.message?.includes('proxy') ||
         error.message?.includes('Failed to fetch');
       
       if (isRetryableError && attempts < maxAttempts - 1) {
@@ -560,7 +320,7 @@ const getModelVersion = async (model: string): Promise<string> => {
     // Try to get the latest version for the model
     const apiKey = getReplicateApiKey();
     try {
-      const response = await fetchWithCorsProxy(`https://api.replicate.com/v1/models/${model}/versions`, {
+      const response = await fetch(`https://api.replicate.com/v1/models/${model}/versions`, {
         headers: {
           'Authorization': `Token ${apiKey}`,
           'Content-Type': 'application/json',
