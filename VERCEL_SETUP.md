@@ -19,19 +19,20 @@ The following serverless functions are available:
 
 ## Environment Variables
 
-Add these in Vercel Project Settings → Environment Variables:
+**IMPORTANT**: In Vercel serverless functions, you must use `REPLICATE_API_TOKEN` (without the `VITE_` prefix).
 
-```
-VITE_REPLICATE_API_KEY=r8_your_key_here
-```
-
-Or alternatively:
+Add this in Vercel Project Settings → Environment Variables:
 
 ```
 REPLICATE_API_TOKEN=r8_your_key_here
 ```
 
-The functions will check both variable names.
+**Why?** 
+- `VITE_*` variables are only available in the frontend build (client-side)
+- Serverless functions run in Node.js and need regular environment variables
+- The functions will check `REPLICATE_API_TOKEN` first, then `REPLICATE_API_KEY` as fallback
+
+**Note**: For local development (`.env.local`), you can still use `VITE_REPLICATE_API_KEY` for the frontend, but the serverless functions need `REPLICATE_API_TOKEN`.
 
 ## Local Development
 

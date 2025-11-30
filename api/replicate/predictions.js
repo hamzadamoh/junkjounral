@@ -8,13 +8,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = process.env.VITE_REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
+    // In Vercel serverless functions, use REPLICATE_API_TOKEN (not VITE_ prefix)
+    // VITE_ variables are only available in the frontend build
+    const apiKey = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY;
     
     if (!apiKey) {
+      console.error('Replicate API key missing. Available env vars:', Object.keys(process.env).filter(k => k.includes('REPLICATE')));
       return res.status(500).json({ 
-        error: 'Replicate API key not configured. Set VITE_REPLICATE_API_KEY in Vercel environment variables.' 
+        error: 'Replicate API key not configured. Set REPLICATE_API_TOKEN in Vercel environment variables.' 
       });
     }
+    
+    console.log('Using Replicate API key (first 10 chars):', apiKey.substring(0, 10) + '...');
 
     // Get the request body from the frontend
     const { version, input } = req.body;

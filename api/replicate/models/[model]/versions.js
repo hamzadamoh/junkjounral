@@ -8,7 +8,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = process.env.VITE_REPLICATE_API_KEY || process.env.REPLICATE_API_TOKEN;
+    // In Vercel serverless functions, use REPLICATE_API_TOKEN (not VITE_ prefix)
+    const apiKey = process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_API_KEY;
     
     if (!apiKey) {
       return res.status(500).json({ 

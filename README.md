@@ -34,6 +34,8 @@ When deploying to Vercel, the app includes serverless functions in the `api/` di
 **Important**: Make sure to add your API keys in Vercel's Environment Variables:
 - Go to your Vercel project settings
 - Navigate to "Environment Variables"
-- Add `VITE_REPLICATE_API_KEY` (or `REPLICATE_API_TOKEN`) with your Replicate API key
+- **For Replicate**: Add `REPLICATE_API_TOKEN` (without `VITE_` prefix) with your Replicate API key
+  - Note: Serverless functions need `REPLICATE_API_TOKEN`, not `VITE_REPLICATE_API_KEY`
+- **For other services**: Add `VITE_GOAPI_API_KEY` and `VITE_OPENAI_API_KEY` as usual
 
-The serverless functions will automatically use these environment variables.
+The serverless functions will automatically use `REPLICATE_API_TOKEN` for Replicate API calls.
