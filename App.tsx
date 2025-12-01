@@ -10,7 +10,9 @@ import {
   Printer,
   FileDown,
   Archive,
-  FileText
+  FileText,
+  Eye,
+  X
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -42,6 +44,7 @@ const App: React.FC = () => {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [currentProgress, setCurrentProgress] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
   
 
   // --- Handlers ---
@@ -260,45 +263,63 @@ const App: React.FC = () => {
       }
     } else {
       // For Midjourney, generate in parallel
-      const imagePromises = Array.from({ length: total }, async (_, i) => {
+      // Note: Midjourney returns 4 images per request, so we need fewer requests
+      const requestsNeeded = Math.ceil(total / 4);
+      const imagePromises = Array.from({ length: requestsNeeded }, async (_, requestIdx) => {
         try {
-          const base64Url = await generateFunction(
+          // Midjourney returns an array of images (typically 4)
+          const base64Urls = await generateFunction(
             selectedTheme, 
             settings,
             settings.parametersForMJ,
             settings.aspectRatio || '1:1',
             settings.midjourneyMode || 'fast',
             (status) => {
-              console.log(`Page ${i + 1} status: ${status}`);
+              console.log(`Midjourney request ${requestIdx + 1} status: ${status}`);
+              // Update all images that will come from this request
+              const startIdx = requestIdx * 4;
+              const endIdx = Math.min(startIdx + 4, total);
               setGeneratedImages(prev => prev.map((img, idx) => 
-                idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
+                idx >= startIdx && idx < endIdx 
+                  ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } 
+                  : img
               ));
             },
-            i,
-            generatedPrompts[i]
-          );
+            requestIdx,
+            generatedPrompts[requestIdx * 4] // Use prompt from first image in this batch
+          ) as string[]; // Type assertion: Midjourney returns array
           
-          setGeneratedImages(prev => prev.map((img, idx) => 
-            idx === i ? { 
-              ...img, 
-              url: base64Url, 
-              status: 'completed' as const 
-            } : img
-          ));
+          // Add all images from this request to the gallery
+          const startIdx = requestIdx * 4;
+          base64Urls.forEach((base64Url, imgIdx) => {
+            const actualIdx = startIdx + imgIdx;
+            if (actualIdx < total) {
+              setGeneratedImages(prev => prev.map((img, idx) => 
+                idx === actualIdx ? { 
+                  ...img, 
+                  url: base64Url, 
+                  status: 'completed' as const,
+                  prompt: generatedPrompts[actualIdx] || img.prompt
+                } : img
+              ));
+            }
+          });
           
           setCurrentProgress((prev) => {
-            const completed = prev + (100 / total);
+            const completed = ((requestIdx + 1) / requestsNeeded) * 100;
             return Math.min(completed, 100);
           });
 
-          return { success: true, index: i };
+          return { success: true, index: requestIdx };
         } catch (err: any) {
-          console.error(`Generation failed for page ${i + 1}:`, err);
+          console.error(`Generation failed for Midjourney request ${requestIdx + 1}:`, err);
           setErrorMsg(err.message || "Failed to generate some pages.");
+          const startIdx = requestIdx * 4;
+          const endIdx = Math.min(startIdx + 4, total);
           setGeneratedImages(prev => prev.map((img, idx) => 
-            idx === i ? { ...img, status: 'error' as const } : img
+            idx >= startIdx && idx < endIdx ? { ...img, status: 'error' as const } : img
           ));
-          return { success: false, index: i, error: err };
+          return { success: false, index: requestIdx, error: err };
         }
       });
 
@@ -1026,15 +1047,24 @@ const App: React.FC = () => {
                 {img.prompt}
               </p>
               
-              {/* Action Button */}
+              {/* Action Buttons */}
               {img.status === 'completed' && img.url ? (
-                <button 
-                  onClick={() => downloadImage(img, actualIndex)}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <Download size={16} />
-                  Download
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setPreviewImage(img)}
+                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Eye size={16} />
+                    Preview
+                  </button>
+                  <button 
+                    onClick={() => downloadImage(img, actualIndex)}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Download size={16} />
+                    Download
+                  </button>
+                </div>
               ) : img.status === 'generating' ? (
                 <button 
                   disabled
@@ -1105,6 +1135,68 @@ const App: React.FC = () => {
         {step === 4 && renderGallery()}
         {step === 3 && status === GenerationStatus.GENERATING && renderLoading()}
       </main>
+
+      {/* Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div 
+            className="bg-slate-900 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto border border-slate-700 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-10">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-100">
+                  Variation #{previewImage.variationNumber || 'N/A'}
+                </h3>
+                <p className="text-sm text-slate-400 mt-1 line-clamp-2">
+                  {previewImage.prompt}
+                </p>
+              </div>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="text-slate-400 hover:text-slate-200 transition-colors p-2 hover:bg-slate-800 rounded-lg"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Image */}
+            <div className="p-4">
+              <img 
+                src={previewImage.url} 
+                alt="Preview" 
+                className="w-full h-auto rounded-lg"
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-slate-900 border-t border-slate-800 p-4 flex gap-2">
+              <button
+                onClick={() => {
+                  if (previewImage) {
+                    const index = generatedImages.findIndex(img => img.id === previewImage.id);
+                    downloadImage(previewImage, index);
+                  }
+                }}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+                Download Image
+              </button>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global CSS for Animations */}
       <style>{`

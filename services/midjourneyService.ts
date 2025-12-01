@@ -65,7 +65,8 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     : '';
 
   // Construct the final detailed prompt
-  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+  // STRICT: Single page only, no scenes, no multiple objects arranged around
+  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. Digital junk journal page design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects.`;
   
   // Add seed for additional variation
   if (variationIndex !== undefined) {
@@ -173,13 +174,14 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
 
 /**
  * Polls for task completion with exponential backoff
+ * Returns all image URLs from Midjourney (typically 4 variations)
  */
 const pollTaskUntilComplete = async (
   taskId: string,
   onProgress?: (status: string) => void,
   maxAttempts: number = 120, // Increased to 120 attempts (about 10-20 minutes)
   initialDelay: number = 3000 // Start with 3 seconds
-): Promise<string> => {
+): Promise<string[]> => {
   let attempts = 0;
   let delay = initialDelay;
 
@@ -199,8 +201,9 @@ const pollTaskUntilComplete = async (
     // Handle completed status
     if (currentStatus === 'completed' || currentStatus === 'succeeded') {
       if (status.data.output?.image_urls && status.data.output.image_urls.length > 0) {
-        console.log(`Task ${taskId} completed! Image URL: ${status.data.output.image_urls[0]}`);
-        return status.data.output.image_urls[0];
+        console.log(`Task ${taskId} completed! Found ${status.data.output.image_urls.length} images`);
+        // Return ALL image URLs (Midjourney typically returns 4 variations)
+        return status.data.output.image_urls;
       } else {
         throw new Error('Task completed but no image URL found');
       }
@@ -237,7 +240,38 @@ const pollTaskUntilComplete = async (
 };
 
 /**
- * Generates a journal page using Go API Midjourney
+ * Converts image URLs to base64 data URLs
+ */
+const convertUrlsToBase64 = async (imageUrls: string[]): Promise<string[]> => {
+  const convertPromises = imageUrls.map(async (url) => {
+    try {
+      const imageResponse = await fetch(url);
+      const blob = await imageResponse.blob();
+      
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to convert image to data URL'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error(`Failed to convert image URL ${url}:`, error);
+      throw error;
+    }
+  });
+  
+  return Promise.all(convertPromises);
+};
+
+/**
+ * Generates journal pages using Go API Midjourney
+ * Returns all 4 images from Midjourney (one request = 4 variations)
  */
 export const generateJournalPage = async (
   theme: Theme,
@@ -248,15 +282,21 @@ export const generateJournalPage = async (
   onProgress?: (status: string) => void,
   variationIndex?: number,
   customPrompt?: string
-): Promise<string> => {
+): Promise<string[]> => {
   try {
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
     // CRITICAL: Always append flat printable page constraints to ensure no 3D photography
     // This is especially important for ChatGPT-generated prompts which might not include these constraints
+    // STRICT: Single page only, no scenes, no multiple objects arranged around
+    const strictConstraints = 'Digital junk journal page design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects.';
+    
     if (customPrompt) {
-      prompt = `${prompt}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design.`;
+      prompt = `${prompt}. ${strictConstraints}`;
+    } else {
+      // Add strict constraints to constructed prompts too
+      prompt = `${prompt} ${strictConstraints}`;
     }
 
     // Send task to Go API
@@ -266,26 +306,13 @@ export const generateJournalPage = async (
       throw new Error('Failed to create task');
     }
 
-    // Poll for completion
-    const imageUrl = await pollTaskUntilComplete(taskId, onProgress);
+    // Poll for completion - returns all image URLs (typically 4)
+    const imageUrls = await pollTaskUntilComplete(taskId, onProgress);
 
-    // Convert the image URL to a data URL for consistency with the app
-    // First, fetch the image and convert to base64
-    const imageResponse = await fetch(imageUrl);
-    const blob = await imageResponse.blob();
+    // Convert all image URLs to base64 data URLs
+    const base64Images = await convertUrlsToBase64(imageUrls);
     
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject(new Error('Failed to convert image to data URL'));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    return base64Images;
   } catch (error: any) {
     console.error('Midjourney Image Generation Error:', error);
     throw error;
