@@ -24,7 +24,8 @@ export const generatePromptWithChatGPT = async (
   includeFrames: boolean,
   includeBorders: boolean,
   variationNumber: number,
-  customThemePrompt?: string
+  customThemePrompt?: string,
+  colorIntensity: 'Muted' | 'Colorful' = 'Muted'
 ): Promise<string> => {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
@@ -83,12 +84,14 @@ Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elem
 CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
 - VINTAGE, AGED, ANTIQUE appearance - must look old and worn
 - ILLUSTRATED/ARTISTIC STYLE: stylized illustration, artistic rendering, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic
-- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, NOT bright vibrant colors
+${colorIntensity === 'Muted' 
+  ? '- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, coffee-stained look, NOT bright vibrant colors'
+  : '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'}
 - AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
 - HANDWRITTEN SCRIPT: faint vintage handwriting, old script, cursive text visible
 - COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements
 - FLAT printable page design (like a vintage scrapbook page)
-- NO modern watercolor illustrations, NO bright colors, NO clean digital art
+- NO modern watercolor illustrations, NO clean digital art
 - NO photorealistic rendering, NO realistic photography, NO hyper-realistic details
 - NO 3D objects, NO depth, NO shadows, NO realistic lighting
 - NO still life compositions, NO objects placed around the page

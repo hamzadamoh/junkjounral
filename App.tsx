@@ -35,6 +35,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<GenerationSettings>({
     pageCount: 1, // Defaulting to 1 for demo purposes to save quota
     textureIntensity: 'Medium',
+    colorIntensity: 'Muted',
     pageStyle: 'Full Page',
     elements: [],
     includeFrames: false,
@@ -169,7 +170,7 @@ const App: React.FC = () => {
       
       // Expand prompts: each request prompt is used for 4 images
       generatedPrompts = [];
-      for (let i = 0; i < total; i++) {
+    for (let i = 0; i < total; i++) {
         const requestIdx = Math.floor(i / 4);
         generatedPrompts.push(requestPrompts[requestIdx] || constructPrompt(selectedTheme, settings, i));
       }
@@ -187,7 +188,8 @@ const App: React.FC = () => {
           settings.includeFrames,
           settings.includeBorders,
           i + 1,
-          additionalThemePrompt
+          additionalThemePrompt,
+          settings.colorIntensity
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error);
           // Fallback to constructed prompt if ChatGPT fails
@@ -838,6 +840,30 @@ const App: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Color Intensity</label>
+                <div className="flex bg-slate-900 rounded-lg p-1">
+                  {(['Muted', 'Colorful'] as const).map((intensity) => (
+                    <button
+                      key={intensity}
+                      onClick={() => handleSettingChange('colorIntensity', intensity)}
+                      className={`flex-1 py-2 text-sm rounded-md transition-all ${
+                        settings.colorIntensity === intensity 
+                          ? 'bg-gothic-700 text-white shadow-lg' 
+                          : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {intensity}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  {settings.colorIntensity === 'Muted' 
+                    ? 'Vintage sepia and brown tones (coffee-stained look)' 
+                    : 'Vibrant colors while maintaining vintage aesthetic'}
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Aspect Ratio</label>
                 <div className="grid grid-cols-3 gap-2">
                   {['1:1', '16:9', '9:16', '4:3', '3:4', '21:9'].map((ratio) => (
@@ -1238,7 +1264,7 @@ const App: React.FC = () => {
                   <p className="text-sm text-gray-700 line-clamp-3 min-h-[3rem] flex-1">
                     {img.prompt}
                   </p>
-                  <button
+              <button 
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(img.prompt);
@@ -1256,9 +1282,9 @@ const App: React.FC = () => {
                     ) : (
                       <Copy size={16} />
                     )}
-                  </button>
-                </div>
-              </div>
+              </button>
+            </div>
+          </div>
               
               {/* Action Buttons */}
               {img.status === 'completed' && img.url ? (
