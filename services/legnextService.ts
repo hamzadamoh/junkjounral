@@ -8,9 +8,13 @@ const getLegnextApiKey = (): string => {
 };
 
 interface LegnextTaskResponse {
-  jobId: string;
+  jobId?: string;
+  job_id?: string;
+  id?: string;
+  task_id?: string;
   status?: string;
   message?: string;
+  [key: string]: any; // Allow other fields
 }
 
 interface LegnextJobStatus {
@@ -154,13 +158,17 @@ const sendTaskToLegnext = async (
     const json: LegnextTaskResponse = await response.json();
     console.log(`[Legnext] Task creation response:`, JSON.stringify(json, null, 2));
 
-    if (json.jobId) {
-      console.log(`[Legnext] ✅ Task created successfully: ${json.jobId}`);
-      return json.jobId;
+    // Try multiple possible field names for the job ID
+    const jobId = json.jobId || json.job_id || json.id || json.task_id;
+    
+    if (jobId) {
+      console.log(`[Legnext] ✅ Task created successfully: ${jobId}`);
+      return jobId;
     } else {
-      const errorMsg = json.message || 'Failed to create task';
-      console.error(`[Legnext] ❌ Task creation failed:`, errorMsg);
-      throw new Error(errorMsg);
+      // Log the full response for debugging
+      console.error(`[Legnext] ❌ Task creation failed - no jobId found in response. Full response:`, JSON.stringify(json, null, 2));
+      const errorMsg = json.message || json.error?.message || 'Failed to create task - no job ID in response';
+      throw new Error(`${errorMsg}. Please check the console for the full API response.`);
     }
   } catch (error: any) {
     console.error('[Legnext] Exception sending task to Legnext API:', error);
