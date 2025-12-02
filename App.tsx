@@ -12,7 +12,9 @@ import {
   Archive,
   FileText,
   Eye,
-  X
+  X,
+  Copy,
+  Check
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -49,6 +51,7 @@ const App: React.FC = () => {
   const [currentProgress, setCurrentProgress] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
   
 
   // --- Handlers ---
@@ -123,8 +126,8 @@ const App: React.FC = () => {
     setCurrentProgress(0);
     setErrorMsg(null);
 
-    // STEP 1: Generate all prompts in parallel (much faster!)
-    console.log('Generating all prompts in parallel...');
+    // STEP 1: Generate prompts
+    console.log('Generating prompts...');
     
     // Determine the theme name to use - if custom theme, use the custom prompt directly
     const themeName = isCustomTheme && customThemePrompt.trim() 
@@ -135,25 +138,65 @@ const App: React.FC = () => {
     // For predefined themes, it's an enhancement
     const additionalThemePrompt = settings.customThemePrompt || '';
     
-    const promptPromises = Array.from({ length: total }, (_, i) => 
-      generatePromptWithChatGPT(
-        themeName,
-        settings.pageStyle,
-        settings.textureIntensity,
-        settings.elements,
-        settings.includeFrames,
-        settings.includeBorders,
-        i + 1,
-        additionalThemePrompt // Pass additional custom theme prompt (if any)
-      ).catch((error) => {
-        console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error);
-        // Fallback to constructed prompt if ChatGPT fails
-        return constructPrompt(selectedTheme, settings, i);
-      })
-    );
+    // For Midjourney/Legnext: Only generate prompts for the number of requests needed (1 prompt per 4 images)
+    // For Pollinations/Replicate: Generate a prompt for each image
+    let promptsToGenerate: number;
+    let generatedPrompts: string[];
+    
+    if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
+      // Only need prompts for the number of requests (each request generates 4 images)
+      promptsToGenerate = Math.ceil(total / 4);
+      console.log(`[Midjourney/Legnext] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
+      
+      const promptPromises = Array.from({ length: promptsToGenerate }, (_, i) => 
+        generatePromptWithChatGPT(
+          themeName,
+          settings.pageStyle,
+          settings.textureIntensity,
+          settings.elements,
+          settings.includeFrames,
+          settings.includeBorders,
+          i + 1,
+          additionalThemePrompt
+        ).catch((error) => {
+          console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error);
+          // Fallback to constructed prompt if ChatGPT fails
+          return constructPrompt(selectedTheme, settings, i);
+        })
+      );
+      
+      const requestPrompts = await Promise.all(promptPromises);
+      
+      // Expand prompts: each request prompt is used for 4 images
+      generatedPrompts = [];
+      for (let i = 0; i < total; i++) {
+        const requestIdx = Math.floor(i / 4);
+        generatedPrompts.push(requestPrompts[requestIdx] || constructPrompt(selectedTheme, settings, i));
+      }
+    } else {
+      // For Pollinations/Replicate: Generate a prompt for each image
+      promptsToGenerate = total;
+      console.log(`[Pollinations/Replicate] Generating ${promptsToGenerate} prompts (1 prompt per image)`);
+      
+      const promptPromises = Array.from({ length: total }, (_, i) => 
+        generatePromptWithChatGPT(
+          themeName,
+          settings.pageStyle,
+          settings.textureIntensity,
+          settings.elements,
+          settings.includeFrames,
+          settings.includeBorders,
+          i + 1,
+          additionalThemePrompt
+        ).catch((error) => {
+          console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error);
+          // Fallback to constructed prompt if ChatGPT fails
+          return constructPrompt(selectedTheme, settings, i);
+        })
+      );
 
-    // Wait for all prompts to be generated
-    const generatedPrompts = await Promise.all(promptPromises);
+      generatedPrompts = await Promise.all(promptPromises);
+    }
     
     // Update all prompts in the images
     setGeneratedImages(prev => prev.map((img, idx) => ({
@@ -1189,10 +1232,33 @@ const App: React.FC = () => {
                 </span>
               </div>
               
-              {/* Prompt Text */}
-              <p className="text-sm text-gray-700 mb-4 line-clamp-3 min-h-[3rem]">
-                {img.prompt}
-              </p>
+              {/* Prompt Text with Copy Button */}
+              <div className="mb-4">
+                <div className="flex items-start gap-2 mb-2">
+                  <p className="text-sm text-gray-700 line-clamp-3 min-h-[3rem] flex-1">
+                    {img.prompt}
+                  </p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(img.prompt);
+                        setCopiedPromptIndex(idx);
+                        setTimeout(() => setCopiedPromptIndex(null), 2000);
+                      } catch (err) {
+                        console.error('Failed to copy prompt:', err);
+                      }
+                    }}
+                    className="flex-shrink-0 p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="Copy prompt"
+                  >
+                    {copiedPromptIndex === idx ? (
+                      <Check size={16} className="text-green-600" />
+                    ) : (
+                      <Copy size={16} />
+                    )}
+                  </button>
+                </div>
+              </div>
               
               {/* Action Buttons */}
               {img.status === 'completed' && img.url ? (
