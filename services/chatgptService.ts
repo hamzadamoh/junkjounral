@@ -39,58 +39,44 @@ export const generatePromptWithChatGPT = async (
     themeDescription = `${theme} with ${customThemePrompt.trim()}`;
   }
 
-  // Create variation-specific instructions to ensure diversity in SUBJECTS, not just style
-  // Rotate through different types of content: characters, scenes, objects, ephemera, patterns
-  const subjectTypes = [
-    'quirky character', // e.g., skeleton bride, spooky creature, whimsical figure
-    'different quirky character', // e.g., different character entirely
-    'gothic scene or landscape', // e.g., spooky house, haunted forest, gothic town
-    'vintage ephemera and objects', // e.g., old tickets, vintage cards, antique items
-    'decorative pattern or border', // e.g., ornate frame, decorative border, pattern design
-    'different scene or setting', // e.g., different location or environment
-    'vintage collage elements', // e.g., layered paper scraps, mixed media elements
-    'whimsical creature or figure', // e.g., different creature/character
-    'gothic architecture or structure', // e.g., castle, mansion, spooky building
-    'vintage botanical or nature elements', // e.g., twisted trees, gothic flowers, spooky plants
-    'antique decorative elements', // e.g., vintage frames, old labels, antique decorations
-    'different character or figure' // e.g., yet another unique character
+  // Create variation-specific instructions to ensure diversity
+  // Let ChatGPT naturally explore different aspects of the theme
+  const variationInstructions = [
+    'Explore a different aspect or element of the theme - think creatively about what else could represent this theme',
+    'Create a completely different composition, subject, or focal point while staying within the theme',
+    'Focus on different visual elements, objects, or motifs that relate to the theme',
+    'Design a unique interpretation that hasn\'t been used in previous variations',
+    'Think of a different way to represent the theme visually - different subjects, scenes, or elements',
+    'Create a fresh perspective on the theme with distinct visual content',
+    'Explore another facet of the theme with different subjects or compositions',
+    'Design a unique variation that explores a different aspect of the theme',
+    'Create a distinct visual interpretation that differs from previous variations',
+    'Think creatively about other ways to represent the theme visually',
+    'Explore different subjects, elements, or compositions within the theme',
+    'Create a unique design that represents the theme in a different way'
   ];
   
-  const currentSubjectType = subjectTypes[(variationNumber - 1) % subjectTypes.length];
+  const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
   
-  // Add specific variation direction based on number - focus on DIFFERENT SUBJECTS
+  // Add specific variation direction - emphasize natural variety
   let variationDirection = '';
-  const subjectRotation = variationNumber % 4;
-  if (subjectRotation === 1) {
-    variationDirection = `Focus on a DIFFERENT ${currentSubjectType} - create a unique subject that hasn't appeared in previous variations.`;
-  } else if (subjectRotation === 2) {
-    variationDirection = `Focus on a COMPLETELY DIFFERENT ${currentSubjectType} - ensure this is a distinct subject, not just a style variation.`;
-  } else if (subjectRotation === 3) {
-    variationDirection = `Focus on a NEW ${currentSubjectType} - make sure this subject is different from all previous variations.`;
+  if (variationNumber % 3 === 1) {
+    variationDirection = 'Create a DIFFERENT subject, element, or composition within the theme - avoid repeating the same subject from previous variations.';
+  } else if (variationNumber % 3 === 2) {
+    variationDirection = 'Explore a DIFFERENT aspect of the theme - think of other visual elements, subjects, or scenes that relate to this theme.';
   } else {
-    variationDirection = `Focus on an UNIQUE ${currentSubjectType} - create a fresh, distinct subject within the theme.`;
+    variationDirection = 'Design a UNIQUE interpretation of the theme - ensure this variation has distinct visual content, not just a style change.';
   }
-  
-  // Additional instruction to emphasize subject diversity
-  const variationInstruction = `CRITICAL: This variation must feature a DIFFERENT MAIN SUBJECT than previous variations. For example, if previous variations showed pumpkins, this one should show a different subject like a spooky character, gothic house, vintage ephemera, or twisted tree - NOT just pumpkins in a different style. Each variation should be like a different page from a junk journal collection, featuring different subjects, characters, scenes, or elements, all within the ${themeDescription} theme.`;
 
   const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
 
-CRITICAL: THIS VARIATION MUST FEATURE A DIFFERENT MAIN SUBJECT than all previous variations, not just a different style of the same subject.
+CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
 ${variationDirection}
 
 ${variationInstruction}
 
-For example, if the theme is "Halloween Junk Journal Pages":
-- Variation 1 might feature: a quirky skeleton bride character
-- Variation 2 might feature: a spooky gothic house scene
-- Variation 3 might feature: vintage Halloween ephemera and tickets
-- Variation 4 might feature: a twisted gothic tree
-- Variation 5 might feature: a different quirky character (not skeleton bride)
-- And so on...
-
-Each variation should be like a DIFFERENT PAGE from a junk journal collection - featuring different subjects, characters, scenes, objects, or elements - all within the ${themeDescription} theme.
+Think creatively: What are different ways to represent ${themeDescription}? What other subjects, elements, scenes, or compositions could relate to this theme? Each variation should feel like a different page from a collection - naturally varied, not repetitive.
 
 Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
@@ -108,11 +94,11 @@ CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
 - NO still life compositions, NO objects placed around the page
 - Top-down view, flat illustration style, artistic rendering
 - Think of it as an illustrated, artistic rendering of an old, worn vintage journal page - stylized, NOT realistic
-- EACH VARIATION MUST HAVE A DIFFERENT MAIN SUBJECT (different character, scene, object, or element) AND a unique composition, color scheme, and visual style
+- EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style
 
-${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT subject and interpretation each time. For example, if the custom theme mentions "dragons", create different dragon-related subjects: a dragon character, a dragon scene, dragon ephemera, dragon patterns, etc.` : ''}
+${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time. Explore different aspects, subjects, or elements related to "${customThemePrompt.trim()}".` : ''}
 
-Create a DISTINCT and UNIQUE design featuring a DIFFERENT MAIN SUBJECT with specific visual details, colors, mood, composition, and style that differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
+Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that naturally differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
   try {
     const response = await fetch(OPENAI_API_URL, {
