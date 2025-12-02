@@ -19,17 +19,26 @@ interface LegnextTaskResponse {
 
 interface LegnextJobStatus {
   status: string;
+  job_id?: string;
   result?: {
     images?: string[];
     image?: string;
     url?: string;
     urls?: string[];
   };
+  output?: {
+    image_url?: string;
+    image_urls?: string[];
+    images?: string[];
+    image?: string;
+    url?: string;
+    urls?: string[];
+    [key: string]: any;
+  } | string | string[];
   images?: string[];
   image?: string;
   url?: string;
   urls?: string[];
-  output?: string | string[];
   data?: {
     images?: string[];
     image?: string;
@@ -264,8 +273,36 @@ const pollJobUntilComplete = async (
         // Check for images in multiple possible locations
         const images: string[] = [];
         
+        // Try output.image_urls (array) - Legnext.ai format
+        if (status.output && typeof status.output === 'object' && !Array.isArray(status.output)) {
+          if (status.output.image_urls && Array.isArray(status.output.image_urls)) {
+            images.push(...status.output.image_urls.filter(Boolean));
+          }
+          // Try output.image_url (single) - Legnext.ai format
+          else if (status.output.image_url) {
+            images.push(status.output.image_url);
+          }
+          // Try other output fields
+          else if (status.output.images && Array.isArray(status.output.images)) {
+            images.push(...status.output.images.filter(Boolean));
+          } else if (status.output.image) {
+            images.push(status.output.image);
+          } else if (status.output.url) {
+            images.push(status.output.url);
+          } else if (status.output.urls && Array.isArray(status.output.urls)) {
+            images.push(...status.output.urls.filter(Boolean));
+          }
+        }
+        // Try output as string or array
+        else if (status.output) {
+          if (Array.isArray(status.output)) {
+            images.push(...status.output.filter(Boolean));
+          } else if (typeof status.output === 'string') {
+            images.push(status.output);
+          }
+        }
         // Try result.images (array)
-        if (status.result?.images && Array.isArray(status.result.images)) {
+        else if (status.result?.images && Array.isArray(status.result.images)) {
           images.push(...status.result.images.filter(Boolean));
         }
         // Try result.image (single)
@@ -295,14 +332,6 @@ const pollJobUntilComplete = async (
         // Try root-level urls (array)
         else if (status.urls && Array.isArray(status.urls)) {
           images.push(...status.urls.filter(Boolean));
-        }
-        // Try output (can be string or array)
-        else if (status.output) {
-          if (Array.isArray(status.output)) {
-            images.push(...status.output.filter(Boolean));
-          } else if (typeof status.output === 'string') {
-            images.push(status.output);
-          }
         }
         // Try data.images, data.image, data.url, data.urls
         else if (status.data) {
