@@ -217,6 +217,23 @@ export const generateJournalPage = async (
           }
         }
         
+        // Handle Bad Gateway errors (502) - server-side issues, retry with delay
+        if (imageResponse.status === 502 || imageResponse.status === 503 || imageResponse.status === 504) {
+          if (retryCount < maxRetries) {
+            await getNextProxy(); // Rotate to next proxy
+            // Moderate delay for gateway errors: 8s, 16s, 24s, 32s, 40s
+            const retryAfter = 8 + (retryCount * 8);
+            const errorName = imageResponse.status === 502 ? 'Bad Gateway' : 
+                             imageResponse.status === 503 ? 'Service Unavailable' : 'Gateway Timeout';
+            console.warn(`[Pollinations] ${errorName} (${imageResponse.status}). Server issue detected. Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+            retryCount++;
+            continue;
+          } else {
+            throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}. Server error - all retries exhausted.`);
+          }
+        }
+        
         // For other errors, throw immediately
         throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}`);
       } catch (error: any) {
@@ -225,7 +242,11 @@ export const generateJournalPage = async (
                                  error.message?.includes('Network') ||
                                  error.message?.includes('timeout') ||
                                  error.message?.includes('524') ||
-                                 error.message?.includes('429');
+                                 error.message?.includes('429') ||
+                                 error.message?.includes('502') ||
+                                 error.message?.includes('503') ||
+                                 error.message?.includes('504') ||
+                                 error.message?.includes('Bad Gateway');
         
         if (retryCount < maxRetries && isRetryableError) {
           await getNextProxy(); // Rotate to next proxy
