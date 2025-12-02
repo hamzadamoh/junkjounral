@@ -72,8 +72,8 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     : '';
 
   // Construct the final detailed prompt
-  // STRICT: Vintage junk journal aesthetic - aged, distressed, muted colors
-  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, NOT bright colors, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, vintage junk journal aesthetic.`;
+  // STRICT: Vintage junk journal aesthetic - aged, distressed, muted colors, illustrated style
+  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT bright colors, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, vintage junk journal aesthetic, illustrated artistic style.`;
   
   // Add seed for additional variation (Pollinations uses seed parameter)
   if (variationIndex !== undefined) {
@@ -116,9 +116,9 @@ export const generateJournalPage = async (
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
     // CRITICAL: Always append vintage junk journal constraints
-    // STRICT: Vintage aesthetic, muted colors, aged paper, NOT modern/bright
+    // STRICT: Vintage aesthetic, muted colors, aged paper, illustrated style, NOT realistic
     if (customPrompt) {
-      prompt = `${prompt}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, NOT bright vibrant colors, NOT modern watercolor illustrations, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, vintage junk journal aesthetic.`;
+      prompt = `${prompt}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT bright vibrant colors, NOT modern watercolor illustrations, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, vintage junk journal aesthetic, illustrated artistic style.`;
     }
     
     const { width, height } = getAspectRatioDimensions(aspectRatio);
