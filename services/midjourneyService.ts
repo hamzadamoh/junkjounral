@@ -197,12 +197,14 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
       // Also check if there are images even if status doesn't say completed
       // Sometimes GoAPI returns images before status updates
       if (json.data?.output?.image_urls && json.data.output.image_urls.length > 0) {
-        console.log(`[GoAPI] ⚠️ Found images in response but status is "${statusValue}". Images:`, json.data.output.image_urls.length);
-        // If we have images, treat it as completed regardless of status
-        if (statusValue === 'pending' || statusValue === 'processing') {
-          console.warn(`[GoAPI] ⚠️ Status says "${statusValue}" but images are available. Treating as completed.`);
+        // If we have images but status is still pending/processing, treat it as completed
+        if (statusValue === 'pending' || statusValue === 'processing' || statusValue === 'in_progress') {
+          console.log(`[GoAPI] ✅ Found images in response but status is still "${statusValue}". Images: ${json.data.output.image_urls.length}. Treating as completed.`);
           // Update the status in the response to reflect completion
           json.data.status = 'completed';
+        } else if (statusValue === 'completed' || statusValue === 'succeeded') {
+          // Normal case - status is completed and images are present
+          console.log(`[GoAPI] ✅ Task completed with ${json.data.output.image_urls.length} images`);
         }
       }
       
