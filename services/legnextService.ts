@@ -431,11 +431,20 @@ const pollJobUntilComplete = async (
 
 /**
  * Converts image URLs to base64 data URLs
+ * Uses Vercel serverless function proxy to bypass CORS restrictions
  */
 const convertUrlsToBase64 = async (imageUrls: string[]): Promise<string[]> => {
   const convertPromises = imageUrls.map(async (url) => {
     try {
-      const imageResponse = await fetch(url);
+      // Use Vercel serverless function to proxy the image request
+      // This bypasses CORS restrictions
+      const proxyUrl = `/api/legnext/image?url=${encodeURIComponent(url)}`;
+      const imageResponse = await fetch(proxyUrl);
+      
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to fetch image via proxy: ${imageResponse.status} ${imageResponse.statusText}`);
+      }
+      
       const blob = await imageResponse.blob();
       
       return new Promise<string>((resolve, reject) => {
