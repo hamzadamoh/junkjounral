@@ -39,40 +39,58 @@ export const generatePromptWithChatGPT = async (
     themeDescription = `${theme} with ${customThemePrompt.trim()}`;
   }
 
-  // Create variation-specific instructions to ensure diversity
-  const variationInstructions = [
-    'Create a completely different composition and layout from previous variations',
-    'Use a different color palette and visual style while maintaining the theme',
-    'Design a different arrangement with unique positioning of elements',
-    'Create a different mood and atmosphere with varied lighting and tones',
-    'Use different artistic styles (sketch, watercolor, ink, vintage illustration)',
-    'Create different focal points and visual hierarchy',
-    'Use different patterns, textures, and decorative elements',
-    'Create different perspectives and viewpoints of the theme elements',
-    'Use different scales and proportions of elements',
-    'Create different border and frame designs',
-    'Use different typography and script styles',
-    'Create different background treatments and textures'
+  // Create variation-specific instructions to ensure diversity in SUBJECTS, not just style
+  // Rotate through different types of content: characters, scenes, objects, ephemera, patterns
+  const subjectTypes = [
+    'quirky character', // e.g., skeleton bride, spooky creature, whimsical figure
+    'different quirky character', // e.g., different character entirely
+    'gothic scene or landscape', // e.g., spooky house, haunted forest, gothic town
+    'vintage ephemera and objects', // e.g., old tickets, vintage cards, antique items
+    'decorative pattern or border', // e.g., ornate frame, decorative border, pattern design
+    'different scene or setting', // e.g., different location or environment
+    'vintage collage elements', // e.g., layered paper scraps, mixed media elements
+    'whimsical creature or figure', // e.g., different creature/character
+    'gothic architecture or structure', // e.g., castle, mansion, spooky building
+    'vintage botanical or nature elements', // e.g., twisted trees, gothic flowers, spooky plants
+    'antique decorative elements', // e.g., vintage frames, old labels, antique decorations
+    'different character or figure' // e.g., yet another unique character
   ];
   
-  const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
+  const currentSubjectType = subjectTypes[(variationNumber - 1) % subjectTypes.length];
   
-  // Add specific variation direction based on number
+  // Add specific variation direction based on number - focus on DIFFERENT SUBJECTS
   let variationDirection = '';
-  if (variationNumber % 3 === 1) {
-    variationDirection = 'Focus on creating a DIFFERENT composition with unique element placement and layout.';
-  } else if (variationNumber % 3 === 2) {
-    variationDirection = 'Focus on using DIFFERENT colors, tones, and visual style while keeping the theme.';
+  const subjectRotation = variationNumber % 4;
+  if (subjectRotation === 1) {
+    variationDirection = `Focus on a DIFFERENT ${currentSubjectType} - create a unique subject that hasn't appeared in previous variations.`;
+  } else if (subjectRotation === 2) {
+    variationDirection = `Focus on a COMPLETELY DIFFERENT ${currentSubjectType} - ensure this is a distinct subject, not just a style variation.`;
+  } else if (subjectRotation === 3) {
+    variationDirection = `Focus on a NEW ${currentSubjectType} - make sure this subject is different from all previous variations.`;
   } else {
-    variationDirection = 'Focus on DIFFERENT artistic treatment, patterns, and decorative elements.';
+    variationDirection = `Focus on an UNIQUE ${currentSubjectType} - create a fresh, distinct subject within the theme.`;
   }
+  
+  // Additional instruction to emphasize subject diversity
+  const variationInstruction = `CRITICAL: This variation must feature a DIFFERENT MAIN SUBJECT than previous variations. For example, if previous variations showed pumpkins, this one should show a different subject like a spooky character, gothic house, vintage ephemera, or twisted tree - NOT just pumpkins in a different style. Each variation should be like a different page from a junk journal collection, featuring different subjects, characters, scenes, or elements, all within the ${themeDescription} theme.`;
 
   const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
 
-THIS VARIATION MUST BE VISUALLY DIFFERENT from all previous variations while maintaining the ${themeDescription} theme.
+CRITICAL: THIS VARIATION MUST FEATURE A DIFFERENT MAIN SUBJECT than all previous variations, not just a different style of the same subject.
 
 ${variationDirection}
+
 ${variationInstruction}
+
+For example, if the theme is "Halloween Junk Journal Pages":
+- Variation 1 might feature: a quirky skeleton bride character
+- Variation 2 might feature: a spooky gothic house scene
+- Variation 3 might feature: vintage Halloween ephemera and tickets
+- Variation 4 might feature: a twisted gothic tree
+- Variation 5 might feature: a different quirky character (not skeleton bride)
+- And so on...
+
+Each variation should be like a DIFFERENT PAGE from a junk journal collection - featuring different subjects, characters, scenes, objects, or elements - all within the ${themeDescription} theme.
 
 Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
@@ -90,11 +108,11 @@ CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
 - NO still life compositions, NO objects placed around the page
 - Top-down view, flat illustration style, artistic rendering
 - Think of it as an illustrated, artistic rendering of an old, worn vintage journal page - stylized, NOT realistic
-- EACH VARIATION MUST HAVE A UNIQUE COMPOSITION, COLOR SCHEME, AND VISUAL STYLE
+- EACH VARIATION MUST HAVE A DIFFERENT MAIN SUBJECT (different character, scene, object, or element) AND a unique composition, color scheme, and visual style
 
-${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time.` : ''}
+${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT subject and interpretation each time. For example, if the custom theme mentions "dragons", create different dragon-related subjects: a dragon character, a dragon scene, dragon ephemera, dragon patterns, etc.` : ''}
 
-Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
+Create a DISTINCT and UNIQUE design featuring a DIFFERENT MAIN SUBJECT with specific visual details, colors, mood, composition, and style that differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
   try {
     const response = await fetch(OPENAI_API_URL, {
