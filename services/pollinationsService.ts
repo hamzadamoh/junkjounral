@@ -175,12 +175,11 @@ export const generateJournalPage = async (
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
+        // Pollinations API doesn't allow custom headers due to CORS restrictions
+        // Use cache: 'no-cache' in fetch options instead of headers
         imageResponse = await fetch(requestUrl, {
-          // Add cache-busting headers to ensure fresh requests
           cache: 'no-cache',
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
+          // Don't add custom headers - Pollinations CORS policy doesn't allow them
         });
         
         if (imageResponse.ok) {
