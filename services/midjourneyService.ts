@@ -22,6 +22,10 @@ interface GoApiTaskStatus {
       image_urls: string[];
     };
     message?: string;
+    queue_position?: number;
+    estimated_wait_time?: number;
+    process_mode?: string;
+    is_using_private_pool?: boolean;
   };
   message?: string;
 }
@@ -186,7 +190,19 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
     if (json.code === 200) {
       const statusValue = json.data?.status || 'unknown';
       const progressValue = json.data?.progress || 'N/A';
-      console.log(`[GoAPI] Task ${taskId} status: ${statusValue}, progress: ${progressValue}%`);
+      const queuePosition = json.data?.queue_position;
+      const estimatedWait = json.data?.estimated_wait_time;
+      const processMode = json.data?.process_mode;
+      const privatePool = json.data?.is_using_private_pool;
+      
+      // Build status message with additional info
+      let statusMsg = `[GoAPI] Task ${taskId} status: ${statusValue}`;
+      if (progressValue !== 'N/A') statusMsg += `, progress: ${progressValue}%`;
+      if (queuePosition !== undefined) statusMsg += `, queue position: ${queuePosition}`;
+      if (estimatedWait !== undefined) statusMsg += `, estimated wait: ${estimatedWait}s`;
+      if (processMode) statusMsg += `, mode: ${processMode}`;
+      if (privatePool !== undefined) statusMsg += `, private pool: ${privatePool}`;
+      console.log(statusMsg);
       
       // Log full response periodically or if status is unexpected to help debug
       const shouldLogFull = !['pending', 'processing', 'in_progress', 'queued', 'completed', 'succeeded', 'failed', 'error'].includes(statusValue);
@@ -303,24 +319,38 @@ const pollTaskUntilComplete = async (
         const elapsedSeconds = (Date.now() - startTime) / 1000;
         const elapsedMinutes = Math.round(elapsedSeconds / 60);
         
-        // Special handling for tasks stuck in "pending" for too long
-        if (currentStatus === 'pending' && elapsedSeconds > 900) { // 15 minutes
+        // Special handling for tasks stuck in "pending" or "processing" for too long
+        const fullResponse = status as any;
+        const queuePosition = fullResponse.data?.queue_position;
+        const estimatedWait = fullResponse.data?.estimated_wait_time;
+        const processMode = fullResponse.data?.process_mode;
+        
+        if ((currentStatus === 'pending' || currentStatus === 'processing') && elapsedSeconds > 600) { // 10 minutes
           // Check if there's an error in the response
-          const fullResponse = status as any;
           if (fullResponse.error && fullResponse.error.message) {
             console.error(`[GoAPI] ❌ Task ${taskId} has error after ${elapsedMinutes} minutes:`, fullResponse.error.message);
             throw new Error(`Task error: ${fullResponse.error.message}`);
           }
           
-          // If pending for > 15 minutes, it might be stuck - warn user
+          // If processing for > 10 minutes, provide detailed info
           if (attempts % 5 === 0) { // Every 5 attempts (about every 1-2 minutes)
-            console.warn(`[GoAPI] ⚠️ Task ${taskId} has been PENDING for ${elapsedMinutes} minutes. This is unusually long.`);
-            console.warn(`[GoAPI] The task may be stuck in queue. Check manually: https://goapi.ai/dashboard`);
+            console.warn(`[GoAPI] ⚠️ Task ${taskId} has been ${currentStatus.toUpperCase()} for ${elapsedMinutes} minutes.`);
+            
+            if (queuePosition !== undefined) {
+              console.warn(`[GoAPI] Queue position: ${queuePosition}${estimatedWait ? `, estimated wait: ${estimatedWait}s` : ''}`);
+            }
+            
+            if (processMode === 'fast') {
+              console.warn(`[GoAPI] Using "fast" mode - if your Fast GPU time is exhausted, tasks may queue longer.`);
+            }
+            
+            console.warn(`[GoAPI] This can happen during high server load. Check manually: https://goapi.ai/dashboard`);
             console.warn(`[GoAPI] Task details:`, JSON.stringify({
               task_id: taskId,
               status: currentStatus,
-              process_mode: fullResponse.data?.process_mode,
-              model_version: fullResponse.data?.model_version,
+              process_mode: processMode,
+              queue_position: queuePosition,
+              estimated_wait_time: estimatedWait,
               is_using_private_pool: fullResponse.data?.is_using_private_pool,
               error: fullResponse.error
             }, null, 2));
