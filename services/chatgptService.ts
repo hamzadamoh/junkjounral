@@ -39,7 +39,42 @@ export const generatePromptWithChatGPT = async (
     themeDescription = `${theme} with ${customThemePrompt.trim()}`;
   }
 
-  const userPrompt = `Create a unique prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
+  // Create variation-specific instructions to ensure diversity
+  const variationInstructions = [
+    'Create a completely different composition and layout from previous variations',
+    'Use a different color palette and visual style while maintaining the theme',
+    'Design a different arrangement with unique positioning of elements',
+    'Create a different mood and atmosphere with varied lighting and tones',
+    'Use different artistic styles (sketch, watercolor, ink, vintage illustration)',
+    'Create different focal points and visual hierarchy',
+    'Use different patterns, textures, and decorative elements',
+    'Create different perspectives and viewpoints of the theme elements',
+    'Use different scales and proportions of elements',
+    'Create different border and frame designs',
+    'Use different typography and script styles',
+    'Create different background treatments and textures'
+  ];
+  
+  const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
+  
+  // Add specific variation direction based on number
+  let variationDirection = '';
+  if (variationNumber % 3 === 1) {
+    variationDirection = 'Focus on creating a DIFFERENT composition with unique element placement and layout.';
+  } else if (variationNumber % 3 === 2) {
+    variationDirection = 'Focus on using DIFFERENT colors, tones, and visual style while keeping the theme.';
+  } else {
+    variationDirection = 'Focus on DIFFERENT artistic treatment, patterns, and decorative elements.';
+  }
+
+  const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
+
+THIS VARIATION MUST BE VISUALLY DIFFERENT from all previous variations while maintaining the ${themeDescription} theme.
+
+${variationDirection}
+${variationInstruction}
+
+Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
 CRITICAL REQUIREMENTS:
 - FLAT printable page design (like a digital scrapbook page)
@@ -48,10 +83,11 @@ CRITICAL REQUIREMENTS:
 - Top-down view, flat illustration style
 - Digital design suitable for printing
 - Think of it as a flat collage on paper, not a photograph of objects
+- EACH VARIATION MUST HAVE A UNIQUE COMPOSITION, COLOR SCHEME, AND VISUAL STYLE
 
-${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally.` : ''}
+${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time.` : ''}
 
-Make it unique with specific visual details, colors, and mood. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
+Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
   try {
     const response = await fetch(OPENAI_API_URL, {
@@ -66,8 +102,8 @@ Make it unique with specific visual details, colors, and mood. 2-3 sentences. Re
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.9, // Higher temperature for more creative variation
-        max_tokens: 150, // Reduced for faster generation
+        temperature: 1.2, // Increased temperature for maximum creative variation (higher = more diverse)
+        max_tokens: 200, // Increased to allow for more detailed, varied descriptions
         stream: false // Ensure non-streaming for parallel requests
       })
     });
