@@ -272,19 +272,49 @@ const pollTaskUntilComplete = async (
           onProgress(progressMsg);
         }
         
-        // If stuck in processing for a long time, provide helpful diagnostics
         const elapsedSeconds = (Date.now() - startTime) / 1000;
-        if (elapsedSeconds > 300 && attempts % 10 === 0) {
-          const elapsedMinutes = Math.round(elapsedSeconds / 60);
+        const elapsedMinutes = Math.round(elapsedSeconds / 60);
+        
+        // Special handling for tasks stuck in "pending" for too long
+        if (currentStatus === 'pending' && elapsedSeconds > 900) { // 15 minutes
+          // Check if there's an error in the response
+          const fullResponse = status as any;
+          if (fullResponse.error && fullResponse.error.message) {
+            console.error(`[GoAPI] ❌ Task ${taskId} has error after ${elapsedMinutes} minutes:`, fullResponse.error.message);
+            throw new Error(`Task error: ${fullResponse.error.message}`);
+          }
+          
+          // If pending for > 15 minutes, it might be stuck - warn user
+          if (attempts % 5 === 0) { // Every 5 attempts (about every 1-2 minutes)
+            console.warn(`[GoAPI] ⚠️ Task ${taskId} has been PENDING for ${elapsedMinutes} minutes. This is unusually long.`);
+            console.warn(`[GoAPI] The task may be stuck in queue. Check manually: https://goapi.ai/dashboard`);
+            console.warn(`[GoAPI] Task details:`, JSON.stringify({
+              task_id: taskId,
+              status: currentStatus,
+              process_mode: fullResponse.data?.process_mode,
+              model_version: fullResponse.data?.model_version,
+              is_using_private_pool: fullResponse.data?.is_using_private_pool,
+              error: fullResponse.error
+            }, null, 2));
+          }
+        }
+        
+        // If stuck in processing for a long time, provide helpful diagnostics
+        if (elapsedSeconds > 300 && attempts % 10 === 0 && currentStatus !== 'pending') {
           console.warn(`[GoAPI] ⚠️ Task ${taskId} has been ${currentStatus} for ${elapsedMinutes} minutes.`);
           console.warn(`[GoAPI] This is normal for Midjourney - generation can take 5-15 minutes depending on server load.`);
           console.warn(`[GoAPI] Check status manually: https://goapi.ai/dashboard or API: https://api.goapi.ai/api/v1/task/${taskId}`);
-          console.warn(`[GoAPI] Full response:`, JSON.stringify(status, null, 2));
         }
         
-        // Wait before next poll with exponential backoff (max 15 seconds)
+        // For pending status that's been waiting a long time, increase delay to avoid spamming
+        if (currentStatus === 'pending' && elapsedSeconds > 600) { // 10 minutes
+          delay = Math.min(delay * 1.2, 30000); // Slower polling, max 30 seconds
+        } else {
+          // Wait before next poll with exponential backoff (max 15 seconds)
+          delay = Math.min(delay * 1.1, 15000);
+        }
+        
         await new Promise(resolve => setTimeout(resolve, delay));
-        delay = Math.min(delay * 1.1, 15000); // Slower backoff, max 15 seconds
         attempts++;
       } 
       // Unknown status - log it and continue (might be a new status we haven't seen)
