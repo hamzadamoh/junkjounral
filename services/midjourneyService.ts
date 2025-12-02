@@ -217,6 +217,7 @@ const pollTaskUntilComplete = async (
   const startTime = Date.now();
 
   console.log(`[GoAPI] Starting to poll task ${taskId}, max attempts: ${maxAttempts} (up to ~${Math.round((maxAttempts * delay) / 1000 / 60)} minutes)`);
+  console.log(`[GoAPI] 💡 Tip: You can check task status manually at https://goapi.ai/dashboard or via API: GET https://api.goapi.ai/api/v1/task/${taskId}`);
 
   while (attempts < maxAttempts) {
     try {
@@ -234,16 +235,27 @@ const pollTaskUntilComplete = async (
       const elapsedMinutes = Math.round((Date.now() - startTime) / 1000 / 60 * 10) / 10;
       console.log(`[GoAPI] Task ${taskId} (attempt ${attempts + 1}/${maxAttempts}, ${elapsedMinutes}m elapsed): status="${currentStatus}", progress=${progress || 'N/A'}%`);
 
-      // Handle completed status
-      if (currentStatus === 'completed' || currentStatus === 'succeeded') {
+      // Handle completed status - check multiple possible completion statuses
+      if (currentStatus === 'completed' || currentStatus === 'succeeded' || currentStatus === 'done' || currentStatus === 'success') {
+        // Check if images are available in output
         if (status.data.output?.image_urls && status.data.output.image_urls.length > 0) {
           console.log(`[GoAPI] ✅ Task ${taskId} completed! Found ${status.data.output.image_urls.length} images`);
           // Return ALL image URLs (Midjourney typically returns 4 variations)
           return status.data.output.image_urls;
-        } else {
+        } 
+        // Sometimes images might be in a different location - check the full response
+        else {
           // Log the full response to see what we got
-          console.error(`[GoAPI] Task completed but no images. Full response:`, JSON.stringify(status, null, 2));
-          throw new Error('Task completed but no image URLs found in response');
+          console.warn(`[GoAPI] Task marked as ${currentStatus} but no images in output. Full response:`, JSON.stringify(status, null, 2));
+          
+          // Check if there are images elsewhere in the response
+          const fullResponse = status as any;
+          if (fullResponse.data?.images && Array.isArray(fullResponse.data.images)) {
+            console.log(`[GoAPI] Found images in alternative location:`, fullResponse.data.images);
+            return fullResponse.data.images.map((img: any) => typeof img === 'string' ? img : img.url || img.image_url);
+          }
+          
+          throw new Error(`Task completed (status: ${currentStatus}) but no image URLs found in response`);
         }
       } 
       // Handle failed status
@@ -253,11 +265,21 @@ const pollTaskUntilComplete = async (
         throw new Error(errorMsg);
       }
       // Handle in-progress statuses (pending, processing, etc.)
-      else if (currentStatus === 'pending' || currentStatus === 'processing' || currentStatus === 'in_progress' || currentStatus === 'queued' || currentStatus === 'waiting') {
+      else if (currentStatus === 'pending' || currentStatus === 'processing' || currentStatus === 'in_progress' || currentStatus === 'queued' || currentStatus === 'waiting' || currentStatus === 'running') {
         // Update progress if callback provided
         if (onProgress) {
           const progressMsg = progress ? `${currentStatus} (${progress}%)` : currentStatus;
           onProgress(progressMsg);
+        }
+        
+        // If stuck in processing for a long time, provide helpful diagnostics
+        const elapsedSeconds = (Date.now() - startTime) / 1000;
+        if (elapsedSeconds > 300 && attempts % 10 === 0) {
+          const elapsedMinutes = Math.round(elapsedSeconds / 60);
+          console.warn(`[GoAPI] ⚠️ Task ${taskId} has been ${currentStatus} for ${elapsedMinutes} minutes.`);
+          console.warn(`[GoAPI] This is normal for Midjourney - generation can take 5-15 minutes depending on server load.`);
+          console.warn(`[GoAPI] Check status manually: https://goapi.ai/dashboard or API: https://api.goapi.ai/api/v1/task/${taskId}`);
+          console.warn(`[GoAPI] Full response:`, JSON.stringify(status, null, 2));
         }
         
         // Wait before next poll with exponential backoff (max 15 seconds)
@@ -266,8 +288,21 @@ const pollTaskUntilComplete = async (
         attempts++;
       } 
       // Unknown status - log it and continue (might be a new status we haven't seen)
+      // But also check if it might actually be completed with images
       else {
         console.warn(`[GoAPI] ⚠️ Unknown status for task ${taskId}: "${currentStatus}". Full response:`, JSON.stringify(status, null, 2));
+        
+        // Check if images are present even with unknown status (some APIs return images before status updates)
+        const fullResponse = status as any;
+        if (fullResponse.data?.output?.image_urls && fullResponse.data.output.image_urls.length > 0) {
+          console.log(`[GoAPI] ✅ Found images despite unknown status "${currentStatus}". Returning images.`);
+          return fullResponse.data.output.image_urls;
+        }
+        if (fullResponse.data?.images && Array.isArray(fullResponse.data.images) && fullResponse.data.images.length > 0) {
+          console.log(`[GoAPI] ✅ Found images in alternative location despite unknown status "${currentStatus}". Returning images.`);
+          return fullResponse.data.images.map((img: any) => typeof img === 'string' ? img : img.url || img.image_url);
+        }
+        
         if (onProgress) {
           onProgress(currentStatus);
         }
