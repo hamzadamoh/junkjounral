@@ -121,9 +121,34 @@ const sendTaskToLegnext = async (
     
     // Check response status before parsing
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Legnext] HTTP ${response.status} error creating task:`, errorText);
-      throw new Error(`Legnext HTTP error: ${response.status} - ${errorText}`);
+      let errorMessage = `Legnext HTTP error: ${response.status}`;
+      let errorDetail = '';
+      
+      try {
+        const errorJson = await response.json();
+        console.error(`[Legnext] HTTP ${response.status} error creating task:`, JSON.stringify(errorJson, null, 2));
+        
+        // Handle specific error cases
+        if (response.status === 402) {
+          const quotaError = errorJson.error?.message || errorJson.message || 'insufficient quota';
+          errorMessage = `Legnext API error: Insufficient quota. Your Legnext.ai account has no credits remaining or has exceeded its usage limit.`;
+          errorDetail = `Please check your Legnext.ai account balance at https://legnext.ai/dashboard and add credits if needed. Error details: ${quotaError}`;
+        } else if (response.status === 401) {
+          errorMessage = `Legnext API error: Invalid API key. Please check that VITE_LEGNEXT_API_KEY is set correctly.`;
+        } else if (response.status === 429) {
+          errorMessage = `Legnext API error: Rate limit exceeded. Please wait a moment and try again.`;
+        } else {
+          errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
+          errorMessage = `Legnext HTTP error: ${response.status} - ${errorDetail}`;
+        }
+      } catch (parseError) {
+        const errorText = await response.text();
+        console.error(`[Legnext] HTTP ${response.status} error (could not parse JSON):`, errorText);
+        errorMessage = `Legnext HTTP error: ${response.status} - ${errorText}`;
+      }
+      
+      const fullError = errorDetail ? `${errorMessage} ${errorDetail}` : errorMessage;
+      throw new Error(fullError);
     }
     
     const json: LegnextTaskResponse = await response.json();
@@ -139,6 +164,10 @@ const sendTaskToLegnext = async (
     }
   } catch (error: any) {
     console.error('[Legnext] Exception sending task to Legnext API:', error);
+    // If error already has a detailed message, use it; otherwise provide generic message
+    if (error.message && error.message.includes('Legnext')) {
+      throw error;
+    }
     throw new Error(error.message || 'Failed to send task to Legnext API');
   }
 };
