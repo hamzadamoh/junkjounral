@@ -819,7 +819,8 @@ const App: React.FC = () => {
                   {[
                     { value: 'pollinations', label: 'Pollinations (Free)', desc: 'Fast, free, no API key' },
                     { value: 'replicate', label: 'Replicate', desc: 'Multiple models, works via Vercel proxy' },
-                    { value: 'midjourney', label: 'Midjourney', desc: 'Premium quality, requires API key' }
+                    { value: 'midjourney', label: 'Midjourney (GoAPI)', desc: 'Premium quality via GoAPI, requires API key' },
+                    { value: 'legnext', label: 'Midjourney (Legnext)', desc: 'Premium quality via Legnext.ai, requires API key' }
                   ].map((service) => (
                     <button
                       key={service.value}
