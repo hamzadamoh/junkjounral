@@ -17,10 +17,13 @@ interface GoApiTaskStatus {
   code: number;
   data: {
     status: string;
+    progress?: number;
     output?: {
       image_urls: string[];
     };
+    message?: string;
   };
+  message?: string;
 }
 
 const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersForMJ?: string, variationIndex?: number): string => {
@@ -123,16 +126,29 @@ const sendTaskToGoApi = async (
   };
 
   try {
+    console.log(`[GoAPI] Creating task with prompt: ${prompt.substring(0, 100)}...`);
     const response = await fetch(`${GOAPI_BASE_URL}/mj/v2/imagine`, options);
+    
+    // Check response status before parsing
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[GoAPI] HTTP ${response.status} error creating task:`, errorText);
+      throw new Error(`GoAPI HTTP error: ${response.status} - ${errorText}`);
+    }
+    
     const json: GoApiTaskResponse = await response.json();
+    console.log(`[GoAPI] Task creation response:`, JSON.stringify(json, null, 2));
 
     if (json.status === 'success' && json.task_id) {
+      console.log(`[GoAPI] ✅ Task created successfully: ${json.task_id}`);
       return json.task_id;
     } else {
-      throw new Error(json.message || 'Failed to create task');
+      const errorMsg = json.message || 'Failed to create task';
+      console.error(`[GoAPI] ❌ Task creation failed:`, errorMsg);
+      throw new Error(errorMsg);
     }
   } catch (error: any) {
-    console.error('Error sending task to Go API:', error);
+    console.error('[GoAPI] Exception sending task to Go API:', error);
     throw new Error(error.message || 'Failed to send task to Go API');
   }
 };
@@ -156,19 +172,33 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
 
   try {
     const response = await fetch(`${GOAPI_BASE_URL}/api/v1/task/${taskId}`, options);
+    
+    // Check if response is ok before parsing
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[GoAPI] HTTP ${response.status} error for task ${taskId}:`, errorText);
+      throw new Error(`GoAPI HTTP error: ${response.status} - ${errorText}`);
+    }
+    
     const json: GoApiTaskStatus = await response.json();
 
+    // Log response for debugging (but not the full JSON every time to reduce noise)
     if (json.code === 200) {
-      // Log the full response for debugging
-      console.log(`Task ${taskId} response:`, JSON.stringify(json, null, 2));
+      console.log(`[GoAPI] Task ${taskId} status: ${json.data?.status || 'unknown'}, progress: ${json.data?.progress || 'N/A'}`);
+      // Only log full response if status is unexpected
+      if (json.data?.status && !['pending', 'processing', 'in_progress', 'queued', 'completed', 'succeeded', 'failed', 'error'].includes(json.data.status)) {
+        console.log(`[GoAPI] Unexpected status response:`, JSON.stringify(json, null, 2));
+      }
       return json;
     } else {
-      console.error('Error from Go API:', json);
-      return null;
+      console.error(`[GoAPI] Error response for task ${taskId}:`, JSON.stringify(json, null, 2));
+      // Don't return null - throw with the actual error message
+      throw new Error(`GoAPI error: ${json.code} - ${(json as any).message || 'Unknown error'}`);
     }
   } catch (error: any) {
-    console.error('Exception in getTaskStatus:', error);
-    return null;
+    console.error(`[GoAPI] Exception in getTaskStatus for task ${taskId}:`, error);
+    // Re-throw the error instead of returning null so we can see what went wrong
+    throw error;
   }
 };
 
@@ -179,64 +209,89 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
 const pollTaskUntilComplete = async (
   taskId: string,
   onProgress?: (status: string) => void,
-  maxAttempts: number = 120, // Increased to 120 attempts (about 10-20 minutes)
-  initialDelay: number = 3000 // Start with 3 seconds
+  maxAttempts: number = 180, // Increased to 180 attempts (about 15-30 minutes for slow generations)
+  initialDelay: number = 5000 // Start with 5 seconds (Midjourney can be slow)
 ): Promise<string[]> => {
   let attempts = 0;
   let delay = initialDelay;
+  const startTime = Date.now();
 
-  console.log(`Starting to poll task ${taskId}, max attempts: ${maxAttempts}`);
+  console.log(`[GoAPI] Starting to poll task ${taskId}, max attempts: ${maxAttempts} (up to ~${Math.round((maxAttempts * delay) / 1000 / 60)} minutes)`);
 
   while (attempts < maxAttempts) {
-    const status = await getTaskStatus(taskId);
+    try {
+      const status = await getTaskStatus(taskId);
 
-    if (!status) {
-      console.error(`Failed to get status for task ${taskId} on attempt ${attempts + 1}`);
-      throw new Error('Failed to get task status');
-    }
-
-    const currentStatus = status.data.status;
-    console.log(`Task ${taskId} status (attempt ${attempts + 1}/${maxAttempts}): ${currentStatus}`);
-
-    // Handle completed status
-    if (currentStatus === 'completed' || currentStatus === 'succeeded') {
-      if (status.data.output?.image_urls && status.data.output.image_urls.length > 0) {
-        console.log(`Task ${taskId} completed! Found ${status.data.output.image_urls.length} images`);
-        // Return ALL image URLs (Midjourney typically returns 4 variations)
-        return status.data.output.image_urls;
-      } else {
-        throw new Error('Task completed but no image URL found');
+      if (!status || !status.data) {
+        console.error(`[GoAPI] Invalid status response for task ${taskId} on attempt ${attempts + 1}`);
+        throw new Error('Invalid status response from GoAPI');
       }
-    } 
-    // Handle failed status
-    else if (currentStatus === 'failed' || currentStatus === 'error') {
-      throw new Error(`Task failed with status: ${currentStatus}`);
-    }
-    // Handle in-progress statuses (pending, processing, etc.)
-    else if (currentStatus === 'pending' || currentStatus === 'processing' || currentStatus === 'in_progress' || currentStatus === 'queued') {
-      // Update progress if callback provided
-      if (onProgress) {
-        onProgress(currentStatus);
-      }
+
+      const currentStatus = status.data.status;
+      const progress = status.data.progress;
       
-      // Wait before next poll with exponential backoff (max 15 seconds)
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay = Math.min(delay * 1.1, 15000); // Slower backoff, max 15 seconds
-      attempts++;
-    } 
-    // Unknown status - log it and continue
-    else {
-      console.warn(`Unknown status for task ${taskId}: ${currentStatus}`);
-      if (onProgress) {
-        onProgress(currentStatus);
+      // More detailed logging with elapsed time
+      const elapsedMinutes = Math.round((Date.now() - startTime) / 1000 / 60 * 10) / 10;
+      console.log(`[GoAPI] Task ${taskId} (attempt ${attempts + 1}/${maxAttempts}, ${elapsedMinutes}m elapsed): status="${currentStatus}", progress=${progress || 'N/A'}%`);
+
+      // Handle completed status
+      if (currentStatus === 'completed' || currentStatus === 'succeeded') {
+        if (status.data.output?.image_urls && status.data.output.image_urls.length > 0) {
+          console.log(`[GoAPI] ✅ Task ${taskId} completed! Found ${status.data.output.image_urls.length} images`);
+          // Return ALL image URLs (Midjourney typically returns 4 variations)
+          return status.data.output.image_urls;
+        } else {
+          // Log the full response to see what we got
+          console.error(`[GoAPI] Task completed but no images. Full response:`, JSON.stringify(status, null, 2));
+          throw new Error('Task completed but no image URLs found in response');
+        }
+      } 
+      // Handle failed status
+      else if (currentStatus === 'failed' || currentStatus === 'error') {
+        const errorMsg = (status as any).message || `Task failed with status: ${currentStatus}`;
+        console.error(`[GoAPI] ❌ Task ${taskId} failed:`, errorMsg);
+        throw new Error(errorMsg);
       }
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay = Math.min(delay * 1.1, 15000);
-      attempts++;
+      // Handle in-progress statuses (pending, processing, etc.)
+      else if (currentStatus === 'pending' || currentStatus === 'processing' || currentStatus === 'in_progress' || currentStatus === 'queued' || currentStatus === 'waiting') {
+        // Update progress if callback provided
+        if (onProgress) {
+          const progressMsg = progress ? `${currentStatus} (${progress}%)` : currentStatus;
+          onProgress(progressMsg);
+        }
+        
+        // Wait before next poll with exponential backoff (max 15 seconds)
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay = Math.min(delay * 1.1, 15000); // Slower backoff, max 15 seconds
+        attempts++;
+      } 
+      // Unknown status - log it and continue (might be a new status we haven't seen)
+      else {
+        console.warn(`[GoAPI] ⚠️ Unknown status for task ${taskId}: "${currentStatus}". Full response:`, JSON.stringify(status, null, 2));
+        if (onProgress) {
+          onProgress(currentStatus);
+        }
+        // For unknown statuses, wait a bit longer before retrying
+        await new Promise(resolve => setTimeout(resolve, Math.max(delay, 5000)));
+        delay = Math.min(delay * 1.1, 15000);
+        attempts++;
+      }
+    } catch (error: any) {
+      // If it's a network/API error, we might want to retry
+      if (attempts < maxAttempts - 1 && (error.message?.includes('fetch') || error.message?.includes('network') || error.message?.includes('HTTP'))) {
+        console.warn(`[GoAPI] Network/API error for task ${taskId}, retrying... (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delay * 2)); // Wait longer on errors
+        delay = Math.min(delay * 1.2, 20000); // Increase delay more on errors
+        attempts++;
+        continue;
+      }
+      // For other errors (like task failed), throw immediately
+      throw error;
     }
   }
 
-  throw new Error(`Task polling timeout after ${maxAttempts} attempts (approximately ${Math.round((maxAttempts * delay) / 1000 / 60)} minutes)`);
+  const elapsedMinutes = Math.round((Date.now() - startTime) / 1000 / 60 * 10) / 10;
+  throw new Error(`Task polling timeout after ${attempts} attempts (${elapsedMinutes} minutes elapsed). Task ${taskId} may still be processing. Check the GoAPI dashboard for status.`);
 };
 
 /**
