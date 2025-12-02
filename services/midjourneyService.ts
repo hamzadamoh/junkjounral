@@ -182,13 +182,30 @@ const getTaskStatus = async (taskId: string): Promise<GoApiTaskStatus | null> =>
     
     const json: GoApiTaskStatus = await response.json();
 
-    // Log response for debugging (but not the full JSON every time to reduce noise)
+    // Log response for debugging
     if (json.code === 200) {
-      console.log(`[GoAPI] Task ${taskId} status: ${json.data?.status || 'unknown'}, progress: ${json.data?.progress || 'N/A'}`);
-      // Only log full response if status is unexpected
-      if (json.data?.status && !['pending', 'processing', 'in_progress', 'queued', 'completed', 'succeeded', 'failed', 'error'].includes(json.data.status)) {
-        console.log(`[GoAPI] Unexpected status response:`, JSON.stringify(json, null, 2));
+      const statusValue = json.data?.status || 'unknown';
+      const progressValue = json.data?.progress || 'N/A';
+      console.log(`[GoAPI] Task ${taskId} status: ${statusValue}, progress: ${progressValue}%`);
+      
+      // Log full response periodically or if status is unexpected to help debug
+      const shouldLogFull = !['pending', 'processing', 'in_progress', 'queued', 'completed', 'succeeded', 'failed', 'error'].includes(statusValue);
+      if (shouldLogFull) {
+        console.log(`[GoAPI] Unexpected status "${statusValue}". Full response:`, JSON.stringify(json, null, 2));
       }
+      
+      // Also check if there are images even if status doesn't say completed
+      // Sometimes GoAPI returns images before status updates
+      if (json.data?.output?.image_urls && json.data.output.image_urls.length > 0) {
+        console.log(`[GoAPI] ⚠️ Found images in response but status is "${statusValue}". Images:`, json.data.output.image_urls.length);
+        // If we have images, treat it as completed regardless of status
+        if (statusValue === 'pending' || statusValue === 'processing') {
+          console.warn(`[GoAPI] ⚠️ Status says "${statusValue}" but images are available. Treating as completed.`);
+          // Update the status in the response to reflect completion
+          json.data.status = 'completed';
+        }
+      }
+      
       return json;
     } else {
       console.error(`[GoAPI] Error response for task ${taskId}:`, JSON.stringify(json, null, 2));
@@ -236,10 +253,19 @@ const pollTaskUntilComplete = async (
       console.log(`[GoAPI] Task ${taskId} (attempt ${attempts + 1}/${maxAttempts}, ${elapsedMinutes}m elapsed): status="${currentStatus}", progress=${progress || 'N/A'}%`);
 
       // Handle completed status - check multiple possible completion statuses
-      if (currentStatus === 'completed' || currentStatus === 'succeeded' || currentStatus === 'done' || currentStatus === 'success') {
+      // Also check if images are available even if status is still "pending" or "processing"
+      // (Sometimes GoAPI returns images before status updates)
+      const hasImages = status.data.output?.image_urls && status.data.output.image_urls.length > 0;
+      const isCompletedStatus = currentStatus === 'completed' || currentStatus === 'succeeded' || currentStatus === 'done' || currentStatus === 'success';
+      
+      if (isCompletedStatus || hasImages) {
         // Check if images are available in output
-        if (status.data.output?.image_urls && status.data.output.image_urls.length > 0) {
-          console.log(`[GoAPI] ✅ Task ${taskId} completed! Found ${status.data.output.image_urls.length} images`);
+        if (hasImages) {
+          if (!isCompletedStatus) {
+            console.log(`[GoAPI] ✅ Task ${taskId} has images available (status: ${currentStatus}). Treating as completed.`);
+          } else {
+            console.log(`[GoAPI] ✅ Task ${taskId} completed! Found ${status.data.output.image_urls.length} images`);
+          }
           // Return ALL image URLs (Midjourney typically returns 4 variations)
           return status.data.output.image_urls;
         } 
