@@ -22,9 +22,23 @@ interface LegnextJobStatus {
   result?: {
     images?: string[];
     image?: string;
+    url?: string;
+    urls?: string[];
+  };
+  images?: string[];
+  image?: string;
+  url?: string;
+  urls?: string[];
+  output?: string | string[];
+  data?: {
+    images?: string[];
+    image?: string;
+    url?: string;
+    urls?: string[];
   };
   error?: string;
   message?: string;
+  [key: string]: any; // Allow other fields
 }
 
 const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersForMJ?: string, variationIndex?: number): string => {
@@ -247,21 +261,73 @@ const pollJobUntilComplete = async (
 
       // Handle completed status
       if (currentStatus === 'completed' || currentStatus === 'success' || currentStatus === 'done') {
-        // Check for images in result
+        // Check for images in multiple possible locations
         const images: string[] = [];
         
+        // Try result.images (array)
         if (status.result?.images && Array.isArray(status.result.images)) {
-          images.push(...status.result.images);
-        } else if (status.result?.image) {
+          images.push(...status.result.images.filter(Boolean));
+        }
+        // Try result.image (single)
+        else if (status.result?.image) {
           images.push(status.result.image);
+        }
+        // Try result.url (single)
+        else if (status.result?.url) {
+          images.push(status.result.url);
+        }
+        // Try result.urls (array)
+        else if (status.result?.urls && Array.isArray(status.result.urls)) {
+          images.push(...status.result.urls.filter(Boolean));
+        }
+        // Try root-level images (array)
+        else if (status.images && Array.isArray(status.images)) {
+          images.push(...status.images.filter(Boolean));
+        }
+        // Try root-level image (single)
+        else if (status.image) {
+          images.push(status.image);
+        }
+        // Try root-level url (single)
+        else if (status.url) {
+          images.push(status.url);
+        }
+        // Try root-level urls (array)
+        else if (status.urls && Array.isArray(status.urls)) {
+          images.push(...status.urls.filter(Boolean));
+        }
+        // Try output (can be string or array)
+        else if (status.output) {
+          if (Array.isArray(status.output)) {
+            images.push(...status.output.filter(Boolean));
+          } else if (typeof status.output === 'string') {
+            images.push(status.output);
+          }
+        }
+        // Try data.images, data.image, data.url, data.urls
+        else if (status.data) {
+          if (status.data.images && Array.isArray(status.data.images)) {
+            images.push(...status.data.images.filter(Boolean));
+          } else if (status.data.image) {
+            images.push(status.data.image);
+          } else if (status.data.url) {
+            images.push(status.data.url);
+          } else if (status.data.urls && Array.isArray(status.data.urls)) {
+            images.push(...status.data.urls.filter(Boolean));
+          }
         }
         
         if (images.length > 0) {
           console.log(`[Legnext] ✅ Job ${jobId} completed! Found ${images.length} images`);
           return images;
         } else {
-          console.error(`[Legnext] Job completed but no images. Full response:`, JSON.stringify(status, null, 2));
-          throw new Error('Job completed but no image URLs found in response');
+          // Log the full response for debugging
+          console.error(`[Legnext] ❌ Job completed but no images found. Full response:`, JSON.stringify(status, null, 2));
+          console.error(`[Legnext] Response keys:`, Object.keys(status));
+          if (status.result) {
+            console.error(`[Legnext] Result keys:`, Object.keys(status.result));
+          }
+          throw new Error('Job completed but no image URLs found in response. Check console for full API response structure.');
         }
       } 
       // Handle failed status
