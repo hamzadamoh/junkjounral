@@ -180,7 +180,7 @@ const App: React.FC = () => {
       // Start all requests with proper timing to maximize rate limit usage
       const requestPromises: Promise<void>[] = [];
       
-      for (let i = 0; i < total; i++) {
+    for (let i = 0; i < total; i++) {
         // Calculate delay for this request (staggered starts)
         const startDelay = i * delayBetweenRequests;
         
@@ -212,7 +212,7 @@ const App: React.FC = () => {
             setGeneratedImages(prev => prev.map((img, idx) => 
               idx === i ? { 
                 ...img, 
-                url: base64Url, 
+          url: base64Url,
                 status: 'completed' as const 
               } : img
             ));
@@ -223,9 +223,9 @@ const App: React.FC = () => {
             });
 
             console.log(`✓ Completed image ${i + 1}/${total}`);
-          } catch (err: any) {
+      } catch (err: any) {
             console.error(`Generation failed for page ${i + 1}:`, err);
-            setErrorMsg(err.message || "Failed to generate some pages.");
+        setErrorMsg(err.message || "Failed to generate some pages.");
             setGeneratedImages(prev => prev.map((img, idx) => 
               idx === i ? { ...img, status: 'error' as const } : img
             ));
@@ -239,11 +239,12 @@ const App: React.FC = () => {
       await Promise.allSettled(requestPromises);
     } else if (settings.imageService === 'pollinations') {
       // For Pollinations, use throttled batch processing to avoid rate limits
-      // Pollinations has rate limits, so we'll process in smaller batches with delays
-      const batchSize = 10; // Process 10 at a time
-      const delayBetweenBatches = 2000; // 2 seconds between batches
+      // Pollinations has strict rate limits, so we'll process in smaller batches with delays
+      const batchSize = 5; // Reduced from 10 to 5 to avoid rate limits
+      const delayBetweenBatches = 5000; // Increased to 5 seconds between batches
+      const delayBetweenRequests = 1000; // 1 second delay between individual requests in a batch
       
-      console.log(`Processing ${total} Pollinations images in batches of ${batchSize}...`);
+      console.log(`Processing ${total} Pollinations images in batches of ${batchSize} with ${delayBetweenBatches}ms delays...`);
       
       for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
         const batchEnd = Math.min(batchStart + batchSize, total);
@@ -251,6 +252,11 @@ const App: React.FC = () => {
         
         const batchPromises = Array.from({ length: batchEnd - batchStart }, async (_, batchIdx) => {
           const i = batchStart + batchIdx;
+          
+          // Add delay between individual requests to avoid hitting rate limits
+          if (batchIdx > 0) {
+            await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
+          }
           try {
             const base64Url = await generateFunction(
               selectedTheme, 
@@ -636,33 +642,33 @@ const App: React.FC = () => {
 
     // Default theme selection view
     return (
-      <div className="animate-fade-in space-y-8">
-        <div className="text-center space-y-4">
-          <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
-          <p className="text-slate-400 max-w-2xl mx-auto">
-            Choose a foundational theme for your junk journal collection. Each theme comes with specialized prompts and textures tailored for print.
-          </p>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {THEMES.map(theme => (
-            <button
-              key={theme.id}
-              onClick={() => handleThemeSelect(theme)}
-              className="group relative overflow-hidden rounded-xl bg-gothic-800 border border-slate-700 hover:border-gothic-gold transition-all duration-300 text-left h-80"
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10" />
-              <img 
-                src={theme.thumbnail} 
-                alt={theme.name} 
-                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute bottom-0 left-0 p-6 z-20 w-full">
-                <h3 className="text-xl font-serif text-slate-100 mb-2 group-hover:text-gothic-gold transition-colors">{theme.name}</h3>
-                <p className="text-sm text-slate-300 line-clamp-2">{theme.description}</p>
-              </div>
-            </button>
-          ))}
+    <div className="animate-fade-in space-y-8">
+      <div className="text-center space-y-4">
+        <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          Choose a foundational theme for your junk journal collection. Each theme comes with specialized prompts and textures tailored for print.
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {THEMES.map(theme => (
+          <button
+            key={theme.id}
+            onClick={() => handleThemeSelect(theme)}
+            className="group relative overflow-hidden rounded-xl bg-gothic-800 border border-slate-700 hover:border-gothic-gold transition-all duration-300 text-left h-80"
+          >
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10" />
+            <img 
+              src={theme.thumbnail} 
+              alt={theme.name} 
+              className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-transform duration-500"
+            />
+            <div className="absolute bottom-0 left-0 p-6 z-20 w-full">
+              <h3 className="text-xl font-serif text-slate-100 mb-2 group-hover:text-gothic-gold transition-colors">{theme.name}</h3>
+              <p className="text-sm text-slate-300 line-clamp-2">{theme.description}</p>
+            </div>
+          </button>
+        ))}
           
           {/* Custom Theme Option */}
           <button
@@ -679,9 +685,9 @@ const App: React.FC = () => {
               </p>
             </div>
           </button>
-        </div>
       </div>
-    );
+    </div>
+  );
   };
 
   const renderSettings = () => (
@@ -731,12 +737,12 @@ const App: React.FC = () => {
                    Quantity (1-200)
                  </label>
                  <div className="flex gap-3 items-center">
-                   <input 
-                     type="range" 
-                     min="1" 
+                 <input 
+                   type="range" 
+                   min="1" 
                      max="200" 
                      value={Math.min(settings.pageCount, 200)}
-                     onChange={(e) => handleSettingChange('pageCount', parseInt(e.target.value))}
+                   onChange={(e) => handleSettingChange('pageCount', parseInt(e.target.value))}
                      className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-gothic-gold"
                    />
                    <input
@@ -799,8 +805,8 @@ const App: React.FC = () => {
                       {ratio}
                     </button>
                   ))}
-                </div>
-              </div>
+            </div>
+          </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Image Generation Service</label>
@@ -1081,22 +1087,22 @@ const App: React.FC = () => {
     const completedCount = generatedImages.filter(img => img.status === 'completed' && img.url).length;
 
     return (
-      <div className="animate-fade-in">
-         <div className="mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <button 
+    <div className="animate-fade-in">
+       <div className="mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <button 
               onClick={() => {
                 setStep(2);
               }} 
-              className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
-            >
-              <ChevronLeft />
-            </button>
+            className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+          >
+            <ChevronLeft />
+          </button>
             <h2 className="text-3xl font-serif text-slate-100">
               Your Collection {generatedImages.length > 0 && `(${generatedImages.length} images)`}
             </h2>
-          </div>
-          
+        </div>
+        
           <div className="flex gap-3 flex-wrap">
             {completedCount > 0 && (
               <>
@@ -1116,18 +1122,18 @@ const App: React.FC = () => {
                 </button>
               </>
             )}
-            <button 
-              onClick={() => {
-                setStep(2);
-                setGeneratedImages([]);
-                setStatus(GenerationStatus.IDLE);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-            >
-              <RefreshCw size={18} /> New Batch
-            </button>
-          </div>
+           <button 
+            onClick={() => {
+              setStep(2);
+              setGeneratedImages([]);
+              setStatus(GenerationStatus.IDLE);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            <RefreshCw size={18} /> New Batch
+          </button>
         </div>
+      </div>
 
         {/* Grid Layout: 3 columns - Show all images */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1153,8 +1159,8 @@ const App: React.FC = () => {
                   <p className="text-sm">Generation Failed</p>
                 </div>
               ) : img.url ? (
-                <img 
-                  src={img.url} 
+            <img 
+              src={img.url} 
                   alt={`Variation ${img.variationNumber || idx + 1}`} 
                   className="w-full h-full object-cover"
                 />
@@ -1183,13 +1189,13 @@ const App: React.FC = () => {
               {/* Action Buttons */}
               {img.status === 'completed' && img.url ? (
                 <div className="flex gap-2">
-                  <button 
+              <button 
                     onClick={() => setPreviewImage(img)}
                     className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
+              >
                     <Eye size={16} />
                     Preview
-                  </button>
+              </button>
                   <button 
                     onClick={() => downloadImage(img, actualIndex)}
                     className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
@@ -1197,7 +1203,7 @@ const App: React.FC = () => {
                     <Download size={16} />
                     Download
                   </button>
-                </div>
+            </div>
               ) : img.status === 'generating' ? (
                 <button 
                   disabled
@@ -1221,13 +1227,13 @@ const App: React.FC = () => {
                   Generate
                 </button>
               )}
-            </div>
+          </div>
           </div>
             );
             })
           )}
-        </div>
-
+      </div>
+      
         {/* Progress indicator if generating */}
         {status === GenerationStatus.GENERATING && (
           <div className="mt-8 p-6 bg-slate-900/50 rounded-xl border border-slate-800 text-center">
@@ -1236,12 +1242,12 @@ const App: React.FC = () => {
                 className="bg-gothic-gold h-full transition-all duration-300 ease-out"
                 style={{ width: `${currentProgress}%` }}
               />
-            </div>
+      </div>
             <p className="text-gothic-gold font-mono text-sm">{Math.round(currentProgress)}% Completed</p>
           </div>
         )}
-      </div>
-    );
+    </div>
+  );
   };
 
   return (
@@ -1263,9 +1269,9 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-12">
-        {step === 1 && renderThemeSelection()}
-        {step === 2 && renderSettings()}
-        {step === 4 && renderGallery()}
+            {step === 1 && renderThemeSelection()}
+            {step === 2 && renderSettings()}
+            {step === 4 && renderGallery()}
         {step === 3 && status === GenerationStatus.GENERATING && renderLoading()}
       </main>
 

@@ -191,7 +191,8 @@ export const generateJournalPage = async (
           if (retryCount < maxRetries) {
             // Get next proxy for retry
             await getNextProxy(); // Rotate to next proxy
-            const retryAfter = 3 + (retryCount * 2); // Exponential backoff: 3s, 5s, 7s, 9s, 11s
+            // Longer exponential backoff for rate limits: 10s, 20s, 30s, 40s, 50s
+            const retryAfter = 10 + (retryCount * 10);
             console.warn(`[Pollinations] Rate limited (429). Rotating proxy and retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
             await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
             retryCount++;
@@ -201,15 +202,38 @@ export const generateJournalPage = async (
           }
         }
         
+        // Handle timeout errors (524) - these are server-side timeouts, retry with longer delay
+        if (imageResponse.status === 524) {
+          if (retryCount < maxRetries) {
+            await getNextProxy(); // Rotate to next proxy
+            // Longer delay for timeouts: 15s, 25s, 35s, 45s, 55s
+            const retryAfter = 15 + (retryCount * 10);
+            console.warn(`[Pollinations] Timeout (524). Server took too long to respond. Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+            retryCount++;
+            continue;
+          } else {
+            throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}. Server timeout - all retries exhausted.`);
+          }
+        }
+        
         // For other errors, throw immediately
         throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}`);
       } catch (error: any) {
-        // If it's a network error and we have retries left, try again
-        if (retryCount < maxRetries && (error.message?.includes('Failed to fetch') || error.message?.includes('Network'))) {
-          console.warn(`[Pollinations] Network error. Retrying with next proxy... (attempt ${retryCount + 1}/${maxRetries})`);
+        // If it's a network error, timeout, or fetch error and we have retries left, try again
+        const isRetryableError = error.message?.includes('Failed to fetch') || 
+                                 error.message?.includes('Network') ||
+                                 error.message?.includes('timeout') ||
+                                 error.message?.includes('524') ||
+                                 error.message?.includes('429');
+        
+        if (retryCount < maxRetries && isRetryableError) {
           await getNextProxy(); // Rotate to next proxy
+          // Longer delay for network errors: 5s, 10s, 15s, 20s, 25s
+          const retryAfter = 5 + (retryCount * 5);
+          console.warn(`[Pollinations] Network/timeout error. Retrying with next proxy after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
           retryCount++;
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
           continue;
         }
         throw error;
