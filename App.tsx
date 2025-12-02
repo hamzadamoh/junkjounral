@@ -27,6 +27,8 @@ const App: React.FC = () => {
   // --- State ---
   const [step, setStep] = useState<number>(1);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [isCustomTheme, setIsCustomTheme] = useState<boolean>(false);
+  const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [settings, setSettings] = useState<GenerationSettings>({
     pageCount: 1, // Defaulting to 1 for demo purposes to save quota
     textureIntensity: 'Medium',
@@ -52,7 +54,30 @@ const App: React.FC = () => {
 
   const handleThemeSelect = (theme: Theme) => {
     setSelectedTheme(theme);
+    setIsCustomTheme(false);
+    setCustomThemePrompt('');
     setStep(2);
+  };
+
+  const handleCustomThemeSelect = () => {
+    setIsCustomTheme(true);
+    setSelectedTheme(null);
+  };
+
+  const handleCustomThemeSubmit = () => {
+    if (customThemePrompt.trim()) {
+      // Create a custom theme object
+      const customTheme: Theme = {
+        id: 'custom',
+        name: 'Custom Theme',
+        description: customThemePrompt.trim(),
+        thumbnail: 'https://picsum.photos/id/106/400/600', // Placeholder
+        basePrompt: customThemePrompt.trim(),
+        styleKeywords: ['custom', 'unique']
+      };
+      setSelectedTheme(customTheme);
+      setStep(2);
+    }
   };
 
   const handleSettingChange = (field: keyof GenerationSettings, value: any) => {
@@ -71,7 +96,8 @@ const App: React.FC = () => {
   };
 
   const startGeneration = async () => {
-    if (!selectedTheme) return;
+    // Allow generation if either a theme is selected OR a custom theme is being used
+    if (!selectedTheme && !isCustomTheme) return;
     
     const total = settings.pageCount;
     const newImages: GeneratedImage[] = [];
@@ -98,16 +124,26 @@ const App: React.FC = () => {
 
     // STEP 1: Generate all prompts in parallel (much faster!)
     console.log('Generating all prompts in parallel...');
+    
+    // Determine the theme name to use - if custom theme, use the custom prompt directly
+    const themeName = isCustomTheme && customThemePrompt.trim() 
+      ? customThemePrompt.trim() 
+      : selectedTheme?.name || 'Custom Theme';
+    
+    // For custom themes, the customThemePrompt from settings is additional details
+    // For predefined themes, it's an enhancement
+    const additionalThemePrompt = settings.customThemePrompt || '';
+    
     const promptPromises = Array.from({ length: total }, (_, i) => 
       generatePromptWithChatGPT(
-        selectedTheme.name,
+        themeName,
         settings.pageStyle,
         settings.textureIntensity,
         settings.elements,
         settings.includeFrames,
         settings.includeBorders,
         i + 1,
-        settings.customThemePrompt // Pass custom theme prompt
+        additionalThemePrompt // Pass additional custom theme prompt (if any)
       ).catch((error) => {
         console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error);
         // Fallback to constructed prompt if ChatGPT fails
@@ -545,37 +581,108 @@ const App: React.FC = () => {
 
   // --- Render Steps ---
 
-  const renderThemeSelection = () => (
-    <div className="animate-fade-in space-y-8">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
-        <p className="text-slate-400 max-w-2xl mx-auto">
-          Choose a foundational theme for your junk journal collection. Each theme comes with specialized prompts and textures tailored for print.
-        </p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {THEMES.map(theme => (
+  const renderThemeSelection = () => {
+    // If custom theme mode is selected, show the input form
+    if (isCustomTheme) {
+      return (
+        <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <button 
+                onClick={() => {
+                  setIsCustomTheme(false);
+                  setCustomThemePrompt('');
+                }}
+                className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+              >
+                <ChevronLeft />
+              </button>
+              <h2 className="text-3xl font-serif text-gothic-gold">Create Custom Theme</h2>
+            </div>
+            <p className="text-slate-400">
+              Enter your own theme description. ChatGPT will use this as the base for generating all prompts.
+            </p>
+          </div>
+
+          <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Custom Theme Description
+              </label>
+              <textarea
+                value={customThemePrompt}
+                onChange={(e) => setCustomThemePrompt(e.target.value)}
+                placeholder="e.g., 'Vintage botanical journal with pressed flowers, dried herbs, and botanical illustrations', 'Steampunk adventure journal with gears, maps, and mechanical drawings', 'Dark romantic gothic journal with roses, lace, and vintage photographs'..."
+                rows={6}
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Describe the overall aesthetic and elements you want in your journal pages. Be specific about colors, textures, and key elements.
+              </p>
+            </div>
+
+            <button
+              onClick={handleCustomThemeSubmit}
+              disabled={!customThemePrompt.trim()}
+              className="w-full bg-gradient-to-r from-gothic-gold to-amber-600 hover:from-amber-500 hover:to-amber-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-black font-bold py-4 rounded-lg shadow-lg shadow-amber-900/20 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+            >
+              <Sparkles className="animate-pulse" size={20} />
+              Continue with Custom Theme
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Default theme selection view
+    return (
+      <div className="animate-fade-in space-y-8">
+        <div className="text-center space-y-4">
+          <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
+          <p className="text-slate-400 max-w-2xl mx-auto">
+            Choose a foundational theme for your junk journal collection. Each theme comes with specialized prompts and textures tailored for print.
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {THEMES.map(theme => (
+            <button
+              key={theme.id}
+              onClick={() => handleThemeSelect(theme)}
+              className="group relative overflow-hidden rounded-xl bg-gothic-800 border border-slate-700 hover:border-gothic-gold transition-all duration-300 text-left h-80"
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10" />
+              <img 
+                src={theme.thumbnail} 
+                alt={theme.name} 
+                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-transform duration-500"
+              />
+              <div className="absolute bottom-0 left-0 p-6 z-20 w-full">
+                <h3 className="text-xl font-serif text-slate-100 mb-2 group-hover:text-gothic-gold transition-colors">{theme.name}</h3>
+                <p className="text-sm text-slate-300 line-clamp-2">{theme.description}</p>
+              </div>
+            </button>
+          ))}
+          
+          {/* Custom Theme Option */}
           <button
-            key={theme.id}
-            onClick={() => handleThemeSelect(theme)}
-            className="group relative overflow-hidden rounded-xl bg-gothic-800 border border-slate-700 hover:border-gothic-gold transition-all duration-300 text-left h-80"
+            onClick={handleCustomThemeSelect}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
           >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10" />
-            <img 
-              src={theme.thumbnail} 
-              alt={theme.name} 
-              className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-transform duration-500"
-            />
-            <div className="absolute bottom-0 left-0 p-6 z-20 w-full">
-              <h3 className="text-xl font-serif text-slate-100 mb-2 group-hover:text-gothic-gold transition-colors">{theme.name}</h3>
-              <p className="text-sm text-slate-300 line-clamp-2">{theme.description}</p>
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <Sparkles className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Custom Theme</h3>
+              <p className="text-sm text-slate-400">
+                Create your own unique theme with a custom description
+              </p>
             </div>
           </button>
-        ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderSettings = () => (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -886,7 +993,9 @@ const App: React.FC = () => {
             <div className="space-y-4 text-sm">
               <div className="flex justify-between pb-2 border-b border-slate-800">
                 <span className="text-slate-500">Theme</span>
-                <span className="text-gothic-gold">{selectedTheme?.name}</span>
+                <span className="text-gothic-gold">
+                  {isCustomTheme ? 'Custom Theme' : selectedTheme?.name}
+                </span>
               </div>
               <div className="flex justify-between pb-2 border-b border-slate-800">
                 <span className="text-slate-500">Style</span>
