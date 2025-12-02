@@ -24,7 +24,7 @@ export interface GenerationSettings {
   aspectRatio?: string;
   midjourneyMode?: string;
   parametersForMJ?: string;
-  imageService?: 'midjourney' | 'pollinations' | 'replicate';
+  imageService?: 'midjourney' | 'pollinations' | 'replicate' | 'legnext';
   replicateModel?: string;
   customThemePrompt?: string;
 }

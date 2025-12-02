@@ -21,6 +21,7 @@ import { Theme, GenerationSettings, GenerationStatus, GeneratedImage } from './t
 import { generateJournalPage as generateWithMidjourney } from './services/midjourneyService';
 import { generateJournalPage as generateWithPollinations } from './services/pollinationsService';
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
+import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generatePromptWithChatGPT } from './services/chatgptService';
 
 const App: React.FC = () => {
@@ -166,6 +167,8 @@ const App: React.FC = () => {
       ? generateWithPollinations 
       : settings.imageService === 'replicate'
       ? generateWithReplicate
+      : settings.imageService === 'legnext'
+      ? generateWithLegnext
       : generateWithMidjourney;
 
     // For Replicate, maximize the 6 requests/minute limit
@@ -305,13 +308,14 @@ const App: React.FC = () => {
           await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
         }
       }
-    } else {
-      // For Midjourney, generate in parallel
+    } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
+      // For Midjourney (GoAPI or Legnext), generate in parallel
       // Note: Midjourney returns 4 images per request, so we need fewer requests
+      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : 'Midjourney';
       const requestsNeeded = Math.ceil(total / 4);
       const imagePromises = Array.from({ length: requestsNeeded }, async (_, requestIdx) => {
         try {
-          // Midjourney returns an array of images (typically 4)
+          // Midjourney/Legnext returns an array of images (typically 4)
           const base64Urls = await generateFunction(
             selectedTheme, 
             settings,
@@ -319,7 +323,7 @@ const App: React.FC = () => {
             settings.aspectRatio || '1:1',
             settings.midjourneyMode || 'fast',
             (status) => {
-              console.log(`Midjourney request ${requestIdx + 1} status: ${status}`);
+              console.log(`${serviceName} request ${requestIdx + 1} status: ${status}`);
               // Update all images that will come from this request
               const startIdx = requestIdx * 4;
               const endIdx = Math.min(startIdx + 4, total);
@@ -356,7 +360,7 @@ const App: React.FC = () => {
 
           return { success: true, index: requestIdx };
         } catch (err: any) {
-          console.error(`Generation failed for Midjourney request ${requestIdx + 1}:`, err);
+          console.error(`Generation failed for ${serviceName} request ${requestIdx + 1}:`, err);
           setErrorMsg(err.message || "Failed to generate some pages.");
           const startIdx = requestIdx * 4;
           const endIdx = Math.min(startIdx + 4, total);
@@ -819,7 +823,7 @@ const App: React.FC = () => {
                   ].map((service) => (
                     <button
                       key={service.value}
-                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate')}
+                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate' | 'legnext')}
                       className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
                         settings.imageService === service.value 
                           ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
@@ -1050,6 +1054,8 @@ const App: React.FC = () => {
       <p className="text-slate-400 mb-8 max-w-md">
         {settings.imageService === 'pollinations' 
           ? 'Pollinations.AI is crafting your' 
+          : settings.imageService === 'legnext' 
+          ? 'Legnext is crafting your'
           : 'Midjourney is crafting your'} {selectedTheme?.name} journal pages. 
         {settings.imageService === 'pollinations' 
           ? ' This should be quick!' 
