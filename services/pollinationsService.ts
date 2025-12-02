@@ -72,7 +72,8 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     : '';
 
   // Construct the final detailed prompt
-  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+  // STRICT: Vintage junk journal aesthetic - aged, distressed, muted colors
+  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, NOT bright colors, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, vintage junk journal aesthetic.`;
   
   // Add seed for additional variation (Pollinations uses seed parameter)
   if (variationIndex !== undefined) {
@@ -114,10 +115,10 @@ export const generateJournalPage = async (
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
-    // CRITICAL: Always append flat printable page constraints to ensure no 3D photography
-    // This is especially important for ChatGPT-generated prompts which might not include these constraints
+    // CRITICAL: Always append vintage junk journal constraints
+    // STRICT: Vintage aesthetic, muted colors, aged paper, NOT modern/bright
     if (customPrompt) {
-      prompt = `${prompt}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design.`;
+      prompt = `${prompt}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, NOT bright vibrant colors, NOT modern watercolor illustrations, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, vintage junk journal aesthetic.`;
     }
     
     const { width, height } = getAspectRatioDimensions(aspectRatio);

@@ -415,7 +415,8 @@ const App: React.FC = () => {
       ? styleVariations[variationIndex % styleVariations.length]
       : '';
 
-    let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+    // STRICT: Vintage junk journal aesthetic - aged, distressed, muted colors
+    let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, muted sepia and brown tones, vintage handwritten script, old faded colors, tea-stained paper, worn edges, vintage collage style, antique ephemera, muted color palette, NOT bright colors, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, vintage junk journal aesthetic.`;
     
     // Add seed or random element for additional variation
     if (variationIndex !== undefined) {

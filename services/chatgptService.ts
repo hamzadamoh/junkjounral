@@ -31,7 +31,7 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
-  const systemPrompt = `You are a creative prompt engineer specializing in FLAT, PRINTABLE junk journal page descriptions. CRITICAL: Generate prompts for FLAT DIGITAL DESIGNS only - NOT 3D photography, NOT still life photos, NOT objects with depth or shadows. The output must be a flat, printable scrapbook page design that can be printed and used in a journal.`;
+  const systemPrompt = `You are a creative prompt engineer specializing in VINTAGE JUNK JOURNAL page descriptions. CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors.`;
 
   // Build the theme description - combine base theme with custom theme prompt if provided
   let themeDescription = theme;
@@ -76,13 +76,18 @@ ${variationInstruction}
 
 Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
-CRITICAL REQUIREMENTS:
-- FLAT printable page design (like a digital scrapbook page)
+CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
+- VINTAGE, AGED, ANTIQUE appearance - must look old and worn
+- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, NOT bright vibrant colors
+- AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
+- HANDWRITTEN SCRIPT: faint vintage handwriting, old script, cursive text visible
+- COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements
+- FLAT printable page design (like a vintage scrapbook page)
+- NO modern watercolor illustrations, NO bright colors, NO clean digital art
 - NO 3D objects, NO depth, NO shadows, NO realistic photography
 - NO still life compositions, NO objects placed around the page
 - Top-down view, flat illustration style
-- Digital design suitable for printing
-- Think of it as a flat collage on paper, not a photograph of objects
+- Think of it as an old, worn vintage journal page found in an antique shop
 - EACH VARIATION MUST HAVE A UNIQUE COMPOSITION, COLOR SCHEME, AND VISUAL STYLE
 
 ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time.` : ''}
