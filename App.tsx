@@ -39,6 +39,7 @@ const App: React.FC = () => {
     parametersForMJ: '',
     imageService: 'pollinations', // Default to Pollinations (free, no API key needed)
     replicateModel: 'black-forest-labs/flux-1.1-pro',
+    customThemePrompt: '',
   });
   const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -105,7 +106,8 @@ const App: React.FC = () => {
         settings.elements,
         settings.includeFrames,
         settings.includeBorders,
-        i + 1
+        i + 1,
+        settings.customThemePrompt // Pass custom theme prompt
       ).catch((error) => {
         console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error);
         // Fallback to constructed prompt if ChatGPT fails
@@ -810,7 +812,29 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Elements */}
+          {/* Section 2: Custom Theme Prompt */}
+          <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
+            <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
+              <Sparkles size={18} /> Custom Theme Prompt (Optional)
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Additional Theme Description
+              </label>
+              <textarea
+                value={settings.customThemePrompt || ''}
+                onChange={(e) => handleSettingChange('customThemePrompt', e.target.value)}
+                placeholder="e.g., 'vintage botanical illustrations with pressed flowers', 'steampunk mechanical gears and brass', 'dark romantic gothic architecture'..."
+                rows={4}
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                ChatGPT will incorporate this into the generated prompts. Leave empty to use only the selected theme.
+              </p>
+            </div>
+          </div>
+
+          {/* Section 3: Elements */}
           <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
              <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
               <Sparkles size={18} /> Optional Elements

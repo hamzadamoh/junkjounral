@@ -26,6 +26,7 @@ export interface GenerationSettings {
   parametersForMJ?: string;
   imageService?: 'midjourney' | 'pollinations' | 'replicate';
   replicateModel?: string;
+  customThemePrompt?: string;
 }
 
 export interface GeneratedImage {

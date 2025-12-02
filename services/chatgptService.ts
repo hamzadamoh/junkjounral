@@ -23,7 +23,8 @@ export const generatePromptWithChatGPT = async (
   elements: string[],
   includeFrames: boolean,
   includeBorders: boolean,
-  variationNumber: number
+  variationNumber: number,
+  customThemePrompt?: string
 ): Promise<string> => {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
@@ -32,7 +33,13 @@ export const generatePromptWithChatGPT = async (
 
   const systemPrompt = `You are a creative prompt engineer specializing in FLAT, PRINTABLE junk journal page descriptions. CRITICAL: Generate prompts for FLAT DIGITAL DESIGNS only - NOT 3D photography, NOT still life photos, NOT objects with depth or shadows. The output must be a flat, printable scrapbook page design that can be printed and used in a journal.`;
 
-  const userPrompt = `Create a unique prompt for variation #${variationNumber} of a ${theme} junk journal page. Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
+  // Build the theme description - combine base theme with custom theme prompt if provided
+  let themeDescription = theme;
+  if (customThemePrompt && customThemePrompt.trim()) {
+    themeDescription = `${theme} with ${customThemePrompt.trim()}`;
+  }
+
+  const userPrompt = `Create a unique prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
 CRITICAL REQUIREMENTS:
 - FLAT printable page design (like a digital scrapbook page)
@@ -41,6 +48,8 @@ CRITICAL REQUIREMENTS:
 - Top-down view, flat illustration style
 - Digital design suitable for printing
 - Think of it as a flat collage on paper, not a photograph of objects
+
+${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally.` : ''}
 
 Make it unique with specific visual details, colors, and mood. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
