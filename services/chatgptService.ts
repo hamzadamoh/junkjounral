@@ -84,23 +84,32 @@ Think creatively: What are different ways to represent ${themeDescription}? What
 
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
-CRITICAL REQUIREMENTS FOR MODERN COLORFUL ILLUSTRATION:
-- VIVID, ALIVE, BRIGHT, MODERN: vivid and alive appearance - must look fresh and vibrant
-- MODERN WATERCOLOR STYLE: modern watercolor illustration, vibrant watercolor painting, fresh and lively
-- MULTICOLORED PALETTE: vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues) - modern, fresh, lively
-- CLEAN MODERN DESIGN: clean, modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained
+ABSOLUTELY FORBIDDEN - DO NOT INCLUDE ANY OF THESE:
+- NO "antique", NO "vintage", NO "aged", NO "distressed", NO "old", NO "worn"
+- NO "journal page", NO "junk journal", NO "scrapbook page"
+- NO "handwritten text", NO "cursive script", NO "letters", NO "writing"
+- NO "postage stamps", NO "vintage ephemera", NO "botanical illustrations" (unless modern style)
+- NO "sepia", NO "muted", NO "coffee-stained", NO "tea-stained", NO "parchment"
+- NO "faded", NO "aged paper", NO "distressed texture"
+- NO "antique-style", NO "vintage-style", NO "old-world"
+
+REQUIRED - MUST INCLUDE:
+- VIVID, ALIVE, BRIGHT, MODERN watercolor illustration
+- VIBRANT COLORS: vivid blues, greens, purples, oranges, yellows, pinks, teals - bright and colorful
+- MODERN WATERCOLOR STYLE: fresh, lively, vibrant watercolor painting
+- CLEAN, MODERN design - think contemporary art, modern illustration
+- The illustration should be a pure, modern, colorful watercolor painting of ${themeDescription}
 - FLAT printable page design
-- NO vintage elements, NO aged paper, NO distressed texture, NO sepia tones, NO muted colors
-- NO photorealistic rendering, NO realistic photography, NO hyper-realistic details
+- NO photorealistic rendering, NO realistic photography
 - NO 3D objects, NO depth, NO shadows, NO realistic lighting
-- NO still life compositions, NO objects placed around the page
-- Top-down view, flat illustration style, artistic rendering
-- Think of it as a modern, vivid, colorful watercolor illustration - fresh, alive, vibrant, stylized, NOT realistic, NOT vintage
+- NO still life compositions
+- Top-down view, flat illustration style
+- Think of it as a modern, vivid, colorful watercolor illustration - fresh, alive, vibrant, like a contemporary watercolor painting
 - EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style
 
-${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time. Explore different aspects, subjects, or elements related to "${customThemePrompt.trim()}".` : ''}
+${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time. Explore different aspects, subjects, or elements related to "${customThemePrompt.trim()}". Remember: MODERN, VIVID, COLORFUL - NOT vintage.` : ''}
 
-Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that naturally differs from other variations. 2-3 sentences. Return ONLY the prompt description.`
+Create a DISTINCT and UNIQUE MODERN WATERCOLOR ILLUSTRATION prompt with specific visual details, vivid colors, mood, composition, and style. Describe it as a modern, vivid, colorful watercolor painting - NOT a journal page, NOT vintage, NOT antique. 2-3 sentences. Return ONLY the prompt description.`
     : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
