@@ -90,15 +90,17 @@ ${colorIntensity === 'Muted'
   ? '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
   : '- MULTICOLORED VINTAGE PALETTE: wide range of colors including blues, greens, purples, warm accents (oranges, yellows), cool tones, and various hues - like a watercolor palette with multiple colors, maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be diverse and harmonious, NOT modern bright colors, NOT neon colors'}
 - AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
-- HANDWRITTEN SCRIPT: faint vintage handwriting, old script, cursive text visible
-- COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements
+- HANDWRITTEN SCRIPT OVERLAYS: extensive cursive handwritten text overlaying the design, like old letters or journal entries, faded brown/sepia ink, flowing script, multiple layers of text
+- VINTAGE EPHEMERA: include postage stamps, vintage labels, old tickets, faded botanical illustrations, floral patterns, sheet music notation, vintage seals or stamps
+- COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements - the page should look like a real junk journal page with multiple layers
+- MIXED MEDIA: combine the main illustration with handwritten text, stamps, floral patterns, and other vintage elements all layered together
 - FLAT printable page design (like a vintage scrapbook page)
 - NO modern watercolor illustrations, NO clean digital art
 - NO photorealistic rendering, NO realistic photography, NO hyper-realistic details
 - NO 3D objects, NO depth, NO shadows, NO realistic lighting
 - NO still life compositions, NO objects placed around the page
 - Top-down view, flat illustration style, artistic rendering
-- Think of it as an illustrated, artistic rendering of an old, worn vintage journal page - stylized, NOT realistic
+- Think of it as an illustrated, artistic rendering of an old, worn vintage journal page with handwritten text overlays, stamps, and ephemera - like a real junk journal page, stylized, NOT realistic
 - EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style
 
 ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time. Explore different aspects, subjects, or elements related to "${customThemePrompt.trim()}".` : ''}
