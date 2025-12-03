@@ -167,7 +167,7 @@ const App: React.FC = () => {
     setErrorMsg(null);
 
     // STEP 1: Generate prompts
-    console.log('Generating prompts...');
+    addLog('Generating prompts...');
     
     // Determine the theme name to use - if custom theme, use the custom prompt directly
     const themeName = isCustomTheme && customThemePrompt.trim() 
@@ -187,7 +187,7 @@ const App: React.FC = () => {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
       const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
-      console.log(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
+      addLog(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
       
       const promptPromises = Array.from({ length: promptsToGenerate }, (_, i) => 
         generatePromptWithChatGPT(
@@ -248,7 +248,7 @@ const App: React.FC = () => {
     })));
 
     // STEP 2: Generate all images
-    console.log(`[${settings.imageService}] Generating all images...`);
+    addLog(`[${settings.imageService}] Generating all images...`);
     const generateFunction = settings.imageService === 'pollinations' 
       ? generateWithPollinations 
       : settings.imageService === 'replicate'
@@ -259,7 +259,7 @@ const App: React.FC = () => {
       ? generateWithTtapi
       : generateWithMidjourney;
     
-    console.log(`[${settings.imageService}] Selected generate function:`, generateFunction.name || 'anonymous');
+    addLog(`[${settings.imageService}] Selected generate function: ${generateFunction.name || 'anonymous'}`);
 
     // For Replicate, maximize the 6 requests/minute limit
     // Rate limit: 6 requests/minute = 1 request every 10 seconds
@@ -268,7 +268,7 @@ const App: React.FC = () => {
       const requestsPerMinute = 6;
       const delayBetweenRequests = (60 * 1000) / requestsPerMinute; // Exactly 10 seconds between requests
       
-      console.log(`Sending ${total} Replicate requests at ${requestsPerMinute} requests/minute (${delayBetweenRequests / 1000}s intervals)...`);
+      addLog(`Sending ${total} Replicate requests at ${requestsPerMinute} requests/minute (${delayBetweenRequests / 1000}s intervals)...`);
       
       // Start all requests with proper timing to maximize rate limit usage
       const requestPromises: Promise<void>[] = [];
@@ -283,7 +283,7 @@ const App: React.FC = () => {
             await new Promise(resolve => setTimeout(resolve, startDelay));
           }
           
-          console.log(`[Image ${i + 1}/${total}] 🚀 Starting Replicate generation...`);
+          addLog(`[Image ${i + 1}/${total}] 🚀 Starting Replicate generation...`);
           
           try {
             const base64Url = await generateFunction(
