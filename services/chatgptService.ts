@@ -318,6 +318,11 @@ CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages -
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
+🎯 VARIATION CONTROLLER (Image ${variationNumber}):
+- ROLE: You are creating image #${variationNumber} of a collection.
+- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
+- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
+
 ${variationControl}
 
 ${variationDirection}
@@ -366,6 +371,11 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
 ❌ ANY phrase containing: aged, antique, vintage, junk journal, journal page
 
 This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+🎯 VARIATION CONTROLLER (Image ${variationNumber}):
+- ROLE: You are creating image #${variationNumber} of a collection.
+- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
+- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
 
 ${variationControl}
 
@@ -425,6 +435,11 @@ Create a DISTINCT and UNIQUE MODERN WATERCOLOR ILLUSTRATION prompt. Start with "
     : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+🎯 VARIATION CONTROLLER (Image ${variationNumber}):
+- ROLE: You are creating image #${variationNumber} of a collection.
+- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
+- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
 
 ${variationControl}
 
