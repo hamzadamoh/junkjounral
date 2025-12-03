@@ -33,6 +33,33 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
+  // Global helper function to get focus rotation based on variation number
+  const getFocusRotation = (variationNumber: number): { type: string; description: string } => {
+    const lastDigit = variationNumber % 10;
+    
+    if (lastDigit === 1 || lastDigit === 5 || lastDigit === 9) {
+      return {
+        type: 'CENTRAL SUBJECT',
+        description: 'Focus on a CENTRAL SUBJECT - a main creature, character, or object as the primary focal point (e.g., a dragon, a skull, a key, a character portrait)'
+      };
+    } else if (lastDigit === 2 || lastDigit === 6 || lastDigit === 0) {
+      return {
+        type: 'WIDE SCENE/LANDSCAPE',
+        description: 'Focus on a WIDE SCENE/LANDSCAPE - a broader view showing environment, setting, or multiple elements (e.g., a forest, a castle, a room, a skyline, a cemetery)'
+      };
+    } else if (lastDigit === 3 || lastDigit === 7) {
+      return {
+        type: 'DETAIL/CLOSE-UP',
+        description: 'Focus on a DETAIL/CLOSE-UP - a specific detail, texture, or close-up view (e.g., hands holding an item, a specific architectural detail, a texture, a rose on a grave, intricate patterns)'
+      };
+    } else { // lastDigit === 4 || lastDigit === 8
+      return {
+        type: 'ACTION/DYNAMIC POSE',
+        description: 'Focus on an ACTION/DYNAMIC POSE - movement, action, or dynamic composition (e.g., flying, running, casting a spell, a raven in flight, a character in motion)'
+      };
+    }
+  };
+
   // Global helper function to generate variation control instructions
   const getVariationControl = (variationNumber: number, themeDescription: string): string => {
     // Detect theme type from description
@@ -111,10 +138,18 @@ export const generatePromptWithChatGPT = async (
 
     // Get global variation control
     const variationControl = getVariationControl(variationNumber, themeDescription);
+    
+    // Get focus rotation for this variation
+    const focusRotation = getFocusRotation(variationNumber);
 
     const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+🎯 VARIATION CONTROLLER (Image ${variationNumber}):
+- ROLE: You are creating image #${variationNumber} of a collection.
+- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
+- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
 
 ${variationControl}
 
