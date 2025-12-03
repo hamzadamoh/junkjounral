@@ -148,7 +148,8 @@ const App: React.FC = () => {
     if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
-      console.log(`[Midjourney/Legnext] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
+      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
+      console.log(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
       
       const promptPromises = Array.from({ length: promptsToGenerate }, (_, i) => 
         generatePromptWithChatGPT(
@@ -208,7 +209,7 @@ const App: React.FC = () => {
     })));
 
     // STEP 2: Generate all images
-    console.log('Generating all images...');
+    console.log(`[${settings.imageService}] Generating all images...`);
     const generateFunction = settings.imageService === 'pollinations' 
       ? generateWithPollinations 
       : settings.imageService === 'replicate'
@@ -218,6 +219,8 @@ const App: React.FC = () => {
       : settings.imageService === 'ttapi'
       ? generateWithTtapi
       : generateWithMidjourney;
+    
+    console.log(`[${settings.imageService}] Selected generate function:`, generateFunction.name || 'anonymous');
 
     // For Replicate, maximize the 6 requests/minute limit
     // Rate limit: 6 requests/minute = 1 request every 10 seconds
