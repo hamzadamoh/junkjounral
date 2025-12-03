@@ -94,7 +94,9 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
   // Get color palette based on color intensity setting
   const colorPalette = settings.colorIntensity === 'Muted' 
     ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-    : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+    : settings.colorIntensity === 'Colorful'
+    ? 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
+    : 'wide range of colors (blues, greens, purples, warm accents like oranges and yellows, cool tones, various harmonious hues), multicolored vintage palette, watercolor-like color diversity, maintaining vintage charm, NOT modern bright colors, NOT neon colors';
   
   // Construct the final detailed prompt
   // STRICT: Vintage junk journal aesthetic - aged, distressed, illustrated style
@@ -495,7 +497,9 @@ export const generateJournalPage = async (
     // STRICT: Vintage aesthetic, muted colors, aged paper, illustrated style, NOT realistic
     const colorPalette = settings.colorIntensity === 'Muted' 
       ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-      : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+      : settings.colorIntensity === 'Colorful'
+      ? 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
+      : 'wide range of colors (blues, greens, purples, warm accents like oranges and yellows, cool tones, various harmonious hues), multicolored vintage palette, watercolor-like color diversity, maintaining vintage charm, NOT modern bright colors, NOT neon colors';
     const strictConstraints = `VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, ${colorPalette}, vintage handwritten script, tea-stained paper, worn edges, vintage collage style, antique ephemera, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor illustrations, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style.`;
     
     if (customPrompt) {

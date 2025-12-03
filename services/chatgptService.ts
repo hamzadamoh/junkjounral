@@ -25,7 +25,7 @@ export const generatePromptWithChatGPT = async (
   includeBorders: boolean,
   variationNumber: number,
   customThemePrompt?: string,
-  colorIntensity: 'Muted' | 'Colorful' = 'Muted'
+  colorIntensity: 'Muted' | 'Colorful' | 'Multicolored' = 'Muted'
 ): Promise<string> => {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
@@ -86,7 +86,9 @@ CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
 - ILLUSTRATED/ARTISTIC STYLE: stylized illustration, artistic rendering, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic
 ${colorIntensity === 'Muted' 
   ? '- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, coffee-stained look, NOT bright vibrant colors'
-  : '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'}
+  : colorIntensity === 'Colorful'
+  ? '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
+  : '- MULTICOLORED VINTAGE PALETTE: wide range of colors including blues, greens, purples, warm accents (oranges, yellows), cool tones, and various hues - like a watercolor palette with multiple colors, maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be diverse and harmonious, NOT modern bright colors, NOT neon colors'}
 - AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
 - HANDWRITTEN SCRIPT: faint vintage handwriting, old script, cursive text visible
 - COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements

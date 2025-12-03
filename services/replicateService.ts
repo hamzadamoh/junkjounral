@@ -456,7 +456,9 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
   // Get color palette based on color intensity setting
   const colorPalette = settings.colorIntensity === 'Muted' 
     ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-    : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+    : settings.colorIntensity === 'Colorful'
+    ? 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
+    : 'wide range of colors (blues, greens, purples, warm accents like oranges and yellows, cool tones, various harmonious hues), multicolored vintage palette, watercolor-like color diversity, maintaining vintage charm, NOT modern bright colors, NOT neon colors';
   
   let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. Color palette: ${colorPalette}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
   

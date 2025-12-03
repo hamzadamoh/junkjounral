@@ -74,7 +74,9 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
   // Get color palette based on color intensity setting
   const colorPalette = settings.colorIntensity === 'Muted' 
     ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-    : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+    : settings.colorIntensity === 'Colorful'
+    ? 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
+    : 'wide range of colors (blues, greens, purples, warm accents like oranges and yellows, cool tones, various harmonious hues), multicolored vintage palette, watercolor-like color diversity, maintaining vintage charm, NOT modern bright colors, NOT neon colors';
   
   // Construct the final detailed prompt
   // STRICT: Vintage junk journal aesthetic - aged, distressed, illustrated style

@@ -921,7 +921,7 @@ const App: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Color Intensity</label>
                 <div className="flex bg-slate-900 rounded-lg p-1">
-                  {(['Muted', 'Colorful'] as const).map((intensity) => (
+                  {(['Muted', 'Colorful', 'Multicolored'] as const).map((intensity) => (
                     <button
                       key={intensity}
                       onClick={() => handleSettingChange('colorIntensity', intensity)}
@@ -938,7 +938,9 @@ const App: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-2">
                   {settings.colorIntensity === 'Muted' 
                     ? 'Vintage sepia and brown tones (coffee-stained look)' 
-                    : 'Vibrant colors while maintaining vintage aesthetic'}
+                    : settings.colorIntensity === 'Colorful'
+                    ? 'Vibrant colors while maintaining vintage aesthetic'
+                    : 'Wide range of colors (blues, greens, purples, warm accents) with vintage charm'}
                 </p>
               </div>
 
