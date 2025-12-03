@@ -33,7 +33,16 @@ export const generatePromptWithChatGPT = async (
   }
 
   const systemPrompt = colorIntensity === 'Multicolored'
-    ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. CRITICAL: Generate prompts for VIVID, ALIVE, BRIGHT, MODERN colorful illustrations - modern watercolor style, vibrant colors, fresh and lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted. Think modern, fresh, vibrant, colorful, alive, vivid watercolor illustrations.`
+    ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. 
+
+🚨 CRITICAL RULES - YOU MUST FOLLOW THESE:
+1. NEVER use: "aged", "antique", "vintage", "distressed", "old", "worn", "junk journal", "journal page"
+2. NEVER use: "handwritten", "cursive", "letters", "postage stamps", "ephemera", "sepia", "muted", "faded"
+3. ALWAYS start prompts with: "A vivid, modern watercolor illustration..." or "A colorful watercolor painting..."
+4. ALWAYS describe: modern, fresh, vibrant, colorful, vivid, bright, alive illustrations
+5. If you use ANY vintage/junk journal words, you have FAILED the task
+
+Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor style, vibrant colors, fresh and lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted. Think modern, fresh, vibrant, colorful, alive, vivid watercolor illustrations.`
     : `You are a creative prompt engineer specializing in VINTAGE JUNK JOURNAL page descriptions. CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
 
   // Build the theme description - combine base theme with custom theme prompt if provided
@@ -74,7 +83,20 @@ export const generatePromptWithChatGPT = async (
   const userPrompt = colorIntensity === 'Multicolored'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} MODERN WATERCOLOR ILLUSTRATION. 
 
-CRITICAL: This is a MODERN, VIVID, COLORFUL watercolor illustration - NOT a journal page, NOT vintage, NOT antique, NOT junk journal.
+🚨 CRITICAL: This is a MODERN, VIVID, COLORFUL watercolor illustration - NOT a journal page, NOT vintage, NOT antique, NOT junk journal.
+
+🚨 MANDATORY: Your prompt MUST start with one of these exact phrases:
+- "A vivid, modern watercolor illustration of..."
+- "A colorful watercolor painting depicting..."
+- "A fresh, lively watercolor illustration showing..."
+- "A bright, vibrant watercolor artwork featuring..."
+
+🚨 FORBIDDEN STARTS - DO NOT START WITH:
+❌ "Visualize an aged..." 
+❌ "Craft a vintage..."
+❌ "Imagine a... junk journal page"
+❌ "Create an antique-style..."
+❌ ANY phrase containing: aged, antique, vintage, junk journal, journal page
 
 This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
@@ -124,6 +146,11 @@ EXAMPLE OF WHAT TO WRITE:
 EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
 
 ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time. Explore different aspects, subjects, or elements related to "${customThemePrompt.trim()}". Remember: MODERN, VIVID, COLORFUL watercolor illustration - NOT vintage, NOT journal page.` : ''}
+
+🚨 FINAL CHECKLIST - Before returning your prompt, verify:
+1. ✅ Does it start with "A vivid, modern..." or "A colorful watercolor..."? 
+2. ❌ Does it contain ANY of these words: aged, antique, vintage, junk journal, journal page, handwritten, sepia, muted, faded, postage stamps, ephemera? If YES, rewrite it completely.
+3. ✅ Is it describing a modern, colorful illustration with vibrant colors?
 
 Create a DISTINCT and UNIQUE MODERN WATERCOLOR ILLUSTRATION prompt. Start with "A vivid, modern watercolor illustration..." or "A colorful watercolor painting..." - describe it as a pure, modern, colorful watercolor painting of ${themeDescription} with vibrant colors. DO NOT mention journal, vintage, antique, stamps, handwritten text, or any vintage elements. 2-3 sentences. Return ONLY the prompt description.`
     : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
