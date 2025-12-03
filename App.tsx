@@ -24,6 +24,7 @@ import { generateJournalPage as generateWithMidjourney } from './services/midjou
 import { generateJournalPage as generateWithPollinations } from './services/pollinationsService';
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
+import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT } from './services/chatgptService';
 
 const App: React.FC = () => {
@@ -144,7 +145,7 @@ const App: React.FC = () => {
     let promptsToGenerate: number;
     let generatedPrompts: string[];
     
-    if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
+    if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
       console.log(`[Midjourney/Legnext] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
@@ -214,6 +215,8 @@ const App: React.FC = () => {
       ? generateWithReplicate
       : settings.imageService === 'legnext'
       ? generateWithLegnext
+      : settings.imageService === 'ttapi'
+      ? generateWithTtapi
       : generateWithMidjourney;
 
     // For Replicate, maximize the 6 requests/minute limit
@@ -356,7 +359,7 @@ const App: React.FC = () => {
     } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
       // For Midjourney (GoAPI or Legnext), generate in parallel
       // Note: Midjourney returns 4 images per request, so we need fewer requests
-      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : 'Midjourney';
+      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
       const requestsNeeded = Math.ceil(total / 4);
       const imagePromises = Array.from({ length: requestsNeeded }, async (_, requestIdx) => {
         try {
@@ -504,10 +507,12 @@ const App: React.FC = () => {
         ? generateWithReplicate
         : settings.imageService === 'legnext'
         ? generateWithLegnext
+        : settings.imageService === 'ttapi'
+        ? generateWithTtapi
         : generateWithMidjourney;
 
       // For Midjourney/Legnext, we need to handle arrays
-      if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
+      if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
         const base64Urls = await generateFunction(
           selectedTheme,
           settings,
@@ -534,7 +539,7 @@ const App: React.FC = () => {
             } : item
           ));
         }
-      } else {
+    } else {
         // For Pollinations/Replicate, single image
         const base64Url = await generateFunction(
           selectedTheme,
@@ -934,7 +939,7 @@ const App: React.FC = () => {
                       {intensity}
                     </button>
                   ))}
-                </div>
+            </div>
                 <p className="text-xs text-slate-500 mt-2">
                   {settings.colorIntensity === 'Muted' 
                     ? 'Vintage sepia and brown tones (coffee-stained look)' 
@@ -942,7 +947,7 @@ const App: React.FC = () => {
                     ? 'Vibrant colors while maintaining vintage aesthetic'
                     : 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'}
                 </p>
-              </div>
+          </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Aspect Ratio</label>
@@ -970,11 +975,12 @@ const App: React.FC = () => {
                     { value: 'pollinations', label: 'Pollinations (Free)', desc: 'Fast, free, no API key' },
                     { value: 'replicate', label: 'Replicate', desc: 'Multiple models, works via Vercel proxy' },
                     { value: 'midjourney', label: 'Midjourney (GoAPI)', desc: 'Premium quality via GoAPI, requires API key' },
-                    { value: 'legnext', label: 'Midjourney (Legnext)', desc: 'Premium quality via Legnext.ai, requires API key' }
+                    { value: 'legnext', label: 'Midjourney (Legnext)', desc: 'Premium quality via Legnext.ai, requires API key' },
+                    { value: 'ttapi', label: 'Midjourney (Ttapi)', desc: 'Premium quality via ttapi.io, requires API key' }
                   ].map((service) => (
                     <button
                       key={service.value}
-                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate' | 'legnext')}
+                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate' | 'legnext' | 'ttapi')}
                       className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
                         settings.imageService === service.value 
                           ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
@@ -1207,6 +1213,8 @@ const App: React.FC = () => {
           ? 'Pollinations.AI is crafting your' 
           : settings.imageService === 'legnext' 
           ? 'Legnext is crafting your'
+          : settings.imageService === 'ttapi'
+          ? 'Ttapi is crafting your'
           : 'Midjourney is crafting your'} {selectedTheme?.name} journal pages. 
         {settings.imageService === 'pollinations' 
           ? ' This should be quick!' 
