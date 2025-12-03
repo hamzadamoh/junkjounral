@@ -522,31 +522,39 @@ export const generateJournalPage = async (
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
-    // CRITICAL: Always append vintage junk journal constraints
-    // STRICT: Vintage aesthetic, muted colors, aged paper, illustrated style, NOT realistic
-    let strictConstraints: string;
-    
-    if (settings.colorIntensity === 'Muted' || settings.colorIntensity === 'Colorful') {
-      // Vintage junk journal style
-      const colorPalette = settings.colorIntensity === 'Muted' 
-        ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-        : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
-      strictConstraints = `VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, ${colorPalette}, extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor illustrations, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
-    } else {
-      // Multicolored: vivid, alive, modern - NO vintage
-      strictConstraints = `vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor illustration, vivid and alive, fresh and vibrant, clean modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, modern colorful illustration.`;
-    }
-    
+    // For custom prompts from ChatGPT, trust the prompt and only add minimal constraints
+    // For constructed prompts, add full constraints
     if (customPrompt) {
-      prompt = `${prompt}. ${strictConstraints}`;
+      // Custom prompt from ChatGPT - only add aspect ratio and flat design constraints
+      // Don't override the style ChatGPT generated
+      if (settings.aspectRatio && settings.aspectRatio !== '1:1') {
+        prompt += ` --ar ${settings.aspectRatio}`;
+      }
+      // Add minimal flat design constraints if not already present
+      if (!prompt.toLowerCase().includes('flat printable page')) {
+        prompt += ` flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+      }
     } else {
-      // Add strict constraints to constructed prompts too
+      // Constructed prompt - add full constraints based on color intensity
+      let strictConstraints: string;
+      
+      if (settings.colorIntensity === 'Muted' || settings.colorIntensity === 'Colorful') {
+        // Vintage junk journal style
+        const colorPalette = settings.colorIntensity === 'Muted' 
+          ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
+          : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+        strictConstraints = `VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, ${colorPalette}, extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor illustrations, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
+      } else {
+        // Multicolored: vivid, alive, modern - NO vintage
+        strictConstraints = `vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor illustration, vivid and alive, fresh and vibrant, clean modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, modern colorful illustration.`;
+      }
+      
       prompt = `${prompt} ${strictConstraints}`;
     }
 
-    // Add aspect ratio to prompt if needed (ttapi may support this)
-    // Note: ttapi uses Midjourney, so aspect ratio might need to be in the prompt
-    if (aspectRatio && aspectRatio !== '1:1') {
+    // Aspect ratio is already added above if customPrompt, or will be added in constructPrompt
+    // Only add here if not already added
+    if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
       prompt += ` --ar ${aspectRatio}`;
     }
 
