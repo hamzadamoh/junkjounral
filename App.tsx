@@ -491,11 +491,17 @@ const App: React.FC = () => {
     let colorPalette: string;
     let styleConstraints: string;
     
-    if (settings.colorIntensity === 'Muted' || settings.colorIntensity === 'Colorful') {
-      // Vintage junk journal style
-      colorPalette = settings.colorIntensity === 'Muted' 
-        ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-        : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+    if (settings.colorIntensity === 'Muted') {
+      // Muted: sepia, brown tones, faded
+      colorPalette = 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors';
+      styleConstraints = `VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, ${colorPalette}, extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
+    } else if (settings.colorIntensity === 'Normal') {
+      // Normal: normal colors, not muted/sepia, not overly vibrant - gothic/vintage aesthetic
+      colorPalette = 'normal colors, deep burgundy, maroon, dark grey, black, antique gold, rich but not faded, NOT sepia, NOT muted, NOT overly vibrant, NOT neon';
+      styleConstraints = `VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, ${colorPalette}, extensive cursive handwritten text overlays (like old letters or journal entries), brown/black ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
+    } else if (settings.colorIntensity === 'Colorful') {
+      // Colorful: vibrant colors with vintage charm
+      colorPalette = 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
       styleConstraints = `VINTAGE JUNK JOURNAL PAGE, aged antique paper, distressed worn texture, ${colorPalette}, extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
     } else {
       // Multicolored: vivid, alive, modern - NO vintage/junk journal
@@ -962,24 +968,32 @@ const App: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Color Intensity</label>
-                <div className="flex bg-slate-900 rounded-lg p-1">
-                  {(['Muted', 'Colorful', 'Multicolored'] as const).map((intensity) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Muted', 'Normal', 'Colorful', 'Multicolored'] as const).map((intensity) => (
                     <button
                       key={intensity}
                       onClick={() => handleSettingChange('colorIntensity', intensity)}
-                      className={`flex-1 py-2 text-sm rounded-md transition-all ${
+                      className={`py-2 px-3 text-sm rounded-md transition-all ${
                         settings.colorIntensity === intensity 
-                          ? 'bg-gothic-700 text-white shadow-lg' 
-                          : 'text-slate-500 hover:text-slate-300'
+                          ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
+                          : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
                       }`}
+                      title={
+                        intensity === 'Muted' ? 'Sepia, brown tones, faded colors' :
+                        intensity === 'Normal' ? 'Normal colors, gothic/vintage aesthetic' :
+                        intensity === 'Colorful' ? 'Vibrant colors with vintage charm' :
+                        'Modern, vivid, colorful (not vintage)'
+                      }
                     >
                       {intensity}
                     </button>
                   ))}
-            </div>
-                <p className="text-xs text-slate-500 mt-2">
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
                   {settings.colorIntensity === 'Muted' 
                     ? 'Vintage sepia and brown tones (coffee-stained look)' 
+                    : settings.colorIntensity === 'Normal'
+                    ? 'Normal colors, gothic/vintage aesthetic (deep burgundy, maroon, dark grey, black, antique gold)'
                     : settings.colorIntensity === 'Colorful'
                     ? 'Vibrant colors while maintaining vintage aesthetic'
                     : 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'}

@@ -457,11 +457,17 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
   let colorPalette: string;
   let styleConstraints: string;
   
-  if (settings.colorIntensity === 'Muted' || settings.colorIntensity === 'Colorful') {
-    // Vintage junk journal style
-    colorPalette = settings.colorIntensity === 'Muted' 
-      ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-      : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+  if (settings.colorIntensity === 'Muted') {
+    // Muted: sepia, brown tones, faded
+    colorPalette = 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors';
+    styleConstraints = `Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, real junk journal page with text overlays and ephemera.`;
+  } else if (settings.colorIntensity === 'Normal') {
+    // Normal: normal colors, not muted/sepia, not overly vibrant - gothic/vintage aesthetic
+    colorPalette = 'normal colors, deep burgundy, maroon, dark grey, black, antique gold, rich but not faded, NOT sepia, NOT muted, NOT overly vibrant, NOT neon';
+    styleConstraints = `Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), brown/black ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, real junk journal page with text overlays and ephemera.`;
+  } else if (settings.colorIntensity === 'Colorful') {
+    // Colorful: vibrant colors with vintage charm
+    colorPalette = 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
     styleConstraints = `Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, real junk journal page with text overlays and ephemera.`;
   } else {
     // Multicolored: vivid, alive, modern - NO vintage/junk journal

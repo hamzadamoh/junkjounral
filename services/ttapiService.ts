@@ -93,11 +93,18 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     : '';
 
   // Get color palette and style constraints based on color intensity setting
-  const colorPalette = settings.colorIntensity === 'Muted' 
-    ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-    : settings.colorIntensity === 'Colorful'
-    ? 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
-    : 'wide range of colors (blues, greens, purples, warm accents like oranges and yellows, cool tones, various harmonious hues), multicolored vintage palette, watercolor-like color diversity, maintaining vintage charm, NOT modern bright colors, NOT neon colors';
+  let colorPalette: string;
+  
+  if (settings.colorIntensity === 'Muted') {
+    colorPalette = 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors';
+  } else if (settings.colorIntensity === 'Normal') {
+    colorPalette = 'normal colors, deep burgundy, maroon, dark grey, black, antique gold, rich but not faded, NOT sepia, NOT muted, NOT overly vibrant, NOT neon';
+  } else if (settings.colorIntensity === 'Colorful') {
+    colorPalette = 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+  } else {
+    // Multicolored
+    colorPalette = 'vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor palette, fresh and lively colors';
+  }
 
   let prompt = '';
   if (settings.colorIntensity === 'Multicolored') {

@@ -25,7 +25,7 @@ export const generatePromptWithChatGPT = async (
   includeBorders: boolean,
   variationNumber: number,
   customThemePrompt?: string,
-  colorIntensity: 'Muted' | 'Colorful' | 'Multicolored' = 'Muted'
+  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' = 'Muted'
 ): Promise<string> => {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
@@ -170,6 +170,8 @@ CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
 - ILLUSTRATED/ARTISTIC STYLE: stylized illustration, artistic rendering, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic
 ${colorIntensity === 'Muted' 
   ? '- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, coffee-stained look, NOT bright vibrant colors'
+  : colorIntensity === 'Normal'
+  ? '- NORMAL COLORS: deep burgundy, maroon, dark grey, black, antique gold, rich but not faded, NOT sepia, NOT muted, NOT overly vibrant, normal color saturation, gothic/vintage aesthetic'
   : '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'}
 - AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
 - HANDWRITTEN SCRIPT OVERLAYS: extensive cursive handwritten text overlaying the design, like old letters or journal entries, faded brown/sepia ink, flowing script, multiple layers of text
