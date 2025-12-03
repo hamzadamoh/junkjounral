@@ -52,8 +52,21 @@ Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor s
   }
 
   // Create variation-specific instructions to ensure diversity
-  // Let ChatGPT naturally explore different aspects of the theme
-  const variationInstructions = [
+  // For Normal color intensity, add more specific diversity instructions
+  const variationInstructions = colorIntensity === 'Normal' ? [
+    'Explore a DIFFERENT time of day: morning, noon, evening, night, dawn, or dusk - each creates a unique mood and lighting',
+    'Create a DIFFERENT composition: close-up of details, wide landscape view, path leading into distance, single tree focus, or forest density',
+    'Focus on DIFFERENT elements: different types of trees, animals, structures, natural features, or weather conditions',
+    'Design a DIFFERENT perspective: bird\'s eye view, ground level, looking up at trees, looking down a path, or side view',
+    'Explore DIFFERENT weather/mood: clear day, snowing, misty, foggy, moonlit, sunset, sunrise, or aurora',
+    'Create a DIFFERENT scene type: forest path, stream/river, cabin/house, open clearing, dense woods, or mountain view',
+    'Focus on DIFFERENT details: tree bark close-up, snow-covered branches, footprints in snow, frozen water, or distant horizon',
+    'Design a DIFFERENT mood: serene and peaceful, dramatic and bold, mystical and magical, cozy and warm, or crisp and clear',
+    'Explore DIFFERENT natural features: hills, valleys, streams, lakes, clearings, or dense forest areas',
+    'Create a DIFFERENT focal point: a single prominent tree, a winding path, a structure, a natural feature, or a wide landscape',
+    'Focus on DIFFERENT lighting: bright sunlight, soft diffused light, dramatic shadows, warm sunset glow, cool moonlit, or magical aurora',
+    'Design a DIFFERENT scale: macro close-up details, medium view of a scene, or wide expansive landscape'
+  ] : [
     'Explore a different aspect or element of the theme - think creatively about what else could represent this theme',
     'Create a completely different composition, subject, or focal point while staying within the theme',
     'Focus on different visual elements, objects, or motifs that relate to the theme',
@@ -71,13 +84,26 @@ Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor s
   const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
   
   // Add specific variation direction - emphasize natural variety
+  // For Normal color intensity, add more specific diversity guidance
   let variationDirection = '';
-  if (variationNumber % 3 === 1) {
-    variationDirection = 'Create a DIFFERENT subject, element, or composition within the theme - avoid repeating the same subject from previous variations.';
-  } else if (variationNumber % 3 === 2) {
-    variationDirection = 'Explore a DIFFERENT aspect of the theme - think of other visual elements, subjects, or scenes that relate to this theme.';
+  if (colorIntensity === 'Normal') {
+    const directions = [
+      'Create a COMPLETELY DIFFERENT scene - change the time of day, weather, composition, or focal point. Avoid any similarity to previous variations.',
+      'Explore a DIFFERENT aspect - think of other subjects, elements, natural features, or perspectives within the theme. Make it visually distinct.',
+      'Design a UNIQUE interpretation - ensure this variation has different composition, different elements, different mood, or different perspective than previous ones.',
+      'Create a FRESH perspective - change the viewpoint, scale, or focus. Think: close-up vs wide view, day vs night, path vs clearing, single tree vs forest.',
+      'Explore DIFFERENT elements - vary the subjects, natural features, structures, or details. Each variation should feel like a different scene entirely.',
+      'Design a DISTINCT scene - change multiple aspects: time of day, composition type, focal elements, and mood. Make it feel like a different photograph or painting.'
+    ];
+    variationDirection = directions[(variationNumber - 1) % directions.length];
   } else {
-    variationDirection = 'Design a UNIQUE interpretation of the theme - ensure this variation has distinct visual content, not just a style change.';
+    if (variationNumber % 3 === 1) {
+      variationDirection = 'Create a DIFFERENT subject, element, or composition within the theme - avoid repeating the same subject from previous variations.';
+    } else if (variationNumber % 3 === 2) {
+      variationDirection = 'Explore a DIFFERENT aspect of the theme - think of other visual elements, subjects, or scenes that relate to this theme.';
+    } else {
+      variationDirection = 'Design a UNIQUE interpretation of the theme - ensure this variation has distinct visual content, not just a style change.';
+    }
   }
 
   const userPrompt = colorIntensity === 'Multicolored'
@@ -161,7 +187,18 @@ ${variationDirection}
 
 ${variationInstruction}
 
-Think creatively: What are different ways to represent ${themeDescription}? What other subjects, elements, scenes, or compositions could relate to this theme? Each variation should feel like a different page from a collection - naturally varied, not repetitive.
+${colorIntensity === 'Normal' 
+  ? `Think creatively and explore WIDELY different scenes within ${themeDescription}:
+- Vary TIME OF DAY: morning, noon, evening, night, dawn, dusk, sunset, sunrise
+- Vary COMPOSITION: close-up details, wide landscape, path view, single focus, forest density, open clearing
+- Vary ELEMENTS: different trees, animals, structures, natural features, weather conditions
+- Vary PERSPECTIVE: bird's eye, ground level, looking up, looking down path, side view
+- Vary MOOD: serene, dramatic, mystical, cozy, crisp, peaceful, magical
+- Vary SCALE: macro close-up, medium scene, wide expansive view
+- Vary WEATHER: clear day, snowing, misty, foggy, moonlit, aurora
+
+Each variation should feel like a COMPLETELY DIFFERENT scene - like different photographs or paintings of the same theme. Avoid any visual similarity between variations.`
+  : `Think creatively: What are different ways to represent ${themeDescription}? What other subjects, elements, scenes, or compositions could relate to this theme? Each variation should feel like a different page from a collection - naturally varied, not repetitive.`}
 
 Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
