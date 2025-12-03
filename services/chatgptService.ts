@@ -223,12 +223,6 @@ Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor s
 
 CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
 
-  // Build the theme description - combine base theme with custom theme prompt if provided
-  let themeDescription = theme;
-  if (customThemePrompt && customThemePrompt.trim()) {
-    themeDescription = `${theme} with ${customThemePrompt.trim()}`;
-  }
-
   // Create variation-specific instructions to ensure diversity
   // For Normal color intensity, add more specific diversity instructions that work for ANY theme
   const variationInstructions = colorIntensity === 'Normal' ? [
