@@ -1554,12 +1554,90 @@ const App: React.FC = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className={`max-w-7xl mx-auto px-6 py-12 transition-all duration-300 ${showSidebar ? 'mr-80' : ''}`}>
             {step === 1 && renderThemeSelection()}
             {step === 2 && renderSettings()}
             {step === 4 && renderGallery()}
         {step === 3 && status === GenerationStatus.GENERATING && renderLoading()}
       </main>
+
+      {/* Console Logs Sidebar */}
+      {status === GenerationStatus.GENERATING && (
+        <div className={`fixed right-0 top-20 bottom-0 w-80 bg-slate-900 border-l border-slate-800 shadow-2xl z-40 transition-transform duration-300 ${showSidebar ? 'translate-x-0' : 'translate-x-full'}`}>
+          {/* Sidebar Header */}
+          <div className="h-16 border-b border-slate-800 bg-slate-900 flex items-center justify-between px-4">
+            <div className="flex items-center gap-2">
+              <Terminal size={20} className="text-gothic-gold" />
+              <h3 className="text-sm font-semibold text-slate-200">Console Logs</h3>
+            </div>
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="text-slate-400 hover:text-slate-200 transition-colors p-1.5 hover:bg-slate-800 rounded"
+              title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              {showSidebar ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
+          </div>
+
+          {/* Logs Container */}
+          <div className="h-[calc(100vh-5rem)] overflow-y-auto p-4 font-mono text-xs">
+            {consoleLogs.length === 0 ? (
+              <div className="text-slate-500 text-center mt-8">
+                <Terminal size={32} className="mx-auto mb-2 opacity-50" />
+                <p>Waiting for logs...</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {consoleLogs.map((log) => {
+                  const time = new Date(log.timestamp).toLocaleTimeString();
+                  return (
+                    <div
+                      key={log.id}
+                      className={`p-2 rounded border-l-2 ${
+                        log.type === 'error'
+                          ? 'bg-red-900/20 border-red-500 text-red-300'
+                          : log.type === 'success'
+                          ? 'bg-green-900/20 border-green-500 text-green-300'
+                          : 'bg-slate-800/50 border-slate-600 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="text-slate-500 text-[10px] mt-0.5 flex-shrink-0">{time}</span>
+                        <span className="break-words whitespace-pre-wrap">{log.message}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={logsEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar Footer */}
+          <div className="absolute bottom-0 left-0 right-0 h-12 border-t border-slate-800 bg-slate-900 flex items-center justify-between px-4">
+            <span className="text-xs text-slate-500">
+              {consoleLogs.length} log{consoleLogs.length !== 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={() => setConsoleLogs([])}
+              className="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 hover:bg-slate-800 rounded"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar Toggle Button (when hidden) */}
+      {status === GenerationStatus.GENERATING && !showSidebar && (
+        <button
+          onClick={() => setShowSidebar(true)}
+          className="fixed right-4 top-24 z-40 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 p-2 rounded-lg shadow-lg transition-all hover:scale-105"
+          title="Show console logs"
+        >
+          <Terminal size={20} />
+        </button>
+      )}
 
       {/* Preview Modal */}
       {previewImage && (
