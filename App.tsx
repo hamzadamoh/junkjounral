@@ -175,9 +175,8 @@ const App: React.FC = () => {
       ? customThemePrompt.trim() 
       : selectedTheme?.name || 'Custom Theme';
     
-    // For custom themes, the customThemePrompt from settings is additional details
-    // For predefined themes, it's an enhancement
-    const additionalThemePrompt = settings.customThemePrompt || '';
+    // Note: customThemePrompt and customArtStyle fields have been removed from UI
+    // They are kept in settings for backward compatibility but are no longer used
     
     // For Midjourney/Legnext: Only generate prompts for the number of requests needed (1 prompt per 4 images)
     // For Pollinations/Replicate: Generate a prompt for each image
@@ -199,9 +198,9 @@ const App: React.FC = () => {
           settings.includeFrames,
           settings.includeBorders,
           i + 1,
-          additionalThemePrompt,
+          '', // customThemePrompt - no longer used
           settings.colorIntensity,
-          settings.customArtStyle
+          '' // customArtStyle - no longer used
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error);
           // Fallback to constructed prompt if ChatGPT fails
@@ -1009,7 +1008,7 @@ const App: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Color Intensity</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['Muted', 'Normal', 'Colorful', 'Multicolored'] as const).map((intensity) => (
+                  {(['Muted', 'Normal', 'Colorful', 'Multicolored', 'Custom / Override'] as const).map((intensity) => (
                     <button
                       key={intensity}
                       onClick={() => handleSettingChange('colorIntensity', intensity)}
@@ -1022,10 +1021,11 @@ const App: React.FC = () => {
                         intensity === 'Muted' ? 'Sepia, brown tones, faded colors' :
                         intensity === 'Normal' ? 'Normal colors, gothic/vintage aesthetic' :
                         intensity === 'Colorful' ? 'Vibrant colors with vintage charm' :
-                        'Modern, vivid, colorful (not vintage)'
+                        intensity === 'Multicolored' ? 'Modern, vivid, colorful (not vintage)' :
+                        'Custom style - bypasses all default prompts, follows theme exactly'
                       }
                     >
-                      {intensity}
+                      {intensity === 'Custom / Override' ? 'Custom / Override' : intensity}
                     </button>
                   ))}
             </div>
@@ -1036,7 +1036,9 @@ const App: React.FC = () => {
                     ? 'Normal colors, gothic/vintage aesthetic (deep burgundy, maroon, dark grey, black, antique gold)'
                     : settings.colorIntensity === 'Colorful'
                     ? 'Vibrant colors while maintaining vintage aesthetic'
-                    : 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'}
+                    : settings.colorIntensity === 'Multicolored'
+                    ? 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'
+                    : 'Custom style - no automatic junk journal or modern constraints, follows your theme exactly'}
                 </p>
           </div>
 
@@ -1178,51 +1180,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 2: Custom Theme Prompt */}
-          <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
-            <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
-              <Sparkles size={18} /> Custom Theme Prompt (Optional)
-            </h3>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Additional Theme Description
-              </label>
-              <textarea
-                value={settings.customThemePrompt || ''}
-                onChange={(e) => handleSettingChange('customThemePrompt', e.target.value)}
-                placeholder="e.g., 'vintage botanical illustrations with pressed flowers', 'steampunk mechanical gears and brass', 'dark romantic gothic architecture'..."
-                rows={4}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
-              />
-              <p className="text-xs text-slate-500 mt-2">
-                ChatGPT will incorporate this into the generated prompts. Leave empty to use only the selected theme.
-              </p>
-            </div>
-          </div>
-
-          {/* Section 3: Custom Art Style */}
-          <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
-            <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
-              <Settings size={18} /> Custom Art Style (Optional)
-            </h3>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Art Style Description
-              </label>
-              <textarea
-                value={settings.customArtStyle || ''}
-                onChange={(e) => handleSettingChange('customArtStyle', e.target.value)}
-                placeholder="e.g., 'Celtic Art Nouveau with gold frames', 'Soft atmospheric winter watercolor, no frames', 'Minimalist line art with geometric patterns'..."
-                rows={4}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
-              />
-              <p className="text-xs text-amber-400 mt-2">
-                <strong>Important:</strong> If you fill this field, it will completely override the default junk journal/modern prompts. The system will focus strictly on your specified art style, ignoring junk journal elements (stamps, ephemera, distressed textures) unless your style explicitly calls for them.
-              </p>
-            </div>
-          </div>
-
-          {/* Section 4: Elements */}
+          {/* Section 2: Elements */}
           <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
              <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
               <Sparkles size={18} /> Optional Elements

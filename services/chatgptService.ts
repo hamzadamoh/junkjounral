@@ -33,13 +33,14 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
-  // CRITICAL: If customArtStyle is provided, completely bypass default prompts
-  if (customArtStyle && customArtStyle.trim()) {
-    const systemPrompt = `You are an expert art director. Your goal is to generate image generation prompts based strictly on the user's defined style.
+  // CRITICAL: If colorIntensity is 'Custom / Override', use neutral system prompt
+  if (colorIntensity === 'Custom / Override') {
+    const systemPrompt = `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
 
-USER'S ART STYLE: ${customArtStyle.trim()}
-
-CRITICAL: Adhere strictly to this art style. Do NOT add 'junk journal' elements, stamps, or text unless the specific art style calls for it. Focus on composition, lighting, and mood.`;
+- Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
+- Do NOT default to 'modern' or 'flat' unless explicitly asked.
+- If the user provides a 'Custom Art Style', follow it rigorously.
+- If no style is provided, generate a high-quality, artistic representation of the Theme.`;
 
     // Build the theme description
     let themeDescription = theme;
@@ -47,7 +48,7 @@ CRITICAL: Adhere strictly to this art style. Do NOT add 'junk journal' elements,
       themeDescription = `${theme} with ${customThemePrompt.trim()}`;
     }
 
-    // Create variation-specific instructions for custom art style
+    // Create variation-specific instructions for custom override
     const variationInstructions = [
       'Explore a DIFFERENT time of day: morning, noon, evening, night, dawn, or dusk - each creates a unique mood and lighting',
       'Create a DIFFERENT composition: close-up of details, wide landscape view, path/road leading into distance, single focus element, or dense grouping',
@@ -97,17 +98,15 @@ Each variation should feel like a COMPLETELY DIFFERENT scene - like different ph
 
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
-ART STYLE REQUIREMENTS:
-- STRICTLY follow the user's defined art style: "${customArtStyle.trim()}"
-- Focus on composition, lighting, and mood as specified in the art style
-- Do NOT add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the art style explicitly calls for them
-- Create a flat, printable page design suitable for digital use
-- NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the art style requires it)
-- Top-down view, flat illustration style (unless the art style specifies otherwise)
+${customArtStyle && customArtStyle.trim() ? `CUSTOM ART STYLE: Follow this art style rigorously: "${customArtStyle.trim()}". Do NOT add elements that are not part of this style.` : ''}
+
+IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme or style explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
+
+Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
 
 EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
 
-Create a DISTINCT and UNIQUE design that adheres strictly to the art style "${customArtStyle.trim()}" while exploring different aspects of ${themeDescription}. 2-3 sentences. Return ONLY the prompt description.`;
+Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurately and artistically. 2-3 sentences. Return ONLY the prompt description.`;
 
     try {
       const response = await fetch(OPENAI_API_URL, {
@@ -148,7 +147,15 @@ Create a DISTINCT and UNIQUE design that adheres strictly to the art style "${cu
   }
 
   // Default prompts (existing logic)
-  const systemPrompt = colorIntensity === 'Multicolored'
+  // Check for 'Custom / Override' first
+  const systemPrompt = colorIntensity === 'Custom / Override'
+    ? `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+
+- Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
+- Do NOT default to 'modern' or 'flat' unless explicitly asked.
+- If the user provides a 'Custom Art Style', follow it rigorously.
+- If no style is provided, generate a high-quality, artistic representation of the Theme.`
+    : colorIntensity === 'Multicolored'
     ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. 
 
 🚨 CRITICAL RULES - YOU MUST FOLLOW THESE:
@@ -222,7 +229,39 @@ Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor s
     }
   }
 
-  const userPrompt = colorIntensity === 'Multicolored'
+  const userPrompt = colorIntensity === 'Custom / Override'
+    ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
+
+CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+${variationDirection}
+
+${variationInstruction}
+
+Think creatively and explore WIDELY different scenes within ${themeDescription}:
+- Vary TIME OF DAY: morning, noon, evening, night, dawn, dusk, sunset, sunrise - each creates unique lighting and mood
+- Vary COMPOSITION: close-up details, wide landscape, path/road view, single focus element, dense grouping, open area
+- Vary ELEMENTS: different subjects, objects, structures, natural/man-made features, environmental conditions within the theme
+- Vary PERSPECTIVE: bird's eye view, ground level, looking up, looking down path/road, side view, angled view
+- Vary MOOD: serene, dramatic, mystical, cozy, crisp, peaceful, magical, energetic - each variation should have a distinct emotional feel
+- Vary SCALE: macro close-up details, medium scene view, wide expansive landscape - change the viewing distance
+- Vary WEATHER/ATMOSPHERE: clear day, misty, foggy, moonlit, stormy, atmospheric lighting - change environmental conditions
+- Vary SCENE TYPE: path/road view, water feature, structure/building, open area, dense area, elevated view - change the scene structure
+
+Each variation should feel like a COMPLETELY DIFFERENT scene - like different photographs or paintings of the same theme. Avoid any visual similarity between variations. Change multiple aspects (time, composition, elements, perspective) to ensure maximum diversity.
+
+Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
+
+IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
+
+Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
+
+${customArtStyle && customArtStyle.trim() ? `CUSTOM ART STYLE: Follow this art style rigorously: "${customArtStyle.trim()}". Do NOT add elements that are not part of this style.` : ''}
+
+EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
+
+Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurately and artistically. 2-3 sentences. Return ONLY the prompt description.`
+    : colorIntensity === 'Multicolored'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} MODERN WATERCOLOR ILLUSTRATION. 
 
 🚨 CRITICAL: This is a MODERN, VIVID, COLORFUL watercolor illustration - NOT a journal page, NOT vintage, NOT antique, NOT junk journal.

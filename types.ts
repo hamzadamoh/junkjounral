@@ -17,7 +17,7 @@ export interface Theme {
 export interface GenerationSettings {
   pageCount: number;
   textureIntensity: 'Light' | 'Medium' | 'Heavy';
-  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored';
+  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' | 'Custom / Override';
   pageStyle: 'Full Page' | 'Collage' | 'Lined' | 'Grid' | 'Ephemera Sheet';
   elements: string[];
   includeFrames: boolean;
