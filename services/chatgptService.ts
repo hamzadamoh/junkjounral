@@ -25,13 +25,129 @@ export const generatePromptWithChatGPT = async (
   includeBorders: boolean,
   variationNumber: number,
   customThemePrompt?: string,
-  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' = 'Muted'
+  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' = 'Muted',
+  customArtStyle?: string
 ): Promise<string> => {
   const apiKey = getOpenAIApiKey();
   if (!apiKey) {
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
+  // CRITICAL: If customArtStyle is provided, completely bypass default prompts
+  if (customArtStyle && customArtStyle.trim()) {
+    const systemPrompt = `You are an expert art director. Your goal is to generate image generation prompts based strictly on the user's defined style.
+
+USER'S ART STYLE: ${customArtStyle.trim()}
+
+CRITICAL: Adhere strictly to this art style. Do NOT add 'junk journal' elements, stamps, or text unless the specific art style calls for it. Focus on composition, lighting, and mood.`;
+
+    // Build the theme description
+    let themeDescription = theme;
+    if (customThemePrompt && customThemePrompt.trim()) {
+      themeDescription = `${theme} with ${customThemePrompt.trim()}`;
+    }
+
+    // Create variation-specific instructions for custom art style
+    const variationInstructions = [
+      'Explore a DIFFERENT time of day: morning, noon, evening, night, dawn, or dusk - each creates a unique mood and lighting',
+      'Create a DIFFERENT composition: close-up of details, wide landscape view, path/road leading into distance, single focus element, or dense grouping',
+      'Focus on DIFFERENT elements: vary the subjects, objects, structures, natural features, or environmental conditions within the theme',
+      'Design a DIFFERENT perspective: bird\'s eye view, ground level, looking up, looking down a path/road, side view, or angled view',
+      'Explore DIFFERENT weather/atmosphere: clear day, misty, foggy, moonlit, sunset, sunrise, stormy, or magical lighting',
+      'Create a DIFFERENT scene type: path/road view, water feature (stream/river/lake), structure (house/cabin/building), open area, dense area, or elevated view',
+      'Focus on DIFFERENT details: close-up textures, medium-range elements, distant horizon, specific objects, or environmental features',
+      'Design a DIFFERENT mood: serene and peaceful, dramatic and bold, mystical and magical, cozy and warm, crisp and clear, or energetic and vibrant',
+      'Explore DIFFERENT natural/man-made features: varied terrain, water elements, structures, vegetation, or architectural elements',
+      'Create a DIFFERENT focal point: a single prominent element, a winding path/road, a structure, a natural feature, or a wide landscape',
+      'Focus on DIFFERENT lighting: bright sunlight, soft diffused light, dramatic shadows, warm sunset/rise glow, cool moonlit, or atmospheric lighting',
+      'Design a DIFFERENT scale: macro close-up details, medium view of a scene, or wide expansive landscape'
+    ];
+    
+    const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
+    
+    const variationDirections = [
+      'Create a COMPLETELY DIFFERENT scene - change the time of day, weather/atmosphere, composition, or focal point. Avoid any similarity to previous variations.',
+      'Explore a DIFFERENT aspect - think of other subjects, elements, features, or perspectives within the theme. Make it visually distinct.',
+      'Design a UNIQUE interpretation - ensure this variation has different composition, different elements, different mood, or different perspective than previous ones.',
+      'Create a FRESH perspective - change the viewpoint, scale, or focus. Think: close-up vs wide view, day vs night, path/road vs open area, single element vs group.',
+      'Explore DIFFERENT elements - vary the subjects, features, structures, or details. Each variation should feel like a different scene entirely.',
+      'Design a DISTINCT scene - change multiple aspects: time of day, composition type, focal elements, and mood. Make it feel like a different photograph or painting.'
+    ];
+    const variationDirection = variationDirections[(variationNumber - 1) % variationDirections.length];
+
+    const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
+
+CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+${variationDirection}
+
+${variationInstruction}
+
+Think creatively and explore WIDELY different scenes within ${themeDescription}:
+- Vary TIME OF DAY: morning, noon, evening, night, dawn, dusk, sunset, sunrise - each creates unique lighting and mood
+- Vary COMPOSITION: close-up details, wide landscape, path/road view, single focus element, dense grouping, open area
+- Vary ELEMENTS: different subjects, objects, structures, natural/man-made features, environmental conditions within the theme
+- Vary PERSPECTIVE: bird's eye view, ground level, looking up, looking down path/road, side view, angled view
+- Vary MOOD: serene, dramatic, mystical, cozy, crisp, peaceful, magical, energetic - each variation should have a distinct emotional feel
+- Vary SCALE: macro close-up details, medium scene view, wide expansive landscape - change the viewing distance
+- Vary WEATHER/ATMOSPHERE: clear day, misty, foggy, moonlit, stormy, atmospheric lighting - change environmental conditions
+- Vary SCENE TYPE: path/road view, water feature, structure/building, open area, dense area, elevated view - change the scene structure
+
+Each variation should feel like a COMPLETELY DIFFERENT scene - like different photographs or paintings of the same theme. Avoid any visual similarity between variations. Change multiple aspects (time, composition, elements, perspective) to ensure maximum diversity.
+
+Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
+
+ART STYLE REQUIREMENTS:
+- STRICTLY follow the user's defined art style: "${customArtStyle.trim()}"
+- Focus on composition, lighting, and mood as specified in the art style
+- Do NOT add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the art style explicitly calls for them
+- Create a flat, printable page design suitable for digital use
+- NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the art style requires it)
+- Top-down view, flat illustration style (unless the art style specifies otherwise)
+
+EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
+
+Create a DISTINCT and UNIQUE design that adheres strictly to the art style "${customArtStyle.trim()}" while exploring different aspects of ${themeDescription}. 2-3 sentences. Return ONLY the prompt description.`;
+
+    try {
+      const response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 1.2,
+          max_tokens: 200,
+          stream: false
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || response.statusText}`);
+      }
+
+      const data: ChatGPTResponse = await response.json();
+      
+      if (data.choices && data.choices.length > 0) {
+        const generatedPrompt = data.choices[0].message.content.trim();
+        return generatedPrompt;
+      } else {
+        throw new Error('No response from ChatGPT API');
+      }
+    } catch (error: any) {
+      console.error('ChatGPT API Error:', error);
+      throw new Error(`Failed to generate prompt with ChatGPT: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  // Default prompts (existing logic)
   const systemPrompt = colorIntensity === 'Multicolored'
     ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. 
 

@@ -28,6 +28,7 @@ export interface GenerationSettings {
   imageService?: 'midjourney' | 'pollinations' | 'replicate' | 'legnext' | 'ttapi';
   replicateModel?: string;
   customThemePrompt?: string;
+  customArtStyle?: string;
 }
 
 export interface GeneratedImage {

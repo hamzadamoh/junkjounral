@@ -49,6 +49,7 @@ const App: React.FC = () => {
     imageService: 'pollinations', // Default to Pollinations (free, no API key needed)
     replicateModel: 'black-forest-labs/flux-1.1-pro',
     customThemePrompt: '',
+    customArtStyle: '',
   });
   const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -199,7 +200,8 @@ const App: React.FC = () => {
           settings.includeBorders,
           i + 1,
           additionalThemePrompt,
-          settings.colorIntensity
+          settings.colorIntensity,
+          settings.customArtStyle
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error);
           // Fallback to constructed prompt if ChatGPT fails
@@ -479,7 +481,7 @@ const App: React.FC = () => {
     addLog(`   ✅ Completed: ${completedCount}/${total}`, 'success');
     addLog(`   ❌ Errors: ${errorCount}/${total}`, errorCount > 0 ? 'error' : 'success');
     addLog(`   ⏳ Remaining: ${total - completedCount - errorCount}/${total}`, 'log');
-    
+
     setStatus(GenerationStatus.COMPLETED);
     setCurrentProgress(100);
   };
@@ -1026,7 +1028,7 @@ const App: React.FC = () => {
                       {intensity}
                     </button>
                   ))}
-                </div>
+            </div>
                 <p className="text-xs text-slate-400 mt-1">
                   {settings.colorIntensity === 'Muted' 
                     ? 'Vintage sepia and brown tones (coffee-stained look)' 
@@ -1198,7 +1200,29 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 3: Elements */}
+          {/* Section 3: Custom Art Style */}
+          <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
+            <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
+              <Settings size={18} /> Custom Art Style (Optional)
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Art Style Description
+              </label>
+              <textarea
+                value={settings.customArtStyle || ''}
+                onChange={(e) => handleSettingChange('customArtStyle', e.target.value)}
+                placeholder="e.g., 'Celtic Art Nouveau with gold frames', 'Soft atmospheric winter watercolor, no frames', 'Minimalist line art with geometric patterns'..."
+                rows={4}
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
+              />
+              <p className="text-xs text-amber-400 mt-2">
+                <strong>Important:</strong> If you fill this field, it will completely override the default junk journal/modern prompts. The system will focus strictly on your specified art style, ignoring junk journal elements (stamps, ephemera, distressed textures) unless your style explicitly calls for them.
+              </p>
+            </div>
+          </div>
+
+          {/* Section 4: Elements */}
           <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
              <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
               <Sparkles size={18} /> Optional Elements
