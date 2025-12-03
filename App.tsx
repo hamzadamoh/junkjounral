@@ -160,7 +160,8 @@ const App: React.FC = () => {
           settings.includeFrames,
           settings.includeBorders,
           i + 1,
-          additionalThemePrompt
+          additionalThemePrompt,
+          settings.colorIntensity
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error);
           // Fallback to constructed prompt if ChatGPT fails
