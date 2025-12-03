@@ -33,9 +33,42 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
+  // Global helper function to generate variation control instructions
+  const getVariationControl = (variationNumber: number, themeDescription: string): string => {
+    // Detect theme type from description
+    const themeLower = themeDescription.toLowerCase();
+    const isBestiary = themeLower.includes('bestiary') || themeLower.includes('creature') || themeLower.includes('dragon') || themeLower.includes('beast') || themeLower.includes('animal') || themeLower.includes('bear') || themeLower.includes('owl') || themeLower.includes('wolf') || themeLower.includes('bird');
+    const isLandscape = themeLower.includes('landscape') || themeLower.includes('forest') || themeLower.includes('mountain') || themeLower.includes('scene') || themeLower.includes('village') || themeLower.includes('winter') || themeLower.includes('summer') || themeLower.includes('autumn') || themeLower.includes('spring');
+    
+    let controlText = `\n\n🎯 VARIATION CONTROL (Variation #${variationNumber}):\n`;
+    
+    if (isBestiary) {
+      controlText += `- CRITICAL: You MUST switch to a DIFFERENT creature than all previous variations.\n`;
+      controlText += `- If previous variations featured dragons, switch to bears, owls, wolves, birds, or other creatures within the theme.\n`;
+      controlText += `- Each creature must be visually distinct - different species, pose, composition, or setting.\n`;
+      controlText += `- GOAL: Create a diverse bestiary collection where each image features a unique creature.\n`;
+    } else if (isLandscape) {
+      controlText += `- CRITICAL: You MUST switch the perspective or focal point from previous variations.\n`;
+      controlText += `- Rotate through: Wide landscape shot, Close-up detail, Path/road view, Sky/aerial view, Ground level, Elevated view.\n`;
+      controlText += `- Change the focal element: different structures, natural features, or environmental conditions.\n`;
+      controlText += `- GOAL: Each image must show a different aspect of the landscape - like different photographs from a collection.\n`;
+    } else {
+      controlText += `- CRITICAL: You MUST explore a DIFFERENT subject, element, or composition than all previous variations.\n`;
+      controlText += `- Switch between: different subjects, different perspectives (wide/close-up), different focal points, different moods.\n`;
+      controlText += `- Avoid repeating the same visual elements, objects, or compositions.\n`;
+      controlText += `- GOAL: Each image must be distinct enough to be a separate trading card or journal page.\n`;
+    }
+    
+    controlText += `- REMEMBER: Never output the same subject or composition twice. Explore the entire breadth of "${themeDescription}".`;
+    
+    return controlText;
+  };
+
   // CRITICAL: If colorIntensity is 'Custom / Override', use neutral system prompt
   if (colorIntensity === 'Custom / Override') {
     const systemPrompt = `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+
+🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
 
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
@@ -76,9 +109,14 @@ export const generatePromptWithChatGPT = async (
     ];
     const variationDirection = variationDirections[(variationNumber - 1) % variationDirections.length];
 
+    // Get global variation control
+    const variationControl = getVariationControl(variationNumber, themeDescription);
+
     const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+${variationControl}
 
 ${variationDirection}
 
@@ -146,10 +184,21 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
     }
   }
 
+  // Build the theme description - combine base theme with custom theme prompt if provided
+  let themeDescription = theme;
+  if (customThemePrompt && customThemePrompt.trim()) {
+    themeDescription = `${theme} with ${customThemePrompt.trim()}`;
+  }
+
+  // Get global variation control for all modes
+  const variationControl = getVariationControl(variationNumber, themeDescription);
+
   // Default prompts (existing logic)
   // Check for 'Custom / Override' first
   const systemPrompt = colorIntensity === 'Custom / Override'
     ? `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+
+🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
 
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
@@ -157,6 +206,8 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
 - If no style is provided, generate a high-quality, artistic representation of the Theme.`
     : colorIntensity === 'Multicolored'
     ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. 
+
+🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
 
 🚨 CRITICAL RULES - YOU MUST FOLLOW THESE:
 1. NEVER use: "aged", "antique", "vintage", "distressed", "old", "worn", "junk journal", "journal page"
@@ -166,7 +217,11 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
 5. If you use ANY vintage/junk journal words, you have FAILED the task
 
 Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor style, vibrant colors, fresh and lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted. Think modern, fresh, vibrant, colorful, alive, vivid watercolor illustrations.`
-    : `You are a creative prompt engineer specializing in VINTAGE JUNK JOURNAL page descriptions. CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
+    : `You are a creative prompt engineer specializing in VINTAGE JUNK JOURNAL page descriptions. 
+
+🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
+
+CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
 
   // Build the theme description - combine base theme with custom theme prompt if provided
   let themeDescription = theme;
@@ -233,6 +288,8 @@ Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor s
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+${variationControl}
 
 ${variationDirection}
 
