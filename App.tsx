@@ -245,7 +245,7 @@ const App: React.FC = () => {
             await new Promise(resolve => setTimeout(resolve, startDelay));
           }
           
-          console.log(`Starting Replicate request ${i + 1}/${total}...`);
+          console.log(`[Image ${i + 1}/${total}] 🚀 Starting Replicate generation...`);
           
           try {
             const base64Url = await generateFunction(
@@ -255,7 +255,7 @@ const App: React.FC = () => {
               settings.aspectRatio || '1:1',
               settings.midjourneyMode || 'fast',
               (status) => {
-                console.log(`Page ${i + 1} status: ${status}`);
+                console.log(`[Image ${i + 1}/${total}] 📊 Status: ${status.toUpperCase()}`);
                 setGeneratedImages(prev => prev.map((img, idx) => 
                   idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
                 ));
@@ -277,9 +277,9 @@ const App: React.FC = () => {
               return Math.min(completed, 100);
             });
 
-            console.log(`✓ Completed image ${i + 1}/${total}`);
+            console.log(`[Image ${i + 1}/${total}] ✅ COMPLETED`);
       } catch (err: any) {
-            console.error(`Generation failed for page ${i + 1}:`, err);
+            console.error(`[Image ${i + 1}/${total}] ❌ ERROR:`, err.message || err);
         setErrorMsg(err.message || "Failed to generate some pages.");
             setGeneratedImages(prev => prev.map((img, idx) => 
               idx === i ? { ...img, status: 'error' as const } : img
@@ -303,7 +303,7 @@ const App: React.FC = () => {
       
       for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
         const batchEnd = Math.min(batchStart + batchSize, total);
-        console.log(`Processing Pollinations batch: images ${batchStart + 1}-${batchEnd}`);
+        console.log(`[Batch ${Math.floor(batchStart / batchSize) + 1}] Processing images ${batchStart + 1}-${batchEnd}...`);
         
         const batchPromises = Array.from({ length: batchEnd - batchStart }, async (_, batchIdx) => {
           const i = batchStart + batchIdx;
@@ -312,6 +312,8 @@ const App: React.FC = () => {
           if (batchIdx > 0) {
             await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
           }
+          
+          console.log(`[Image ${i + 1}/${total}] 🚀 Starting Pollinations generation...`);
           try {
             const base64Url = await generateFunction(
               selectedTheme, 
@@ -320,7 +322,7 @@ const App: React.FC = () => {
               settings.aspectRatio || '1:1',
               settings.midjourneyMode || 'fast',
               (status) => {
-                console.log(`Page ${i + 1} status: ${status}`);
+                console.log(`[Image ${i + 1}/${total}] 📊 Status: ${status.toUpperCase()}`);
                 setGeneratedImages(prev => prev.map((img, idx) => 
                   idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
                 ));
@@ -342,9 +344,10 @@ const App: React.FC = () => {
               return Math.min(completed, 100);
             });
 
+            console.log(`[Image ${i + 1}/${total}] ✅ COMPLETED`);
             return { success: true, index: i };
           } catch (err: any) {
-            console.error(`Generation failed for page ${i + 1}:`, err);
+            console.error(`[Image ${i + 1}/${total}] ❌ ERROR:`, err.message || err);
             setErrorMsg(err.message || "Failed to generate some pages.");
             setGeneratedImages(prev => prev.map((img, idx) => 
               idx === i ? { ...img, status: 'error' as const } : img
@@ -365,7 +368,14 @@ const App: React.FC = () => {
       // Note: Midjourney returns 4 images per request, so we need fewer requests
       const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
       const requestsNeeded = Math.ceil(total / 4);
+      console.log(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
+      
       const imagePromises = Array.from({ length: requestsNeeded }, async (_, requestIdx) => {
+        const startIdx = requestIdx * 4;
+        const endIdx = Math.min(startIdx + 4, total);
+        const imageRange = `${startIdx + 1}-${endIdx}`;
+        
+        console.log(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
           // Midjourney/Legnext returns an array of images (typically 4)
           const base64Urls = await generateFunction(
@@ -375,10 +385,8 @@ const App: React.FC = () => {
             settings.aspectRatio || '1:1',
             settings.midjourneyMode || 'fast',
             (status) => {
-              console.log(`${serviceName} request ${requestIdx + 1} status: ${status}`);
+              console.log(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 📊 Status: ${status.toUpperCase()} (Images ${imageRange})`);
               // Update all images that will come from this request
-              const startIdx = requestIdx * 4;
-              const endIdx = Math.min(startIdx + 4, total);
               setGeneratedImages(prev => prev.map((img, idx) => 
                 idx >= startIdx && idx < endIdx 
                   ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } 
@@ -390,10 +398,10 @@ const App: React.FC = () => {
           ) as string[]; // Type assertion: Midjourney returns array
           
           // Add all images from this request to the gallery
-          const startIdx = requestIdx * 4;
           base64Urls.forEach((base64Url, imgIdx) => {
             const actualIdx = startIdx + imgIdx;
             if (actualIdx < total) {
+              console.log(`[Image ${actualIdx + 1}/${total}] ✅ COMPLETED`);
               setGeneratedImages(prev => prev.map((img, idx) => 
                 idx === actualIdx ? { 
                   ...img, 
@@ -410,9 +418,10 @@ const App: React.FC = () => {
             return Math.min(completed, 100);
           });
 
+          console.log(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ✅ COMPLETED - Generated ${base64Urls.length} images (Images ${imageRange})`);
           return { success: true, index: requestIdx };
         } catch (err: any) {
-          console.error(`Generation failed for ${serviceName} request ${requestIdx + 1}:`, err);
+          console.error(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ❌ ERROR (Images ${imageRange}):`, err.message || err);
           setErrorMsg(err.message || "Failed to generate some pages.");
           const startIdx = requestIdx * 4;
           const endIdx = Math.min(startIdx + 4, total);
@@ -426,6 +435,13 @@ const App: React.FC = () => {
       await Promise.allSettled(imagePromises);
     }
 
+    const completedCount = generatedImages.filter(img => img.status === 'completed' && img.url).length;
+    const errorCount = generatedImages.filter(img => img.status === 'error').length;
+    console.log(`\n📊 Generation Summary:`);
+    console.log(`   ✅ Completed: ${completedCount}/${total}`);
+    console.log(`   ❌ Errors: ${errorCount}/${total}`);
+    console.log(`   ⏳ Remaining: ${total - completedCount - errorCount}/${total}`);
+    
     setStatus(GenerationStatus.COMPLETED);
     setCurrentProgress(100);
   };
@@ -513,6 +529,8 @@ const App: React.FC = () => {
 
   const regenerateImage = async (img: GeneratedImage, index: number) => {
     if (!selectedTheme) return;
+    
+    console.log(`[Image ${index + 1}] 🔄 Regenerating...`);
     
     // Update status to generating
     setGeneratedImages(prev => prev.map((item, idx) => 
