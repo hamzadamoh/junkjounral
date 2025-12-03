@@ -139,27 +139,46 @@ const getTexturePrompt = (intensity: 'Light' | 'Medium' | 'Heavy'): string => {
 const sendTaskToTtapi = async (
   prompt: string
 ): Promise<string | null> => {
+  console.log(`[Ttapi] ===== Starting sendTaskToTtapi =====`);
+  console.log(`[Ttapi] Prompt length: ${prompt.length}`);
+  console.log(`[Ttapi] Prompt preview: ${prompt.substring(0, 150)}...`);
+  
   const apiKey = getTtapiApiKey();
+  console.log(`[Ttapi] API key retrieved: ${apiKey ? `Yes (length: ${apiKey.length})` : 'NO - MISSING!'}`);
+  
   if (!apiKey) {
-    throw new Error('Ttapi API key is not configured. Please set VITE_TTAPI_API_KEY in your environment variables.');
+    const error = 'Ttapi API key is not configured. Please set VITE_TTAPI_API_KEY in your environment variables.';
+    console.error(`[Ttapi] ❌ ${error}`);
+    throw new Error(error);
   }
 
   const data = {
     prompt: prompt
   };
 
+  const url = `${TTAPI_BASE_URL}/midjourney/v1/imagine`;
+  console.log(`[Ttapi] Request URL: ${url}`);
+  console.log(`[Ttapi] Request data:`, JSON.stringify(data, null, 2));
+
   const options: RequestInit = {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'TT-API-KEY': apiKey,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(data)
   };
 
+  console.log(`[Ttapi] Request headers:`, {
+    'TT-API-KEY': `${apiKey.substring(0, 10)}...`,
+    'Content-Type': 'application/json'
+  });
+
   try {
-    console.log(`[Ttapi] Creating task with prompt: ${prompt.substring(0, 100)}...`);
-    const response = await fetch(`${TTAPI_BASE_URL}/midjourney/v1/imagine`, options);
+    console.log(`[Ttapi] Sending POST request to ${url}...`);
+    const response = await fetch(url, options);
+    console.log(`[Ttapi] Response received. Status: ${response.status} ${response.statusText}`);
+    console.log(`[Ttapi] Response headers:`, Object.fromEntries(response.headers.entries()));
     
     // Check response status before parsing
     if (!response.ok) {
@@ -228,7 +247,7 @@ const getTaskStatus = async (jobId: string): Promise<TtapiJobStatus> => {
   const options: RequestInit = {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'TT-API-KEY': apiKey,
       'Content-Type': 'application/json'
     }
   };
@@ -474,6 +493,18 @@ export const generateJournalPage = async (
   variationIndex?: number,
   customPrompt?: string
 ): Promise<string[]> => {
+  console.log(`[Ttapi] ===== generateJournalPage called =====`);
+  console.log(`[Ttapi] Theme: ${theme?.name || 'N/A'}`);
+  console.log(`[Ttapi] Settings:`, {
+    colorIntensity: settings.colorIntensity,
+    textureIntensity: settings.textureIntensity,
+    pageStyle: settings.pageStyle,
+    aspectRatio,
+    processMode
+  });
+  console.log(`[Ttapi] Custom prompt provided: ${customPrompt ? 'Yes' : 'No'}`);
+  console.log(`[Ttapi] Variation index: ${variationIndex}`);
+  
   try {
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
