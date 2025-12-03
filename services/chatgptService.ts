@@ -88,12 +88,14 @@ ${colorIntensity === 'Muted'
   ? '- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, coffee-stained look, NOT bright vibrant colors'
   : colorIntensity === 'Colorful'
   ? '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
-  : '- MULTICOLORED VINTAGE PALETTE: wide range of colors including blues, greens, purples, warm accents (oranges, yellows), cool tones, and various hues - like a watercolor palette with multiple colors, maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be diverse and harmonious, NOT modern bright colors, NOT neon colors'}
-- AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
+  : '- MULTICOLORED MODERN PALETTE: vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals) - modern, fresh, lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted - think modern watercolor, vibrant illustration, fresh and alive'}
+${colorIntensity === 'Multicolored' 
+  ? '- MODERN, FRESH STYLE: clean, modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps - just vivid, alive, modern colorful illustration'
+  : '- AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
 - HANDWRITTEN SCRIPT OVERLAYS: extensive cursive handwritten text overlaying the design, like old letters or journal entries, faded brown/sepia ink, flowing script, multiple layers of text
 - VINTAGE EPHEMERA: include postage stamps, vintage labels, old tickets, faded botanical illustrations, floral patterns, sheet music notation, vintage seals or stamps
 - COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements - the page should look like a real junk journal page with multiple layers
-- MIXED MEDIA: combine the main illustration with handwritten text, stamps, floral patterns, and other vintage elements all layered together
+- MIXED MEDIA: combine the main illustration with handwritten text, stamps, floral patterns, and other vintage elements all layered together'}
 - FLAT printable page design (like a vintage scrapbook page)
 - NO modern watercolor illustrations, NO clean digital art
 - NO photorealistic rendering, NO realistic photography, NO hyper-realistic details

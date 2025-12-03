@@ -940,7 +940,7 @@ const App: React.FC = () => {
                     ? 'Vintage sepia and brown tones (coffee-stained look)' 
                     : settings.colorIntensity === 'Colorful'
                     ? 'Vibrant colors while maintaining vintage aesthetic'
-                    : 'Wide range of colors (blues, greens, purples, warm accents) with vintage charm'}
+                    : 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'}
                 </p>
               </div>
 
