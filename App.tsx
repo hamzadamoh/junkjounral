@@ -489,6 +489,85 @@ const App: React.FC = () => {
     }
   };
 
+  const regenerateImage = async (img: GeneratedImage, index: number) => {
+    if (!selectedTheme) return;
+    
+    // Update status to generating
+    setGeneratedImages(prev => prev.map((item, idx) => 
+      idx === index ? { ...item, status: 'generating' as const } : item
+    ));
+
+    try {
+      const generateFunction = settings.imageService === 'pollinations' 
+        ? generateWithPollinations 
+        : settings.imageService === 'replicate'
+        ? generateWithReplicate
+        : settings.imageService === 'legnext'
+        ? generateWithLegnext
+        : generateWithMidjourney;
+
+      // For Midjourney/Legnext, we need to handle arrays
+      if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
+        const base64Urls = await generateFunction(
+          selectedTheme,
+          settings,
+          settings.parametersForMJ,
+          settings.aspectRatio || '1:1',
+          settings.midjourneyMode || 'fast',
+          (status) => {
+            setGeneratedImages(prev => prev.map((item, idx) => 
+              idx === index ? { ...item, status: status === 'completed' ? 'completed' : 'generating' } : item
+            ));
+          },
+          index,
+          img.prompt // Use the same prompt
+        ) as string[];
+
+        // Update with the first image from the array (or use the index if multiple)
+        if (base64Urls && base64Urls.length > 0) {
+          const imageToUse = base64Urls[index % base64Urls.length] || base64Urls[0];
+          setGeneratedImages(prev => prev.map((item, idx) => 
+            idx === index ? { 
+              ...item, 
+              url: imageToUse, 
+              status: 'completed' as const 
+            } : item
+          ));
+        }
+      } else {
+        // For Pollinations/Replicate, single image
+        const base64Url = await generateFunction(
+          selectedTheme,
+          settings,
+          settings.parametersForMJ,
+          settings.aspectRatio || '1:1',
+          settings.midjourneyMode || 'fast',
+          (status) => {
+            setGeneratedImages(prev => prev.map((item, idx) => 
+              idx === index ? { ...item, status: status === 'completed' ? 'completed' : 'generating' } : item
+            ));
+          },
+          index,
+          img.prompt // Use the same prompt
+        ) as string;
+
+        setGeneratedImages(prev => prev.map((item, idx) => 
+          idx === index ? { 
+            ...item, 
+            url: base64Url, 
+            status: 'completed' as const 
+          } : item
+        ));
+      }
+    } catch (err: any) {
+      console.error(`Regeneration failed for image ${index + 1}:`, err);
+      setErrorMsg(err.message || "Failed to regenerate image.");
+      setGeneratedImages(prev => prev.map((item, idx) => 
+        idx === index ? { ...item, status: 'error' as const } : item
+      ));
+    }
+  };
+
   const downloadImage = (img: GeneratedImage, index: number) => {
     const link = document.createElement('a');
     link.href = img.url;
@@ -1302,6 +1381,14 @@ const App: React.FC = () => {
                   >
                     <Download size={16} />
                     Download
+                  </button>
+                  <button 
+                    onClick={() => regenerateImage(img, actualIndex)}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    title="Regenerate this image with the same prompt"
+                  >
+                    <RefreshCw size={16} />
+                    Regenerate
                   </button>
             </div>
               ) : img.status === 'generating' ? (
