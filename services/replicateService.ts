@@ -453,14 +453,23 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     settings.includeBorders ? 'decorative borders' : ''
   ].filter(Boolean).join(', ');
 
-  // Get color palette based on color intensity setting
-  const colorPalette = settings.colorIntensity === 'Muted' 
-    ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
-    : settings.colorIntensity === 'Colorful'
-    ? 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
-    : 'wide range of colors (blues, greens, purples, warm accents like oranges and yellows, cool tones, various harmonious hues), multicolored vintage palette, watercolor-like color diversity, maintaining vintage charm, NOT modern bright colors, NOT neon colors';
+  // Get color palette and style constraints based on color intensity setting
+  let colorPalette: string;
+  let styleConstraints: string;
   
-  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, real junk journal page with text overlays and ephemera.`;
+  if (settings.colorIntensity === 'Muted' || settings.colorIntensity === 'Colorful') {
+    // Vintage junk journal style
+    colorPalette = settings.colorIntensity === 'Muted' 
+      ? 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors'
+      : 'rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm, NOT modern bright colors, NOT neon colors';
+    styleConstraints = `Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, real junk journal page with text overlays and ephemera.`;
+  } else {
+    // Multicolored: vivid, alive, modern - NO vintage/junk journal
+    colorPalette = 'vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor palette, fresh and lively colors';
+    styleConstraints = `${colorPalette}, modern watercolor illustration, vivid and alive, fresh and vibrant, clean modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained. Digital design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, modern colorful illustration.`;
+  }
+  
+  let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${styleConstraints}`;
   
   // Add additional parameters if provided
   if (parametersForMJ) {
