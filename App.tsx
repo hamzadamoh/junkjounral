@@ -359,8 +359,8 @@ const App: React.FC = () => {
           await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
         }
       }
-    } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext') {
-      // For Midjourney (GoAPI or Legnext), generate in parallel
+    } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
+      // For Midjourney (GoAPI, Legnext, or Ttapi), generate in parallel
       // Note: Midjourney returns 4 images per request, so we need fewer requests
       const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
       const requestsNeeded = Math.ceil(total / 4);
