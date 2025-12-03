@@ -32,7 +32,9 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
-  const systemPrompt = `You are a creative prompt engineer specializing in VINTAGE JUNK JOURNAL page descriptions. CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
+  const systemPrompt = colorIntensity === 'Multicolored'
+    ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. CRITICAL: Generate prompts for VIVID, ALIVE, BRIGHT, MODERN colorful illustrations - modern watercolor style, vibrant colors, fresh and lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted. Think modern, fresh, vibrant, colorful, alive, vivid watercolor illustrations.`
+    : `You are a creative prompt engineer specializing in VINTAGE JUNK JOURNAL page descriptions. CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
 
   // Build the theme description - combine base theme with custom theme prompt if provided
   let themeDescription = theme;
@@ -69,7 +71,37 @@ export const generatePromptWithChatGPT = async (
     variationDirection = 'Design a UNIQUE interpretation of the theme - ensure this variation has distinct visual content, not just a style change.';
   }
 
-  const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
+  const userPrompt = colorIntensity === 'Multicolored'
+    ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration. 
+
+CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+
+${variationDirection}
+
+${variationInstruction}
+
+Think creatively: What are different ways to represent ${themeDescription}? What other subjects, elements, scenes, or compositions could relate to this theme? Each variation should feel naturally varied, not repetitive.
+
+Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
+
+CRITICAL REQUIREMENTS FOR MODERN COLORFUL ILLUSTRATION:
+- VIVID, ALIVE, BRIGHT, MODERN: vivid and alive appearance - must look fresh and vibrant
+- MODERN WATERCOLOR STYLE: modern watercolor illustration, vibrant watercolor painting, fresh and lively
+- MULTICOLORED PALETTE: vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues) - modern, fresh, lively
+- CLEAN MODERN DESIGN: clean, modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained
+- FLAT printable page design
+- NO vintage elements, NO aged paper, NO distressed texture, NO sepia tones, NO muted colors
+- NO photorealistic rendering, NO realistic photography, NO hyper-realistic details
+- NO 3D objects, NO depth, NO shadows, NO realistic lighting
+- NO still life compositions, NO objects placed around the page
+- Top-down view, flat illustration style, artistic rendering
+- Think of it as a modern, vivid, colorful watercolor illustration - fresh, alive, vibrant, stylized, NOT realistic, NOT vintage
+- EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style
+
+${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the custom theme elements: "${customThemePrompt.trim()}" into the design naturally, but create a DIFFERENT interpretation each time. Explore different aspects, subjects, or elements related to "${customThemePrompt.trim()}".` : ''}
+
+Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that naturally differs from other variations. 2-3 sentences. Return ONLY the prompt description.`
+    : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
@@ -86,16 +118,12 @@ CRITICAL REQUIREMENTS FOR VINTAGE JUNK JOURNAL AESTHETIC:
 - ILLUSTRATED/ARTISTIC STYLE: stylized illustration, artistic rendering, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic
 ${colorIntensity === 'Muted' 
   ? '- MUTED COLORS ONLY: sepia tones, browns, creams, faded colors, coffee-stained look, NOT bright vibrant colors'
-  : colorIntensity === 'Colorful'
-  ? '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'
-  : '- MULTICOLORED MODERN PALETTE: vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals) - modern, fresh, lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted - think modern watercolor, vibrant illustration, fresh and alive'}
-${colorIntensity === 'Multicolored' 
-  ? '- MODERN, FRESH STYLE: clean, modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps - just vivid, alive, modern colorful illustration'
-  : `- AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
+  : '- COLORFUL VINTAGE PALETTE: rich, vibrant colors (reds, blues, greens, purples, yellows) while maintaining vintage aesthetic, aged paper texture, and antique feel - colors should be vibrant but with vintage charm, NOT modern bright colors, NOT neon colors'}
+- AGED PAPER texture: distressed, tea-stained, worn edges, vintage paper texture
 - HANDWRITTEN SCRIPT OVERLAYS: extensive cursive handwritten text overlaying the design, like old letters or journal entries, faded brown/sepia ink, flowing script, multiple layers of text
 - VINTAGE EPHEMERA: include postage stamps, vintage labels, old tickets, faded botanical illustrations, floral patterns, sheet music notation, vintage seals or stamps
 - COLLAGE STYLE: layered paper scraps, vintage ephemera, mixed media collage elements - the page should look like a real junk journal page with multiple layers
-- MIXED MEDIA: combine the main illustration with handwritten text, stamps, floral patterns, and other vintage elements all layered together`}
+- MIXED MEDIA: combine the main illustration with handwritten text, stamps, floral patterns, and other vintage elements all layered together
 - FLAT printable page design (like a vintage scrapbook page)
 - NO modern watercolor illustrations, NO clean digital art
 - NO photorealistic rendering, NO realistic photography, NO hyper-realistic details
