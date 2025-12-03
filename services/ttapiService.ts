@@ -175,8 +175,15 @@ const sendTaskToTtapi = async (
   });
 
   try {
-    console.log(`[Ttapi] Sending POST request to ${url}...`);
-    const response = await fetch(url, options);
+    console.log(`[Ttapi] Sending POST request via Vercel proxy...`);
+    // Use Vercel serverless function to bypass CORS
+    const response = await fetch('/api/ttapi/imagine', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
     console.log(`[Ttapi] Response received. Status: ${response.status} ${response.statusText}`);
     console.log(`[Ttapi] Response headers:`, Object.fromEntries(response.headers.entries()));
     
@@ -253,7 +260,13 @@ const getTaskStatus = async (jobId: string): Promise<TtapiJobStatus> => {
   };
 
   try {
-    const response = await fetch(`${TTAPI_BASE_URL}/midjourney/v1/fetch?jobId=${jobId}`, options);
+    // Use Vercel serverless function to bypass CORS
+    const response = await fetch(`/api/ttapi/fetch?jobId=${jobId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
     
     if (!response.ok) {
       const errorText = await response.text();
