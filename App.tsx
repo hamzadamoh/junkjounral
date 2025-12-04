@@ -552,8 +552,8 @@ const App: React.FC = () => {
     let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. ${styleConstraints}`;
     
     // Add seed or random element for additional variation
-    if (variationIndex !== undefined) {
-      const seed = Math.floor(Math.random() * 1000000) + variationIndex * 1000;
+    if (variationIndex !== undefined && typeof variationIndex === 'number') {
+      const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
       prompt += ` --seed ${seed}`;
     }
     

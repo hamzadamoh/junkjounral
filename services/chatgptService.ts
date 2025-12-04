@@ -33,7 +33,7 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
-  // Global helper function to get focus rotation based on variation number
+  // Global helper function to get focus rotation based on variation number (defined at function scope)
   const getFocusRotation = (variationNumber: number): { type: string; description: string } => {
     const lastDigit = variationNumber % 10;
     
@@ -224,6 +224,9 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
   if (customThemePrompt && customThemePrompt.trim()) {
     themeDescription = `${theme} with ${customThemePrompt.trim()}`;
   }
+
+  // Get focus rotation for this variation (needed for all modes)
+  const focusRotation = getFocusRotation(variationNumber);
 
   // Get global variation control for all modes
   const variationControl = getVariationControl(variationNumber, themeDescription);
