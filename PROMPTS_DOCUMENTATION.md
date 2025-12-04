@@ -60,20 +60,22 @@ const artTechniques = [
 ### Color Palettes (12 types):
 ```javascript
 const palettes = [
-  "Pastel",
-  "Neon",
-  "Vintage",
-  "Monochrome",
-  "Earth Tones",
-  "Cool Tones",
-  "Warm Tones",
-  "High Contrast",
-  "Muted",
-  "Vibrant",
-  "Desaturated",
-  "Saturated"
+  "Pastel & Soft",
+  "Vintage & Muted",
+  "Monochromatic (Single Color Family)",
+  "Earth Tones & Natural",
+  "Cool & Frosty (Blues/Whites/Greys)",
+  "Warm & Cozy (Ambers/Creams/Golds)",
+  "Desaturated & Moody",
+  "Soft Watercolor Wash",
+  "Classic & Elegant",
+  "Sepia & Nostalgic",
+  "Botanical & Organic (Greens/Browns)",
+  "Neutral & Minimalist"
 ];
 ```
+
+**Note**: These palettes are curated to be softer, more artistic, and suitable for high-quality illustrations. Aggressive options like "Neon", "Vibrant", and "High Contrast" have been removed to ensure the randomizer always defaults to usable, professional color schemes when `customArtStyle` is empty.
 
 **Logic**:
 - **IF `customArtStyle` has text**: Use ONLY the user's text → `STYLE: Follow this custom art style: "${customArtStyle.trim()}".`
@@ -93,6 +95,8 @@ You are a versatile AI Art Director. Your goal is to generate image prompts base
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
 - If the user provides a 'Custom Art Style', follow it rigorously.
 - If no style is provided, generate a high-quality, artistic representation of the Theme.
+
+🎨 COLOR LOGIC: Unless the user explicitly uses words like 'Vibrant', 'Neon', 'Bright', or 'Saturated', you MUST default to a **Soft, Natural, or Muted** color palette. Avoid oversaturation. Prioritize artistic, tasteful, and printable colors over intense digital hues.
 ```
 
 ### 3.2 Multicolored Mode
@@ -131,9 +135,9 @@ Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${the
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
 VARIATION SPECIFICS (Image ${variationNumber}):
-- VISUAL FOCUS: ${randomFocus}
+- VISUAL FOCUS: ${randomFocus} ⚠️ THIS DETERMINES THE IMAGE STRUCTURE
 - VIEWING ANGLE: ${randomAngle}
-- THEME: ${themeDescription}
+- THEME: ${themeDescription} (Use theme elements, but structure follows VISUAL FOCUS)
 
 ${styleInstruction}
 ```
@@ -142,15 +146,18 @@ ${styleInstruction}
 - **IF `customArtStyle` has text**: `${styleInstruction}` = `STYLE: Follow this custom art style: "${customArtStyle.trim()}".` (Uses ONLY user's text)
 - **IF `customArtStyle` is empty**: `${styleInstruction}` = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}.` (Uses random selection for diversity)
 
-INSTRUCTION: Depict the Theme '${themeDescription}' using the assigned VISUAL FOCUS.
-- If Focus is 'Single Hero Object (Central)', show a prominent central subject (e.g., a single flower, a key, a skull, a character).
-- If Focus is 'Wide Atmospheric Scene', show a broader landscape or environment view.
-- If Focus is 'Macro Detail/Texture', show a close-up of intricate details, textures, or patterns.
-- If Focus is 'Knolling (Flat Lay of multiple items)', arrange multiple related items in a flat lay composition.
-- If Focus is 'Asymmetrical Corner Composition', place the main subject in a corner with negative space.
-- If Focus is 'Pattern-Focused (No central object)', create a repeating pattern or texture without a central focal point.
-- If Focus is 'Collage of Scattered Elements', arrange various elements scattered across the page.
-- If Focus is 'Framed Vignette', show a scene or object within a decorative frame or border.
+🎯 STRUCTURE HIERARCHY: VISUAL FOCUS > THEME DESCRIPTION
+The VISUAL FOCUS defines the COMPOSITION STRUCTURE. The Theme provides the CONTENT ELEMENTS to fill that structure.
+
+INSTRUCTION: Create the assigned VISUAL FOCUS structure, then incorporate theme elements appropriately:
+- If Focus is 'Single Hero Object (Central)': Create an ISOLATED central element (ephemera-style). Use theme elements to design this single object, NOT as background. Even if theme suggests "pattern", create a distinct focal object.
+- If Focus is 'Wide Atmospheric Scene': Show a broader landscape/environment view using theme elements.
+- If Focus is 'Macro Detail/Texture': Show a close-up of intricate details, textures, or patterns. This is the ONLY focus that allows full-page texture/pattern.
+- If Focus is 'Knolling (Flat Lay of multiple items)': Arrange multiple theme-related items in a flat lay composition.
+- If Focus is 'Asymmetrical Corner Composition': Place the main subject in a corner with negative space. Use theme elements to create the corner element, NOT background.
+- If Focus is 'Pattern-Focused (No central object)': Create a repeating pattern or texture without a central focal point. This is the ONLY focus that allows full-page repeating patterns.
+- If Focus is 'Collage of Scattered Elements': Arrange various theme elements scattered across the page in a collage style.
+- If Focus is 'Framed Vignette': Show a scene or object within a decorative frame or border. Use theme elements inside the frame, NOT as background pattern.
 
 The VIEWING ANGLE determines the perspective:
 - 'Top-Down / Flat Lay': Bird's eye view, looking straight down
@@ -161,6 +168,27 @@ The VIEWING ANGLE determines the perspective:
 
 CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore a DIFFERENT aspect of the theme.
 
+🚨 HIERARCHY RULE - VISUAL FOCUS OVERRIDES THEME:
+The VISUAL FOCUS determines the STRUCTURE and COMPOSITION of the image, NOT the Theme Description.
+- If VISUAL FOCUS is 'Single Hero Object (Central)': The image MUST have an isolated central element as the primary subject, even if the Theme suggests patterns or backgrounds. Use theme elements to create a distinct focal point, NOT a background pattern.
+- If VISUAL FOCUS is 'Framed Vignette': The image MUST show a scene or object within a decorative frame or border. Use theme elements to create the framed content, NOT a repeating background.
+- If VISUAL FOCUS is 'Pattern-Focused (No central object)': THEN you may create a full-page repeating pattern or texture using the theme elements.
+- If VISUAL FOCUS is 'Macro Detail/Texture': THEN you may create a close-up texture or pattern detail.
+- For ALL OTHER FOCUS TYPES: Do NOT generate a full-page background pattern, even if the Theme contains "Pattern" or "Background". Instead, use the theme elements to create the assigned focus structure (e.g., isolated element, framed scene, corner composition, etc.).
+
+🚨 ANTI-REPETITION RULE:
+If the Theme Description contains words like "Pattern", "Background", "Texture", or "Seamless":
+- ONLY generate a full-page repeating pattern/texture if VISUAL FOCUS is 'Pattern-Focused (No central object)' or 'Macro Detail/Texture'.
+- For all other VISUAL FOCUS types (Single Hero Object, Framed Vignette, Asymmetrical Corner, Knolling, Collage, Wide Scene): Use the theme elements to create a DISTINCT focal point, isolated element, framed composition, or specific arrangement - NOT a background pattern.
+
+🎨 DESIGN KIT GENERATION GOAL:
+You are creating a "Design Kit" that contains a MIX of different types of elements:
+- Some variations should be full-page backgrounds/textures (only when Focus is Pattern-Focused or Macro Detail)
+- Some variations should be isolated elements/ephemera (when Focus is Single Hero Object, Framed Vignette, or Asymmetrical Corner)
+- Some variations should be frames or borders (when Focus is Framed Vignette)
+- Some variations should be compositions with multiple items (when Focus is Knolling or Collage)
+- The goal is VARIETY - not all variations should be the same type of element.
+
 ${variationControl}
 
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
@@ -169,7 +197,7 @@ Create a flat, printable page design suitable for digital use. NO 3D objects, NO
 
 EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
 
-Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurately and artistically. 2-3 sentences. Return ONLY the prompt description.
+Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure while incorporating the ${themeDescription} theme elements appropriately. 2-3 sentences. Return ONLY the prompt description.
 ```
 
 ### 4.2 Multicolored Mode User Prompt
@@ -349,15 +377,17 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
 **Logic**:
 - **IF `customArtStyle` has text**: 
   ```
-  STYLE: Follow this custom art style: "${customArtStyle.trim()}".
+  STYLE: Follow this custom art style: "${customArtStyle.trim()}". CONSTRAINT: Avoid neon colors, hyper-saturation, and harsh contrast unless explicitly requested in the style description. Keep colors harmonious and printable.
   ```
-  (Uses ONLY the user's text, NO random tech/palette)
+  (Uses ONLY the user's text, NO random tech/palette, with color safety constraint)
 
 - **IF `customArtStyle` is empty**: 
   ```
-  STYLE: ${randomTech} technique. Color Palette: ${randomPalette}.
+  STYLE: ${randomTech} technique. Color Palette: ${randomPalette}. CONSTRAINT: Avoid neon colors, hyper-saturation, and harsh contrast unless explicitly requested in the style description. Keep colors harmonious and printable.
   ```
-  (Uses random technique and palette from arrays for diversity)
+  (Uses random technique and palette from arrays for diversity, with color safety constraint)
+
+**Color Safety Constraint**: The constraint is always appended to ensure soft/natural color defaults unless the user explicitly requests vibrant/neon colors.
 
 ### 6.2 Multicolored
 ```
