@@ -525,9 +525,7 @@ export const generateJournalPage = async (
     if (settings.colorIntensity === 'Custom / Override') {
       // For Custom / Override: Only add aspect ratio, DO NOT add any style constraints
       // Trust the ChatGPT prompt entirely
-      if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
-        prompt += ` --ar ${aspectRatio}`;
-      }
+      // Note: Aspect ratio will be added after style reference if present
     } else {
       // For other modes: Append constraints based on color intensity
       let strictConstraints: string;
@@ -558,9 +556,16 @@ export const generateJournalPage = async (
     }
 
     // Add Style Reference (--sref) if available
+    // Using --sv 3 (Vibe model) for style-only matching, --sw 50 for balanced weight, --c 5 for composition variety
+    // Style reference parameters come before aspect ratio
     if (settings.styleRefUrl && settings.styleRefUrl.trim()) {
-      prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 100`;
-      console.log(`[Midjourney] Added style reference: ${settings.styleRefUrl}`);
+      prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 50 --sv 3 --c 5`;
+      console.log(`[Midjourney] Added style reference (Vibe mode): ${settings.styleRefUrl}`);
+    }
+
+    // Add aspect ratio last (after style reference if present)
+    if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
+      prompt += ` --ar ${aspectRatio}`;
     }
 
     // Send task to Go API
