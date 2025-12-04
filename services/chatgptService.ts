@@ -60,18 +60,18 @@ const artTechniques = [
 ];
 
 const palettes = [
-  "Pastel & Soft",
-  "Vintage & Muted",
-  "Monochromatic (Single Color Family)",
-  "Earth Tones & Natural",
-  "Cool & Frosty (Blues/Whites/Greys)",
-  "Warm & Cozy (Ambers/Creams/Golds)",
-  "Desaturated & Moody",
-  "Soft Watercolor Wash",
-  "Classic & Elegant",
-  "Sepia & Nostalgic",
-  "Botanical & Organic (Greens/Browns)",
-  "Neutral & Minimalist"
+  "Soft Pastels",
+  "Natural & Organic",
+  "Vintage Muted",
+  "Watercolor Wash",
+  "Earth Tones",
+  "Botanical Greenery",
+  "Monochromatic",
+  "Faded & Nostalgic",
+  "Warm Neutrals",
+  "Cool & Frosty",
+  "Classic Elegant",
+  "Desaturated"
 ];
 
 /**
@@ -251,7 +251,9 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
 - If the user provides a 'Custom Art Style', follow it rigorously.
 - If no style is provided, generate a high-quality, artistic representation of the Theme.
 
-🎨 COLOR LOGIC: Unless the user explicitly uses words like 'Vibrant', 'Neon', 'Bright', or 'Saturated', you MUST default to a **Soft, Natural, or Muted** color palette. Avoid oversaturation. Prioritize artistic, tasteful, and printable colors over intense digital hues.`;
+🎨 COLOR LOGIC: Unless the user explicitly uses words like 'Vibrant', 'Neon', 'Bright', or 'Saturated', you MUST default to a **Soft, Natural, or Muted** color palette. Avoid oversaturation. Prioritize artistic, tasteful, and printable colors over intense digital hues.
+
+🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`;
 
     // Create variation-specific instructions for custom override
     const variationInstructions = [
@@ -431,7 +433,9 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
 - If the user provides a 'Custom Art Style', follow it rigorously.
-- If no style is provided, generate a high-quality, artistic representation of the Theme.`
+- If no style is provided, generate a high-quality, artistic representation of the Theme.
+
+🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`
     : colorIntensity === 'Multicolored'
     ? `You are a creative prompt engineer specializing in MODERN, VIVID, COLORFUL illustration descriptions. 
 
@@ -518,6 +522,8 @@ ${variationControl}
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
 IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
+
+🎨 COLOR SAFETY RULE: Unless the user explicitly uses words like 'Neon', 'Bright', 'Vibrant', or 'Pop Art', you MUST default to a **Natural, Soft, or Artistic** color palette. Avoid oversaturation. Do NOT use digital neon colors.
 
 Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
 
