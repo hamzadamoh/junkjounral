@@ -264,7 +264,7 @@ const App: React.FC = () => {
           i + 1,
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
-          '', // customArtStyle - no longer used
+          settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
           settings.promptService || 'openai'
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
@@ -298,7 +298,7 @@ const App: React.FC = () => {
           i + 1,
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
-          '', // customArtStyle - no longer used
+          settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
           settings.promptService || 'openai'
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);

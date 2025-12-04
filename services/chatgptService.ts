@@ -135,18 +135,11 @@ export const generatePromptWithChatGPT = async (
   }
 
   // ============================================
-  // RANDOMIZE CONTENT (For ALL Modes)
+  // SELECT STYLE (Fixed for entire batch - consistent across all variations)
   // ============================================
-  // Use variationNumber as seed for consistent randomization per variation
-  // This ensures each variation gets a unique but deterministic content assignment
-  // Using prime number multipliers to ensure good distribution
-  const seed = variationNumber;
-  const randomFocus = subjectFocus[Math.floor((seed * 17 + seed * 7) % subjectFocus.length)];
-  const randomAngle = cameraAngles[Math.floor((seed * 23 + seed * 11) % cameraAngles.length)];
-
-  // ============================================
-  // SELECT STYLE (Logic Branch)
-  // ============================================
+  // Style is selected ONCE using a fixed seed (1) to ensure consistency across the batch
+  // This ensures all images in a batch share the same technique and palette
+  const styleSeed = 1; // Fixed seed for style selection - ensures consistency across batch
   let styleInstruction = '';
   if (colorIntensity === 'Custom / Override') {
     // Custom Mode: Check if customArtStyle is provided
@@ -154,9 +147,10 @@ export const generatePromptWithChatGPT = async (
       // User provided custom art style - use ONLY their text, NO random tech/palette
       styleInstruction = `STYLE: Follow this custom art style: "${customArtStyle.trim()}".`;
     } else {
-      // No custom art style - use random tech and palette for diversity
-      const randomTech = artTechniques[Math.floor((seed * 31 + seed * 13) % artTechniques.length)];
-      const randomPalette = palettes[Math.floor((seed * 37 + seed * 19) % palettes.length)];
+      // No custom art style - pick random tech and palette ONCE using fixed seed
+      // This ensures all variations in the batch use the same technique and palette
+      const randomTech = artTechniques[Math.floor((styleSeed * 31 + styleSeed * 13) % artTechniques.length)];
+      const randomPalette = palettes[Math.floor((styleSeed * 37 + styleSeed * 19) % palettes.length)];
       styleInstruction = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}.`;
     }
     // Add safety constraint for color handling in Custom Mode
@@ -174,6 +168,17 @@ export const generatePromptWithChatGPT = async (
     // Colorful: Vintage Junk Journal with vibrant colors
     styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
   }
+
+  // ============================================
+  // RANDOMIZE CONTENT (For ALL Modes - varies per variation)
+  // ============================================
+  // Use variationNumber as seed for consistent randomization per variation
+  // This ensures each variation gets a unique but deterministic content assignment
+  // Using prime number multipliers to ensure good distribution
+  // NOTE: Content (focus/angle) varies per variation, but Style (above) is fixed for the batch
+  const contentSeed = variationNumber;
+  const randomFocus = subjectFocus[Math.floor((contentSeed * 17 + contentSeed * 7) % subjectFocus.length)];
+  const randomAngle = cameraAngles[Math.floor((contentSeed * 23 + contentSeed * 11) % cameraAngles.length)];
 
   // Build the theme description (needed for variationSpecifies)
   let themeDescription = theme;
