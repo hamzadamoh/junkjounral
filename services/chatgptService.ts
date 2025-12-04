@@ -18,6 +18,62 @@ interface ChatGPTResponse {
   }>;
 }
 
+// ============================================
+// GLOBAL CONTENT VARIABLES (Apply to ALL Modes)
+// These ensure variety in WHAT is shown, regardless of style
+// ============================================
+const subjectFocus = [
+  "Single Hero Object (Central)",
+  "Wide Atmospheric Scene",
+  "Macro Detail/Texture",
+  "Knolling (Flat Lay of multiple items)",
+  "Asymmetrical Corner Composition",
+  "Pattern-Focused (No central object)",
+  "Collage of Scattered Elements",
+  "Framed Vignette"
+];
+
+const cameraAngles = [
+  "Top-Down / Flat Lay",
+  "Straight-On Front View",
+  "Macro Close-Up",
+  "Isometric Angle",
+  "Dutch Angle (Dynamic tilt)"
+];
+
+// ============================================
+// STYLE VARIABLES (Apply ONLY to Custom Mode)
+// ============================================
+const artTechniques = [
+  "Watercolor",
+  "Vector Illustration",
+  "Etching",
+  "Gouache",
+  "Ink Drawing",
+  "Digital Painting",
+  "Linocut",
+  "Screen Print",
+  "Charcoal Sketch",
+  "Pastel Drawing",
+  "Acrylic Paint",
+  "Oil Painting"
+];
+
+const palettes = [
+  "Pastel & Soft",
+  "Vintage & Muted",
+  "Monochromatic (Single Color Family)",
+  "Earth Tones & Natural",
+  "Cool & Frosty (Blues/Whites/Greys)",
+  "Warm & Cozy (Ambers/Creams/Golds)",
+  "Desaturated & Moody",
+  "Soft Watercolor Wash",
+  "Classic & Elegant",
+  "Sepia & Nostalgic",
+  "Botanical & Organic (Greens/Browns)",
+  "Neutral & Minimalist"
+];
+
 /**
  * Cleans DeepSeek R1 output by removing reasoning tags and markdown formatting
  */
@@ -66,62 +122,6 @@ export const generatePromptWithChatGPT = async (
     const envVar = useOpenRouter ? 'VITE_OPENROUTER_API_KEY' : 'VITE_OPENAI_API_KEY';
     throw new Error(`${serviceName} API key is not configured. Please set ${envVar} in your environment variables.`);
   }
-
-  // ============================================
-  // GLOBAL CONTENT VARIABLES (Apply to ALL Modes)
-  // These ensure variety in WHAT is shown, regardless of style
-  // ============================================
-  const subjectFocus = [
-    "Single Hero Object (Central)",
-    "Wide Atmospheric Scene",
-    "Macro Detail/Texture",
-    "Knolling (Flat Lay of multiple items)",
-    "Asymmetrical Corner Composition",
-    "Pattern-Focused (No central object)",
-    "Collage of Scattered Elements",
-    "Framed Vignette"
-  ];
-
-  const cameraAngles = [
-    "Top-Down / Flat Lay",
-    "Straight-On Front View",
-    "Macro Close-Up",
-    "Isometric Angle",
-    "Dutch Angle (Dynamic tilt)"
-  ];
-
-  // ============================================
-  // STYLE VARIABLES (Apply ONLY to Custom Mode)
-  // ============================================
-  const artTechniques = [
-    "Watercolor",
-    "Vector Illustration",
-    "Etching",
-    "Gouache",
-    "Ink Drawing",
-    "Digital Painting",
-    "Linocut",
-    "Screen Print",
-    "Charcoal Sketch",
-    "Pastel Drawing",
-    "Acrylic Paint",
-    "Oil Painting"
-  ];
-
-  const palettes = [
-    "Pastel & Soft",
-    "Vintage & Muted",
-    "Monochromatic (Single Color Family)",
-    "Earth Tones & Natural",
-    "Cool & Frosty (Blues/Whites/Greys)",
-    "Warm & Cozy (Ambers/Creams/Golds)",
-    "Desaturated & Moody",
-    "Soft Watercolor Wash",
-    "Classic & Elegant",
-    "Sepia & Nostalgic",
-    "Botanical & Organic (Greens/Browns)",
-    "Neutral & Minimalist"
-  ];
 
   // ============================================
   // RANDOMIZE CONTENT (For ALL Modes)
@@ -282,9 +282,9 @@ EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter
 
 Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure while incorporating the ${themeDescription} theme elements appropriately. 2-3 sentences. Return ONLY the prompt description.`;
 
-    // Create AbortController for timeout (60 seconds for reasoning models)
+    // Create AbortController for timeout (120 seconds for reasoning models)
     const controller = new AbortController();
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
     
     try {
       const headers: Record<string, string> = {
@@ -320,7 +320,9 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
       });
       
       if (!response.ok) {
-        clearTimeout(timeoutId);
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
         const errorData = await response.json().catch(() => ({}));
         const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
         console.error(`[${serviceName}] API Error Details:`, {
@@ -334,7 +336,9 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
       const data: ChatGPTResponse = await response.json();
       
       // Clear timeout if request completes successfully
-      clearTimeout(timeoutId);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
       
       if (data.choices && data.choices.length > 0) {
         const rawContent = data.choices[0].message.content;
@@ -354,7 +358,7 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
       }
     } catch (error: any) {
       // Ensure timeout is cleared even on error
-      if (typeof timeoutId !== 'undefined') {
+      if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
       }
       
@@ -600,9 +604,9 @@ ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the cu
 
 Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that naturally differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
-  // Create AbortController for timeout (60 seconds for reasoning models)
+  // Create AbortController for timeout (120 seconds for reasoning models)
   const controller = new AbortController();
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
   
   try {
     const headers: Record<string, string> = {
@@ -638,7 +642,9 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     });
     
     if (!response.ok) {
-      clearTimeout(timeoutId);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
       const errorData = await response.json().catch(() => ({}));
       const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
       console.error(`[${serviceName}] API Error Details:`, {
@@ -652,7 +658,9 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     const data: ChatGPTResponse = await response.json();
     
     // Clear timeout if request completes successfully
-    clearTimeout(timeoutId);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
     
     if (data.choices && data.choices.length > 0) {
       const rawContent = data.choices[0].message.content;
@@ -672,7 +680,7 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     }
   } catch (error: any) {
     // Ensure timeout is cleared even on error
-    if (typeof timeoutId !== 'undefined') {
+    if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
     }
     
