@@ -66,6 +66,8 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
+  const [masterSubjectList, setMasterSubjectList] = useState<string[]>([]);
+  const [currentTheme, setCurrentTheme] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Logging Function ---
@@ -105,9 +107,17 @@ const App: React.FC = () => {
   // --- Handlers ---
 
   const handleThemeSelect = (theme: Theme) => {
+    const newTheme = theme.name;
     setSelectedTheme(theme);
     setIsCustomTheme(false);
     setCustomThemePrompt('');
+    
+    // Clear master subject list when theme changes
+    if (newTheme !== currentTheme) {
+      setCurrentTheme(newTheme);
+      setMasterSubjectList([]); // Forces regeneration on next Generate click
+    }
+    
     setStep(2);
   };
 
@@ -118,6 +128,8 @@ const App: React.FC = () => {
 
   const handleCustomThemeSubmit = () => {
     if (customThemePrompt.trim()) {
+      const newTheme = customThemePrompt.trim();
+      
       // Create a custom theme object
       const customTheme: Theme = {
         id: 'custom',
@@ -128,6 +140,13 @@ const App: React.FC = () => {
         styleKeywords: ['custom', 'unique']
       };
       setSelectedTheme(customTheme);
+      
+      // Clear master subject list when theme changes
+      if (newTheme !== currentTheme) {
+        setCurrentTheme(newTheme);
+        setMasterSubjectList([]); // Forces regeneration on next Generate click
+      }
+      
       setStep(2);
     }
   };
@@ -372,7 +391,7 @@ const App: React.FC = () => {
           settings.colorIntensity,
           settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
           settings.promptService || 'openai',
-          masterSubjectList,
+          subjectsToUse,
           usedSubjects
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
@@ -429,7 +448,7 @@ const App: React.FC = () => {
           settings.colorIntensity,
           settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
           settings.promptService || 'openai',
-          masterSubjectList,
+          subjectsToUse,
           usedSubjects
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
