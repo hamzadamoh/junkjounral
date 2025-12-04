@@ -79,6 +79,113 @@ const palettes = [
   "Desaturated"
 ];
 
+// ============================================
+// BATCH STATE TRACKING (Module-level)
+// ============================================
+// Track used (focus, angle) combinations per batch
+// Reset when batch changes (detected by variationNumber resetting to 1)
+let usedCombinations = new Set<string>();
+let currentBatchStyleSeed: number | null = null;
+let lastVariationNumber = 0;
+
+/**
+ * 32-bit multiplicative hash function for better distribution
+ * Uses Knuth's multiplicative hash with golden ratio constant
+ */
+function hash32(seed: number, arrayLength: number): number {
+  // 32-bit integer multiplication with golden ratio constant (0x9e3779b9)
+  const hash = ((seed * 0x9e3779b9) >>> 0) % arrayLength;
+  return hash;
+}
+
+/**
+ * Selects a unique (focus, angle) combination for a variation
+ * Retries with offset if collision detected
+ */
+function selectUniqueContent(
+  variationNumber: number,
+  maxAttempts: number = 10
+): { focus: string; angle: string } {
+  let attempts = 0;
+  let focus: string;
+  let angle: string;
+  let combination: string;
+
+  do {
+    // Use hash with offset to ensure different results on retry
+    const offset = attempts * 1000; // Large offset to avoid similar hashes
+    const focusIndex = hash32(variationNumber + offset, subjectFocus.length);
+    const angleIndex = hash32(variationNumber + offset + 5000, cameraAngles.length);
+    
+    focus = subjectFocus[focusIndex];
+    angle = cameraAngles[angleIndex];
+    combination = `${focus}|${angle}`;
+    attempts++;
+  } while (usedCombinations.has(combination) && attempts < maxAttempts);
+
+  // If we still have a collision after max attempts, use it anyway (should be rare)
+  if (usedCombinations.has(combination) && attempts >= maxAttempts) {
+    console.warn(`[Randomization] Collision detected for variation ${variationNumber} after ${maxAttempts} attempts. Using: ${combination}`);
+  }
+
+  usedCombinations.add(combination);
+  return { focus, angle };
+}
+
+/**
+ * Generates a per-batch style seed (random, but consistent for the batch)
+ * Called once per batch when variationNumber resets to 1
+ */
+function getBatchStyleSeed(): number {
+  if (currentBatchStyleSeed === null) {
+    // Generate random seed between 1 and 10000
+    currentBatchStyleSeed = Math.floor(Math.random() * 10000) + 1;
+    console.log(`[Randomization] New batch style seed: ${currentBatchStyleSeed}`);
+  }
+  return currentBatchStyleSeed;
+}
+
+/**
+ * Resets batch state when starting a new batch
+ * Detects new batch by checking if variationNumber decreased or reset to 1
+ */
+function resetBatchIfNeeded(variationNumber: number): void {
+  if (variationNumber === 1 || variationNumber < lastVariationNumber) {
+    // New batch detected - reset state
+    usedCombinations.clear();
+    currentBatchStyleSeed = null;
+    console.log(`[Randomization] New batch detected (variation ${variationNumber}). Resetting state.`);
+  }
+  lastVariationNumber = variationNumber;
+}
+
+/**
+ * Composable variation instruction selection
+ * Combines time, composition, and mood for more variety
+ */
+function getComposableVariationInstruction(variationNumber: number): string {
+  const timeOptions = [
+    'morning', 'noon', 'afternoon', 'evening', 'night', 'dawn', 'dusk', 'twilight'
+  ];
+  const compositionOptions = [
+    'close-up of details', 'wide landscape view', 'path/road leading into distance',
+    'single focus element', 'dense grouping', 'sparse arrangement', 'centered composition',
+    'asymmetrical layout', 'diagonal composition', 'circular arrangement'
+  ];
+  const moodOptions = [
+    'serene and peaceful', 'dramatic and bold', 'mystical and magical',
+    'cozy and warm', 'crisp and clear', 'energetic and vibrant', 'melancholic and moody',
+    'ethereal and dreamy', 'intense and powerful', 'gentle and soft'
+  ];
+
+  // Use hash to select one from each category
+  const timeIndex = hash32(variationNumber, timeOptions.length);
+  const compositionIndex = hash32(variationNumber + 100, compositionOptions.length);
+  const moodIndex = hash32(variationNumber + 200, moodOptions.length);
+
+  return `Explore a DIFFERENT time of day: ${timeOptions[timeIndex]} - create a ${compositionOptions[compositionIndex]} with a ${moodOptions[moodIndex]} mood. Each combination creates a unique visual experience.`;
+}
+
 /**
  * Cleans DeepSeek R1 output by removing reasoning tags and markdown formatting
  */
@@ -135,11 +242,16 @@ export const generatePromptWithChatGPT = async (
   }
 
   // ============================================
+  // BATCH STATE MANAGEMENT
+  // ============================================
+  // Reset batch state if starting a new batch
+  resetBatchIfNeeded(variationNumber);
+
+  // ============================================
   // SELECT STYLE (Fixed for entire batch - consistent across all variations)
   // ============================================
-  // Style is selected ONCE using a fixed seed (1) to ensure consistency across the batch
+  // Style is selected ONCE using a per-batch random seed to ensure consistency across the batch
   // This ensures all images in a batch share the same technique and palette
-  const styleSeed = 1; // Fixed seed for style selection - ensures consistency across batch
   let styleInstruction = '';
   if (colorIntensity === 'Custom / Override') {
     // Custom Mode: Check if customArtStyle is provided
@@ -147,10 +259,13 @@ export const generatePromptWithChatGPT = async (
       // User provided custom art style - use ONLY their text, NO random tech/palette
       styleInstruction = `STYLE: Follow this custom art style: "${customArtStyle.trim()}".`;
     } else {
-      // No custom art style - pick random tech and palette ONCE using fixed seed
+      // No custom art style - pick random tech and palette ONCE using per-batch random seed
       // This ensures all variations in the batch use the same technique and palette
-      const randomTech = artTechniques[Math.floor((styleSeed * 31 + styleSeed * 13) % artTechniques.length)];
-      const randomPalette = palettes[Math.floor((styleSeed * 37 + styleSeed * 19) % palettes.length)];
+      const batchStyleSeed = getBatchStyleSeed();
+      const techIndex = hash32(batchStyleSeed, artTechniques.length);
+      const paletteIndex = hash32(batchStyleSeed + 1000, palettes.length);
+      const randomTech = artTechniques[techIndex];
+      const randomPalette = palettes[paletteIndex];
       styleInstruction = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}.`;
     }
     // Add safety constraint for color handling in Custom Mode
@@ -172,13 +287,10 @@ export const generatePromptWithChatGPT = async (
   // ============================================
   // RANDOMIZE CONTENT (For ALL Modes - varies per variation)
   // ============================================
-  // Use variationNumber as seed for consistent randomization per variation
-  // This ensures each variation gets a unique but deterministic content assignment
-  // Using prime number multipliers to ensure good distribution
+  // Use 32-bit hash function with collision detection and retry logic
+  // This ensures each variation gets a unique (focus, angle) combination
   // NOTE: Content (focus/angle) varies per variation, but Style (above) is fixed for the batch
-  const contentSeed = variationNumber;
-  const randomFocus = subjectFocus[Math.floor((contentSeed * 17 + contentSeed * 7) % subjectFocus.length)];
-  const randomAngle = cameraAngles[Math.floor((contentSeed * 23 + contentSeed * 11) % cameraAngles.length)];
+  const { focus: randomFocus, angle: randomAngle } = selectUniqueContent(variationNumber);
 
   // Build the theme description (needed for variationSpecifies)
   let themeDescription = theme;
@@ -265,23 +377,8 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
 
 🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`;
 
-    // Create variation-specific instructions for custom override
-    const variationInstructions = [
-      'Explore a DIFFERENT time of day: morning, noon, evening, night, dawn, or dusk - each creates a unique mood and lighting',
-      'Create a DIFFERENT composition: close-up of details, wide landscape view, path/road leading into distance, single focus element, or dense grouping',
-      'Focus on DIFFERENT elements: vary the subjects, objects, structures, natural features, or environmental conditions within the theme',
-      'Design a DIFFERENT perspective: bird\'s eye view, ground level, looking up, looking down a path/road, side view, or angled view',
-      'Explore DIFFERENT weather/atmosphere: clear day, misty, foggy, moonlit, sunset, sunrise, stormy, or magical lighting',
-      'Create a DIFFERENT scene type: path/road view, water feature (stream/river/lake), structure (house/cabin/building), open area, dense area, or elevated view',
-      'Focus on DIFFERENT details: close-up textures, medium-range elements, distant horizon, specific objects, or environmental features',
-      'Design a DIFFERENT mood: serene and peaceful, dramatic and bold, mystical and magical, cozy and warm, crisp and clear, or energetic and vibrant',
-      'Explore DIFFERENT natural/man-made features: varied terrain, water elements, structures, vegetation, or architectural elements',
-      'Create a DIFFERENT focal point: a single prominent element, a winding path/road, a structure, a natural feature, or a wide landscape',
-      'Focus on DIFFERENT lighting: bright sunlight, soft diffused light, dramatic shadows, warm sunset/rise glow, cool moonlit, or atmospheric lighting',
-      'Design a DIFFERENT scale: macro close-up details, medium view of a scene, or wide expansive landscape'
-    ];
-    
-    const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
+    // Use composable variation instruction (time + composition + mood)
+    const variationInstruction = getComposableVariationInstruction(variationNumber);
     
     const variationDirections = [
       'Create a COMPLETELY DIFFERENT scene - change the time of day, weather/atmosphere, composition, or focal point. Avoid any similarity to previous variations.',
@@ -723,6 +820,57 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
  * @param base64Image Base64 encoded image (with data URL prefix)
  * @returns Object with theme and style fields
  */
+/**
+ * Unit test function to simulate variation allocation and detect collisions
+ * @param batchSize Number of variations to simulate
+ * @returns Object with collision count and details
+ */
+export function simulateVariationAllocation(batchSize: number): {
+  collisions: number;
+  collisionDetails: Array<{ variation: number; combination: string }>;
+  allocations: Array<{ variation: number; focus: string; angle: string }>;
+} {
+  // Save original state for restoration
+  const originalUsedCombinations = new Set(usedCombinations);
+  const originalBatchSeed = currentBatchStyleSeed;
+  const originalLastVariation = lastVariationNumber;
+  
+  // Reset state for clean test
+  usedCombinations.clear();
+  currentBatchStyleSeed = null;
+  lastVariationNumber = 0;
+
+  const allocations: Array<{ variation: number; focus: string; angle: string }> = [];
+  const collisionDetails: Array<{ variation: number; combination: string }> = [];
+  let collisions = 0;
+
+  for (let i = 1; i <= batchSize; i++) {
+    resetBatchIfNeeded(i);
+    const beforeSize = usedCombinations.size;
+    const { focus, angle } = selectUniqueContent(i);
+    const afterSize = usedCombinations.size;
+    
+    allocations.push({ variation: i, focus, angle });
+    
+    // Detect collision: if set size didn't increase, we had a collision
+    if (afterSize === beforeSize) {
+      collisions++;
+      collisionDetails.push({ variation: i, combination: `${focus}|${angle}` });
+    }
+  }
+
+  // Restore original state
+  usedCombinations = originalUsedCombinations;
+  currentBatchStyleSeed = originalBatchSeed;
+  lastVariationNumber = originalLastVariation;
+
+  return {
+    collisions,
+    collisionDetails,
+    allocations
+  };
+}
+
 export const analyzeReferenceImage = async (base64Image: string): Promise<ImageAnalysisResponse> => {
   const apiKey = getOpenAIApiKey();
   
