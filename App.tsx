@@ -202,7 +202,8 @@ const App: React.FC = () => {
           settings.colorIntensity,
           '' // customArtStyle - no longer used
         ).catch((error) => {
-          console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error);
+          console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
+          console.warn(`Full error details:`, error);
           // Fallback to constructed prompt if ChatGPT fails
           return constructPrompt(selectedTheme, settings, i);
         })

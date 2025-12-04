@@ -322,8 +322,15 @@ const pollTaskUntilComplete = async (
       } 
       // Handle failed status
       else if (currentStatus === 'failed' || currentStatus === 'error') {
-        const errorMsg = (status as any).message || `Task failed with status: ${currentStatus}`;
+        // Check multiple possible error message locations
+        const errorMsg = status.data?.error || 
+                        status.data?.error_message || 
+                        status.data?.message || 
+                        (status as any).message || 
+                        (status as any).error ||
+                        `Task failed with status: ${currentStatus}`;
         console.error(`[GoAPI] ❌ Task ${taskId} failed:`, errorMsg);
+        console.error(`[GoAPI] Full failed task response:`, JSON.stringify(status, null, 2));
         throw new Error(errorMsg);
       }
       // Handle in-progress statuses (pending, processing, etc.)
