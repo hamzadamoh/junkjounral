@@ -27,7 +27,7 @@ import { generateJournalPage as generateWithPollinations } from './services/poll
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
-import { generatePromptWithChatGPT } from './services/chatgptService';
+import { generatePromptWithChatGPT, analyzeReferenceImage } from './services/chatgptService';
 
 const App: React.FC = () => {
   // --- State ---
@@ -61,6 +61,9 @@ const App: React.FC = () => {
   const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Logging Function ---
   const addLog = useCallback((message: string, type: 'log' | 'error' | 'success' = 'log') => {
@@ -128,6 +131,66 @@ const App: React.FC = () => {
 
   const handleSettingChange = (field: keyof GenerationSettings, value: any) => {
     setSettings(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handle image upload and analysis
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 20MB for OpenAI Vision API)
+    if (file.size > 20 * 1024 * 1024) {
+      alert('Image file size must be less than 20MB');
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Image = e.target?.result as string;
+      setUploadedImage(base64Image);
+      setIsAnalyzingImage(true);
+
+      try {
+        const analysis = await analyzeReferenceImage(base64Image);
+        
+        // Auto-fill the fields
+        setCustomThemePrompt(analysis.theme);
+        setSettings(prev => ({
+          ...prev,
+          customArtStyle: analysis.style,
+          colorIntensity: 'Custom / Override' // Switch to Custom / Override mode
+        }));
+
+        addLog(`✅ Image analyzed: Theme="${analysis.theme}", Style="${analysis.style}"`, 'success');
+      } catch (error: any) {
+        console.error('Image analysis error:', error);
+        addLog(`❌ Failed to analyze image: ${error.message || 'Unknown error'}`, 'error');
+        alert(`Failed to analyze image: ${error.message || 'Unknown error'}`);
+      } finally {
+        setIsAnalyzingImage(false);
+      }
+    };
+
+    reader.onerror = () => {
+      setIsAnalyzingImage(false);
+      alert('Failed to read image file');
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setUploadedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const toggleElement = (element: string) => {
@@ -860,6 +923,73 @@ const App: React.FC = () => {
           </div>
 
           <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
+            {/* Image Upload Section */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Upload Reference Image (Optional)
+              </label>
+              <div className="space-y-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  id="image-upload"
+                  disabled={isAnalyzingImage}
+                />
+                <label
+                  htmlFor="image-upload"
+                  className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                    isAnalyzingImage
+                      ? 'border-slate-600 bg-slate-800 cursor-not-allowed'
+                      : uploadedImage
+                      ? 'border-gothic-gold bg-gothic-gold/10'
+                      : 'border-slate-600 bg-slate-900 hover:border-gothic-gold hover:bg-slate-800'
+                  }`}
+                >
+                  {isAnalyzingImage ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <RefreshCw className="animate-spin text-gothic-gold" size={24} />
+                      <span className="text-sm text-slate-400">Analyzing image...</span>
+                    </div>
+                  ) : uploadedImage ? (
+                    <div className="flex flex-col items-center gap-2 w-full p-2">
+                      <div className="relative w-20 h-20 rounded overflow-hidden border border-gothic-gold">
+                        <img
+                          src={uploadedImage}
+                          alt="Uploaded reference"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span className="text-xs text-gothic-gold">Image uploaded - Click to change</span>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveImage();
+                        }}
+                        className="text-xs text-red-400 hover:text-red-300 mt-1"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageIcon className="text-slate-400" size={24} />
+                      <span className="text-sm text-slate-400">
+                        Click to upload or drag and drop
+                      </span>
+                      <span className="text-xs text-slate-500">PNG, JPG, WEBP up to 20MB</span>
+                    </div>
+                  )}
+                </label>
+                <p className="text-xs text-slate-500">
+                  Upload an image to automatically analyze and fill the Theme and Custom Art Style fields. Uses GPT-4o-mini vision.
+                </p>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-3">
                 Custom Theme Description
@@ -873,6 +1003,22 @@ const App: React.FC = () => {
               />
               <p className="text-xs text-slate-500 mt-2">
                 Describe the overall aesthetic and elements you want in your journal pages. Be specific about colors, textures, and key elements.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Custom Art Style (Optional)
+              </label>
+              <textarea
+                value={settings.customArtStyle}
+                onChange={(e) => handleSettingChange('customArtStyle', e.target.value)}
+                placeholder="e.g., 'Soft atmospheric watercolor, pastel blue and white palette, traditional art style', 'Celtic Art Nouveau with gold frames', 'Vintage botanical illustration with sepia tones'..."
+                rows={4}
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Specify the artistic style, medium, colors, and mood. If filled, this will override default style presets. Leave empty to use random style variations.
               </p>
             </div>
 

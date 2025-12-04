@@ -18,6 +18,11 @@ interface ChatGPTResponse {
   }>;
 }
 
+interface ImageAnalysisResponse {
+  theme: string;
+  style: string;
+}
+
 // ============================================
 // GLOBAL CONTENT VARIABLES (Apply to ALL Modes)
 // These ensure variety in WHAT is shown, regardless of style
@@ -705,6 +710,90 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     }
     
     throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
+  }
+};
+
+/**
+ * Analyzes a reference image using GPT-4o-mini vision to extract theme and style
+ * @param base64Image Base64 encoded image (with data URL prefix)
+ * @returns Object with theme and style fields
+ */
+export const analyzeReferenceImage = async (base64Image: string): Promise<ImageAnalysisResponse> => {
+  const apiKey = getOpenAIApiKey();
+  
+  if (!apiKey) {
+    throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
+  }
+
+  // Remove data URL prefix if present (keep just the base64 data)
+  const base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+
+  try {
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this image to create a generative art prompt. Return a JSON object with exactly two fields: 1. "theme": A concise subject description (e.g., "Winter Birch Forest with intricate roots"). 2. "style": A detailed style descriptor including medium, texture, colors, and mood (e.g., "Soft atmospheric watercolor, pastel blue and white palette, traditional art style").'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Data}`
+                }
+              }
+            ]
+          }
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 300
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      throw new Error(`OpenAI Vision API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    const data: ChatGPTResponse = await response.json();
+
+    if (data.choices && data.choices.length > 0) {
+      const content = data.choices[0].message.content;
+      try {
+        const analysis: ImageAnalysisResponse = JSON.parse(content);
+        
+        // Validate response structure
+        if (!analysis.theme || !analysis.style) {
+          throw new Error('Invalid response format: missing theme or style field');
+        }
+
+        return {
+          theme: analysis.theme.trim(),
+          style: analysis.style.trim()
+        };
+      } catch (parseError) {
+        throw new Error(`Failed to parse analysis response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      }
+    } else {
+      throw new Error('No response from OpenAI Vision API');
+    }
+  } catch (error: any) {
+    console.error('[OpenAI Vision] API Error Details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    throw new Error(`Failed to analyze image: ${error.message || 'Unknown error'}`);
   }
 };
 
