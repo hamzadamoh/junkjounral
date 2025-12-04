@@ -89,6 +89,12 @@ function cleanDeepSeekOutput(content: string): string {
   // Remove any markdown code block syntax if present
   cleaned = cleaned.replace(/^```(json|text|markdown)?/i, '').replace(/```$/i, '');
   
+  // Remove double-dash separators that confuse Midjourney
+  // Remove double em-dash (——) with optional whitespace
+  cleaned = cleaned.replace(/——\s*/g, '');
+  // Remove double dash (--) followed by a letter (Midjourney interprets -- as commands)
+  cleaned = cleaned.replace(/--\s*([A-Za-z])/g, '$1');
+  
   // Remove any leading/trailing whitespace and newlines
   cleaned = cleaned.trim();
   
