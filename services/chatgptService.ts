@@ -164,6 +164,45 @@ export const generatePromptWithChatGPT = async (
     styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
   }
 
+  // Build the theme description (needed for variationSpecifies)
+  let themeDescription = theme;
+  if (customThemePrompt && customThemePrompt.trim()) {
+    themeDescription = `${theme} with ${customThemePrompt.trim()}`;
+  }
+
+  // ============================================
+  // CONSTRUCT VARIATION SPECIFICS (Content + Style)
+  // Must be defined before Custom/Override block uses it
+  // ============================================
+  const variationSpecifies = `VARIATION SPECIFICS (Image ${variationNumber}):
+- VISUAL FOCUS: ${randomFocus} ⚠️ THIS DETERMINES THE IMAGE STRUCTURE
+- VIEWING ANGLE: ${randomAngle}
+- THEME: ${themeDescription} (Use theme elements, but structure follows VISUAL FOCUS)
+
+${styleInstruction}
+
+🎯 STRUCTURE HIERARCHY: VISUAL FOCUS > THEME DESCRIPTION
+The VISUAL FOCUS defines the COMPOSITION STRUCTURE. The Theme provides the CONTENT ELEMENTS to fill that structure.
+
+INSTRUCTION: Create the assigned VISUAL FOCUS structure, then incorporate theme elements appropriately:
+- If Focus is 'Single Hero Object (Central)': Create an ISOLATED central element (ephemera-style). Use theme elements to design this single object, NOT as background. Even if theme suggests "pattern", create a distinct focal object.
+- If Focus is 'Wide Atmospheric Scene': Show a broader landscape/environment view using theme elements.
+- If Focus is 'Macro Detail/Texture': Show a close-up of intricate details, textures, or patterns. This is the ONLY focus that allows full-page texture/pattern.
+- If Focus is 'Knolling (Flat Lay of multiple items)': Arrange multiple theme-related items in a flat lay composition.
+- If Focus is 'Asymmetrical Corner Composition': Place the main subject in a corner with negative space. Use theme elements to create the corner element, NOT background.
+- If Focus is 'Pattern-Focused (No central object)': Create a repeating pattern or texture without a central focal point. This is the ONLY focus that allows full-page repeating patterns.
+- If Focus is 'Collage of Scattered Elements': Arrange various theme elements scattered across the page in a collage style.
+- If Focus is 'Framed Vignette': Show a scene or object within a decorative frame or border. Use theme elements inside the frame, NOT as background pattern.
+
+The VIEWING ANGLE determines the perspective:
+- 'Top-Down / Flat Lay': Bird's eye view, looking straight down
+- 'Straight-On Front View': Direct frontal perspective
+- 'Macro Close-Up': Extreme close-up of details
+- 'Isometric Angle': 3D isometric perspective
+- 'Dutch Angle (Dynamic tilt)': Tilted, dynamic angle
+
+CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore a DIFFERENT aspect of the theme.`;
+
   // Global helper function to generate variation control instructions
   const getVariationControl = (variationNumber: number, themeDescription: string): string => {
     // Detect theme type from description
@@ -207,12 +246,6 @@ export const generatePromptWithChatGPT = async (
 - If no style is provided, generate a high-quality, artistic representation of the Theme.
 
 🎨 COLOR LOGIC: Unless the user explicitly uses words like 'Vibrant', 'Neon', 'Bright', or 'Saturated', you MUST default to a **Soft, Natural, or Muted** color palette. Avoid oversaturation. Prioritize artistic, tasteful, and printable colors over intense digital hues.`;
-
-    // Build the theme description
-    let themeDescription = theme;
-    if (customThemePrompt && customThemePrompt.trim()) {
-      themeDescription = `${theme} with ${customThemePrompt.trim()}`;
-    }
 
     // Create variation-specific instructions for custom override
     const variationInstructions = [
@@ -379,46 +412,8 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
     }
   }
 
-  // Build the theme description - combine base theme with custom theme prompt if provided
-  let themeDescription = theme;
-  if (customThemePrompt && customThemePrompt.trim()) {
-    themeDescription = `${theme} with ${customThemePrompt.trim()}`;
-  }
-
-  // Get global variation control for all modes
+  // Get global variation control for all modes (themeDescription already defined above)
   const variationControl = getVariationControl(variationNumber, themeDescription);
-
-  // ============================================
-  // CONSTRUCT VARIATION SPECIFICS (Content + Style)
-  // ============================================
-  const variationSpecifies = `VARIATION SPECIFICS (Image ${variationNumber}):
-- VISUAL FOCUS: ${randomFocus} ⚠️ THIS DETERMINES THE IMAGE STRUCTURE
-- VIEWING ANGLE: ${randomAngle}
-- THEME: ${themeDescription} (Use theme elements, but structure follows VISUAL FOCUS)
-
-${styleInstruction}
-
-🎯 STRUCTURE HIERARCHY: VISUAL FOCUS > THEME DESCRIPTION
-The VISUAL FOCUS defines the COMPOSITION STRUCTURE. The Theme provides the CONTENT ELEMENTS to fill that structure.
-
-INSTRUCTION: Create the assigned VISUAL FOCUS structure, then incorporate theme elements appropriately:
-- If Focus is 'Single Hero Object (Central)': Create an ISOLATED central element (ephemera-style). Use theme elements to design this single object, NOT as background. Even if theme suggests "pattern", create a distinct focal object.
-- If Focus is 'Wide Atmospheric Scene': Show a broader landscape/environment view using theme elements.
-- If Focus is 'Macro Detail/Texture': Show a close-up of intricate details, textures, or patterns. This is the ONLY focus that allows full-page texture/pattern.
-- If Focus is 'Knolling (Flat Lay of multiple items)': Arrange multiple theme-related items in a flat lay composition.
-- If Focus is 'Asymmetrical Corner Composition': Place the main subject in a corner with negative space. Use theme elements to create the corner element, NOT background.
-- If Focus is 'Pattern-Focused (No central object)': Create a repeating pattern or texture without a central focal point. This is the ONLY focus that allows full-page repeating patterns.
-- If Focus is 'Collage of Scattered Elements': Arrange various theme elements scattered across the page in a collage style.
-- If Focus is 'Framed Vignette': Show a scene or object within a decorative frame or border. Use theme elements inside the frame, NOT as background pattern.
-
-The VIEWING ANGLE determines the perspective:
-- 'Top-Down / Flat Lay': Bird's eye view, looking straight down
-- 'Straight-On Front View': Direct frontal perspective
-- 'Macro Close-Up': Extreme close-up of details
-- 'Isometric Angle': 3D isometric perspective
-- 'Dutch Angle (Dynamic tilt)': Tilted, dynamic angle
-
-CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore a DIFFERENT aspect of the theme.`;
 
   // Default prompts (existing logic)
   // Check for 'Custom / Override' first
