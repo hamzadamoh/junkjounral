@@ -137,6 +137,54 @@ const App: React.FC = () => {
   };
 
   // Handle image upload and analysis
+  // Process image (used by both file upload and paste)
+  const processImage = useCallback(async (base64Image: string) => {
+    setUploadedImage(base64Image);
+    setIsAnalyzingImage(true);
+    setIsUploadingStyleRef(true);
+
+    // Run GPT vision analysis and WordPress upload in parallel
+    try {
+      const [analysis, wordPressUrl] = await Promise.allSettled([
+        analyzeReferenceImage(base64Image),
+        uploadImageToWordPress(base64Image)
+      ]);
+
+      // Handle GPT vision analysis result
+      if (analysis.status === 'fulfilled') {
+        // Auto-fill the fields
+        setCustomThemePrompt(analysis.value.theme);
+        setSettings(prev => ({
+          ...prev,
+          customArtStyle: analysis.value.style,
+          colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
+          styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl // Keep existing if upload failed
+        }));
+        addLog(`✅ Image analyzed: Theme="${analysis.value.theme}", Style="${analysis.value.style}"`, 'success');
+      } else {
+        console.error('Image analysis error:', analysis.reason);
+        addLog(`❌ Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`, 'error');
+        alert(`Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`);
+      }
+
+      // Handle WordPress upload result
+      if (wordPressUrl.status === 'fulfilled') {
+        setStyleRefUrl(wordPressUrl.value);
+        addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
+      } else {
+        console.error('WordPress upload error:', wordPressUrl.reason);
+        addLog(`⚠️ Failed to upload style reference: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
+        // Don't show alert for WordPress upload failure - it's optional
+      }
+    } catch (error: any) {
+      console.error('Unexpected error:', error);
+      addLog(`❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
+    } finally {
+      setIsAnalyzingImage(false);
+      setIsUploadingStyleRef(false);
+    }
+  }, [addLog]);
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -157,50 +205,7 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64Image = e.target?.result as string;
-      setUploadedImage(base64Image);
-      setIsAnalyzingImage(true);
-      setIsUploadingStyleRef(true);
-
-      // Run GPT vision analysis and WordPress upload in parallel
-      try {
-        const [analysis, wordPressUrl] = await Promise.allSettled([
-          analyzeReferenceImage(base64Image),
-          uploadImageToWordPress(base64Image)
-        ]);
-
-        // Handle GPT vision analysis result
-        if (analysis.status === 'fulfilled') {
-          // Auto-fill the fields
-          setCustomThemePrompt(analysis.value.theme);
-        setSettings(prev => ({
-          ...prev,
-          customArtStyle: analysis.value.style,
-          colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
-          styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl // Keep existing if upload failed
-        }));
-          addLog(`✅ Image analyzed: Theme="${analysis.value.theme}", Style="${analysis.value.style}"`, 'success');
-        } else {
-          console.error('Image analysis error:', analysis.reason);
-          addLog(`❌ Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`, 'error');
-          alert(`Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`);
-        }
-
-        // Handle WordPress upload result
-        if (wordPressUrl.status === 'fulfilled') {
-          setStyleRefUrl(wordPressUrl.value);
-          addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
-        } else {
-          console.error('WordPress upload error:', wordPressUrl.reason);
-          addLog(`⚠️ Failed to upload style reference: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
-          // Don't show alert for WordPress upload failure - it's optional
-        }
-      } catch (error: any) {
-        console.error('Unexpected error:', error);
-        addLog(`❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
-      } finally {
-        setIsAnalyzingImage(false);
-        setIsUploadingStyleRef(false);
-      }
+      await processImage(base64Image);
     };
 
     reader.onerror = () => {
@@ -210,6 +215,57 @@ const App: React.FC = () => {
 
     reader.readAsDataURL(file);
   };
+
+  // Handle paste event for images
+  useEffect(() => {
+    const handlePaste = async (event: ClipboardEvent) => {
+      // Only handle paste when we're on the custom theme step (step 2)
+      if (step !== 2 || !isCustomTheme) return;
+
+      const items = event.clipboardData?.items;
+      if (!items) return;
+
+      // Find image in clipboard
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          event.preventDefault();
+          
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          // Validate file size (max 20MB)
+          if (file.size > 20 * 1024 * 1024) {
+            alert('Pasted image file size must be less than 20MB');
+            return;
+          }
+
+          // Convert to base64
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const base64Image = e.target?.result as string;
+            await processImage(base64Image);
+            addLog('📋 Image pasted from clipboard', 'success');
+          };
+
+          reader.onerror = () => {
+            setIsAnalyzingImage(false);
+            alert('Failed to read pasted image');
+          };
+
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    };
+
+    // Add paste event listener
+    document.addEventListener('paste', handlePaste);
+    
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [step, isCustomTheme, processImage]);
 
   const handleRemoveImage = () => {
     setUploadedImage(null);
@@ -1004,7 +1060,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col items-center gap-2">
                       <ImageIcon className="text-slate-400" size={24} />
                       <span className="text-sm text-slate-400">
-                        Click to upload or drag and drop
+                        Click to upload, drag and drop, or paste (Ctrl+V)
                       </span>
                       <span className="text-xs text-slate-500">PNG, JPG, WEBP up to 20MB</span>
                     </div>
