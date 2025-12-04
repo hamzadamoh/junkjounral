@@ -30,6 +30,7 @@ export interface GenerationSettings {
   customThemePrompt?: string;
   customArtStyle?: string;
   promptService?: 'openai' | 'openrouter';
+  styleRefUrl?: string; // WordPress URL for Midjourney --sref parameter
 }
 
 export interface GeneratedImage {

@@ -557,6 +557,12 @@ export const generateJournalPage = async (
       }
     }
 
+    // Add Style Reference (--sref) if available
+    if (settings.styleRefUrl && settings.styleRefUrl.trim()) {
+      prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 100`;
+      console.log(`[Midjourney] Added style reference: ${settings.styleRefUrl}`);
+    }
+
     // Send task to Go API
     const taskId = await sendTaskToGoApi(prompt, aspectRatio, processMode);
 

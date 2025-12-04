@@ -28,6 +28,7 @@ import { generateJournalPage as generateWithReplicate } from './services/replica
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage } from './services/chatgptService';
+import { uploadImageToWordPress } from './services/imageHostingService';
 
 const App: React.FC = () => {
   // --- State ---
@@ -63,6 +64,8 @@ const App: React.FC = () => {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
+  const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
+  const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Logging Function ---
@@ -156,25 +159,47 @@ const App: React.FC = () => {
       const base64Image = e.target?.result as string;
       setUploadedImage(base64Image);
       setIsAnalyzingImage(true);
+      setIsUploadingStyleRef(true);
 
+      // Run GPT vision analysis and WordPress upload in parallel
       try {
-        const analysis = await analyzeReferenceImage(base64Image);
-        
-        // Auto-fill the fields
-        setCustomThemePrompt(analysis.theme);
+        const [analysis, wordPressUrl] = await Promise.allSettled([
+          analyzeReferenceImage(base64Image),
+          uploadImageToWordPress(base64Image)
+        ]);
+
+        // Handle GPT vision analysis result
+        if (analysis.status === 'fulfilled') {
+          // Auto-fill the fields
+          setCustomThemePrompt(analysis.value.theme);
         setSettings(prev => ({
           ...prev,
-          customArtStyle: analysis.style,
-          colorIntensity: 'Custom / Override' // Switch to Custom / Override mode
+          customArtStyle: analysis.value.style,
+          colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
+          styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl // Keep existing if upload failed
         }));
+          addLog(`✅ Image analyzed: Theme="${analysis.value.theme}", Style="${analysis.value.style}"`, 'success');
+        } else {
+          console.error('Image analysis error:', analysis.reason);
+          addLog(`❌ Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`, 'error');
+          alert(`Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`);
+        }
 
-        addLog(`✅ Image analyzed: Theme="${analysis.theme}", Style="${analysis.style}"`, 'success');
+        // Handle WordPress upload result
+        if (wordPressUrl.status === 'fulfilled') {
+          setStyleRefUrl(wordPressUrl.value);
+          addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
+        } else {
+          console.error('WordPress upload error:', wordPressUrl.reason);
+          addLog(`⚠️ Failed to upload style reference: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
+          // Don't show alert for WordPress upload failure - it's optional
+        }
       } catch (error: any) {
-        console.error('Image analysis error:', error);
-        addLog(`❌ Failed to analyze image: ${error.message || 'Unknown error'}`, 'error');
-        alert(`Failed to analyze image: ${error.message || 'Unknown error'}`);
+        console.error('Unexpected error:', error);
+        addLog(`❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
       } finally {
         setIsAnalyzingImage(false);
+        setIsUploadingStyleRef(false);
       }
     };
 
@@ -188,6 +213,7 @@ const App: React.FC = () => {
 
   const handleRemoveImage = () => {
     setUploadedImage(null);
+    setStyleRefUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -987,6 +1013,18 @@ const App: React.FC = () => {
                 <p className="text-xs text-slate-500">
                   Upload an image to automatically analyze and fill the Theme and Custom Art Style fields. Uses GPT-4o-mini vision.
                 </p>
+                {settings.styleRefUrl && (
+                  <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded text-xs text-green-400">
+                    ✅ Style Reference uploaded: {settings.styleRefUrl.substring(0, 50)}...
+                    {settings.imageService === 'midjourney' && ' (Will be used with --sref)'}
+                  </div>
+                )}
+                {isUploadingStyleRef && (
+                  <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/50 rounded text-xs text-blue-400 flex items-center gap-2">
+                    <RefreshCw className="animate-spin" size={14} />
+                    Uploading style reference to WordPress...
+                  </div>
+                )}
               </div>
             </div>
 
