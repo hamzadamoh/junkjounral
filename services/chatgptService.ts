@@ -3,7 +3,12 @@ const getOpenAIApiKey = (): string => {
   return import.meta.env.VITE_OPENAI_API_KEY || '';
 };
 
+const getOpenRouterApiKey = (): string => {
+  return import.meta.env.VITE_OPENROUTER_API_KEY || '';
+};
+
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface ChatGPTResponse {
   choices: Array<{
@@ -26,11 +31,19 @@ export const generatePromptWithChatGPT = async (
   variationNumber: number,
   customThemePrompt?: string,
   colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' = 'Muted',
-  customArtStyle?: string
+  customArtStyle?: string,
+  promptService: 'openai' | 'openrouter' = 'openai'
 ): Promise<string> => {
-  const apiKey = getOpenAIApiKey();
+  // Determine which service to use
+  const useOpenRouter = promptService === 'openrouter';
+  const apiKey = useOpenRouter ? getOpenRouterApiKey() : getOpenAIApiKey();
+  const apiUrl = useOpenRouter ? OPENROUTER_API_URL : OPENAI_API_URL;
+  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  
   if (!apiKey) {
-    throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
+    const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
+    const envVar = useOpenRouter ? 'VITE_OPENROUTER_API_KEY' : 'VITE_OPENAI_API_KEY';
+    throw new Error(`${serviceName} API key is not configured. Please set ${envVar} in your environment variables.`);
   }
 
   // ============================================
@@ -249,14 +262,22 @@ EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter
 Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure while incorporating the ${themeDescription} theme elements appropriately. 2-3 sentences. Return ONLY the prompt description.`;
 
     try {
-      const response = await fetch(OPENAI_API_URL, {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+      
+      // OpenRouter requires HTTP-Referer header (optional but recommended)
+      if (useOpenRouter) {
+        headers['HTTP-Referer'] = window.location.origin;
+        headers['X-Title'] = 'Junk Journal Generator';
+      }
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
+        headers,
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
@@ -269,7 +290,8 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || response.statusText}`);
+        const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
+        throw new Error(`${serviceName} API error: ${response.status} ${errorData.error?.message || response.statusText}`);
       }
 
       const data: ChatGPTResponse = await response.json();
@@ -278,11 +300,11 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
         const generatedPrompt = data.choices[0].message.content.trim();
         return generatedPrompt;
       } else {
-        throw new Error('No response from ChatGPT API');
+        throw new Error(`No response from ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API`);
       }
     } catch (error: any) {
-      console.error('ChatGPT API Error:', error);
-      throw new Error(`Failed to generate prompt with ChatGPT: ${error.message || 'Unknown error'}`);
+      console.error(`${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API Error:`, error);
+      throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
     }
   }
 
@@ -512,14 +534,22 @@ ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the cu
 Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that naturally differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
   try {
-    const response = await fetch(OPENAI_API_URL, {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
+    
+    // OpenRouter requires HTTP-Referer header (optional but recommended)
+    if (useOpenRouter) {
+      headers['HTTP-Referer'] = window.location.origin;
+      headers['X-Title'] = 'Junk Journal Generator';
+    }
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers,
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Fast and cost-efficient
+        model, // Fast and cost-efficient
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -532,7 +562,8 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`OpenAI API error: ${response.status} ${errorData.error?.message || response.statusText}`);
+      const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
+      throw new Error(`${serviceName} API error: ${response.status} ${errorData.error?.message || response.statusText}`);
     }
 
     const data: ChatGPTResponse = await response.json();
@@ -541,11 +572,11 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
       const generatedPrompt = data.choices[0].message.content.trim();
       return generatedPrompt;
     } else {
-      throw new Error('No response from ChatGPT API');
+      throw new Error(`No response from ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API`);
     }
   } catch (error: any) {
-    console.error('ChatGPT API Error:', error);
-    throw new Error(`Failed to generate prompt with ChatGPT: ${error.message || 'Unknown error'}`);
+    console.error(`${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API Error:`, error);
+    throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
   }
 };
 

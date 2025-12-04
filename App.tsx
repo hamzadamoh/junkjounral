@@ -50,6 +50,7 @@ const App: React.FC = () => {
     replicateModel: 'black-forest-labs/flux-1.1-pro',
     customThemePrompt: '',
     customArtStyle: '',
+    promptService: 'openai',
   });
   const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -200,7 +201,8 @@ const App: React.FC = () => {
           i + 1,
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
-          '' // customArtStyle - no longer used
+          '', // customArtStyle - no longer used
+          settings.promptService || 'openai'
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -233,7 +235,8 @@ const App: React.FC = () => {
           i + 1,
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
-          '' // customArtStyle - no longer used
+          '', // customArtStyle - no longer used
+          settings.promptService || 'openai'
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -529,6 +532,33 @@ const App: React.FC = () => {
       ? styleVariations[variationIndex % styleVariations.length]
       : '';
 
+    // CRITICAL: Handle Custom / Override mode with safe, neutral fallback
+    if (settings.colorIntensity === 'Custom / Override') {
+      // Custom / Override: Safe, neutral fallback - minimal constraints
+      let prompt = theme.basePrompt;
+      
+      // Add custom art style if provided
+      if (settings.customArtStyle && settings.customArtStyle.trim()) {
+        prompt += `. ${settings.customArtStyle.trim()}`;
+      }
+      
+      // Add ONLY technical constraints - no color/style forcing
+      prompt += `. Flat illustration, 2D, high resolution, printable design.`;
+      
+      // Add seed for variation
+      if (variationIndex !== undefined && typeof variationIndex === 'number') {
+        const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
+        prompt += ` --seed ${seed}`;
+      }
+      
+      // Add additional parameters if provided
+      if (settings.parametersForMJ) {
+        prompt += ` ${settings.parametersForMJ}`;
+      }
+      
+      return prompt;
+    }
+    
     // Get color palette and style constraints based on color intensity setting
     let colorPalette: string;
     let styleConstraints: string;
@@ -1089,6 +1119,35 @@ const App: React.FC = () => {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Prompt Generation Service</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { value: 'openai', label: 'OpenAI (GPT-4o-mini)', desc: 'Default, fast and cost-efficient' },
+                    { value: 'openrouter', label: 'OpenRouter (DeepSeek R1)', desc: 'Free model via OpenRouter' }
+                  ].map((service) => (
+                    <button
+                      key={service.value}
+                      onClick={() => handleSettingChange('promptService', service.value as 'openai' | 'openrouter')}
+                      className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
+                        (settings.promptService || 'openai') === service.value 
+                          ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
+                          : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
+                      }`}
+                      title={service.desc}
+                    >
+                      <div className="font-medium">{service.label}</div>
+                      <div className="text-xs opacity-75">{service.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  {settings.promptService === 'openrouter' 
+                    ? '⚠️ Requires VITE_OPENROUTER_API_KEY environment variable'
+                    : '✓ Requires VITE_OPENAI_API_KEY environment variable'}
+                </p>
               </div>
 
               {/* Model Quality/Mode Selection */}

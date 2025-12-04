@@ -29,6 +29,7 @@ export interface GenerationSettings {
   replicateModel?: string;
   customThemePrompt?: string;
   customArtStyle?: string;
+  promptService?: 'openai' | 'openrouter';
 }
 
 export interface GeneratedImage {

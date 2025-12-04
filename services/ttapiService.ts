@@ -92,6 +92,33 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     ? styleVariations[variationIndex % styleVariations.length]
     : '';
 
+  // CRITICAL: Handle Custom / Override mode with safe, neutral fallback
+  if (settings.colorIntensity === 'Custom / Override') {
+    // Custom / Override: Safe, neutral fallback - minimal constraints
+    let prompt = theme.basePrompt;
+    
+    // Add custom art style if provided
+    if (settings.customArtStyle && settings.customArtStyle.trim()) {
+      prompt += `. ${settings.customArtStyle.trim()}`;
+    }
+    
+    // Add ONLY technical constraints - no color/style forcing
+    prompt += `. Flat illustration, 2D, high resolution, printable design.`;
+    
+    // Add seed for variation
+    if (variationIndex !== undefined && typeof variationIndex === 'number') {
+      const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
+      prompt += ` --seed ${seed}`;
+    }
+    
+    // Add additional parameters if provided
+    if (parametersForMJ) {
+      prompt += ` ${parametersForMJ}`;
+    }
+    
+    return prompt;
+  }
+  
   // Get color palette and style constraints based on color intensity setting
   let colorPalette: string;
   
