@@ -346,7 +346,7 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
             { role: 'user', content: userPrompt }
           ],
           temperature: 1.2,
-          max_tokens: 200,
+          max_tokens: 4000, // FORCE THIS TO 4000 for DeepSeek R1 reasoning model
           stream: false
         }),
         signal: controller.signal
@@ -630,7 +630,7 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
           { role: 'user', content: userPrompt }
         ],
         temperature: 1.2, // Increased temperature for maximum creative variation (higher = more diverse)
-        max_tokens: 200, // Increased to allow for more detailed, varied descriptions
+        max_tokens: 4000, // FORCE THIS TO 4000 for DeepSeek R1 reasoning model (needs 1000+ tokens to "think")
         stream: false // Ensure non-streaming for parallel requests
       }),
       signal: controller.signal
