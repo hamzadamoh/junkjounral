@@ -87,6 +87,8 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     // Add seed for variation
     if (variationIndex !== undefined && typeof variationIndex === 'number') {
       const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
+      // Remove any trailing periods before adding seed to prevent "853924." error
+      prompt = prompt.replace(/\.\s*$/, '');
       prompt += ` seed:${seed}`;
     }
     
@@ -123,6 +125,8 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
   // Add seed for additional variation
   if (variationIndex !== undefined && typeof variationIndex === 'number') {
     const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
+    // Remove any trailing periods before adding seed to prevent "853924." error
+    prompt = prompt.replace(/\.\s*$/, '');
     prompt += ` seed:${seed}`;
   }
   
