@@ -160,7 +160,7 @@ export const generatePromptWithChatGPT = async (
       styleInstruction = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}.`;
     }
     // Add safety constraint for color handling in Custom Mode
-    styleInstruction += ` CONSTRAINT: Avoid neon colors, hyper-saturation, and harsh contrast unless explicitly requested in the style description. Keep colors harmonious and printable.`;
+    styleInstruction += ` CONSTRAINT: Avoid digital neon colors (hot pink, electric blue) and plastic textures. HOWEVER, if the theme is 'Gothic', 'Dark', or 'Fantasy', you MUST use **Deep Shadows, High Contrast (Chiaroscuro), and Dark Muted Tones** (Indigo, Charcoal, Sepia). Do not force 'Soft/Pastel' colors on Dark themes.`;
   } else if (colorIntensity === 'Multicolored') {
     // Multicolored: Modern, Vivid, Colorful
     styleInstruction = 'STYLE: Modern Watercolor Illustration. Vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues). Fresh and lively, clean modern design. NOT vintage, NOT aged, NOT distressed, NOT junk journal style.';
@@ -528,7 +528,7 @@ Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.`
 
 IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
 
-🎨 COLOR SAFETY RULE: Unless the user explicitly uses words like 'Neon', 'Bright', 'Vibrant', or 'Pop Art', you MUST default to a **Natural, Soft, or Artistic** color palette. Avoid oversaturation. Do NOT use digital neon colors.
+🎨 COLOR SAFETY RULE: Avoid digital neon colors (hot pink, electric blue) and plastic textures. HOWEVER, if the theme is 'Gothic', 'Dark', or 'Fantasy', you MUST use **Deep Shadows, High Contrast (Chiaroscuro), and Dark Muted Tones** (Indigo, Charcoal, Sepia). Do not force 'Soft/Pastel' colors on Dark themes.
 
 Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
 
