@@ -130,9 +130,13 @@ export const generateJournalPage = async (
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
-    // CRITICAL: Always append vintage junk journal constraints
-    // STRICT: Vintage aesthetic, muted colors, aged paper, illustrated style, NOT realistic
-    if (customPrompt) {
+    // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, no style constraints
+    if (customPrompt && settings.colorIntensity === 'Custom / Override') {
+      // For Custom / Override: Trust ChatGPT prompt entirely, DO NOT add any style constraints
+      // Only aspect ratio is handled by the URL parameters below
+    } else if (customPrompt) {
+      // For other modes: Append vintage junk journal constraints
+      // STRICT: Vintage aesthetic, muted colors, aged paper, illustrated style, NOT realistic
       if (settings.colorIntensity === 'Muted') {
         // Muted: sepia, brown tones, faded
         const colorPalette = 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors';

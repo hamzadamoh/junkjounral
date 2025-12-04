@@ -104,10 +104,16 @@ export const generatePromptWithChatGPT = async (
   // ============================================
   let styleInstruction = '';
   if (colorIntensity === 'Custom / Override') {
-    // Custom Mode gets random styles
-    const randomTech = artTechniques[Math.floor((seed * 31 + seed * 13) % artTechniques.length)];
-    const randomPalette = palettes[Math.floor((seed * 37 + seed * 19) % palettes.length)];
-    styleInstruction = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}. ${customArtStyle && customArtStyle.trim() ? `Additionally, follow this custom art style: "${customArtStyle.trim()}".` : ''}`;
+    // Custom Mode: Check if customArtStyle is provided
+    if (customArtStyle && customArtStyle.trim()) {
+      // User provided custom art style - use ONLY their text, NO random tech/palette
+      styleInstruction = `STYLE: Follow this custom art style: "${customArtStyle.trim()}".`;
+    } else {
+      // No custom art style - use random tech and palette for diversity
+      const randomTech = artTechniques[Math.floor((seed * 31 + seed * 13) % artTechniques.length)];
+      const randomPalette = palettes[Math.floor((seed * 37 + seed * 19) % palettes.length)];
+      styleInstruction = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}.`;
+    }
   } else if (colorIntensity === 'Multicolored') {
     // Multicolored: Modern, Vivid, Colorful
     styleInstruction = 'STYLE: Modern Watercolor Illustration. Vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues). Fresh and lively, clean modern design. NOT vintage, NOT aged, NOT distressed, NOT junk journal style.';
@@ -121,33 +127,6 @@ export const generatePromptWithChatGPT = async (
     // Colorful: Vintage Junk Journal with vibrant colors
     styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
   }
-
-  // Global helper function to get focus rotation based on variation number (defined at function scope)
-  const getFocusRotation = (variationNumber: number): { type: string; description: string } => {
-    const lastDigit = variationNumber % 10;
-    
-    if (lastDigit === 1 || lastDigit === 5 || lastDigit === 9) {
-      return {
-        type: 'CENTRAL SUBJECT',
-        description: 'Focus on a CENTRAL SUBJECT - a main creature, character, or object as the primary focal point (e.g., a dragon, a skull, a key, a character portrait)'
-      };
-    } else if (lastDigit === 2 || lastDigit === 6 || lastDigit === 0) {
-      return {
-        type: 'WIDE SCENE/LANDSCAPE',
-        description: 'Focus on a WIDE SCENE/LANDSCAPE - a broader view showing environment, setting, or multiple elements (e.g., a forest, a castle, a room, a skyline, a cemetery)'
-      };
-    } else if (lastDigit === 3 || lastDigit === 7) {
-      return {
-        type: 'DETAIL/CLOSE-UP',
-        description: 'Focus on a DETAIL/CLOSE-UP - a specific detail, texture, or close-up view (e.g., hands holding an item, a specific architectural detail, a texture, a rose on a grave, intricate patterns)'
-      };
-    } else { // lastDigit === 4 || lastDigit === 8
-      return {
-        type: 'ACTION/DYNAMIC POSE',
-        description: 'Focus on an ACTION/DYNAMIC POSE - movement, action, or dynamic composition (e.g., flying, running, casting a spell, a raven in flight, a character in motion)'
-      };
-    }
-  };
 
   // Global helper function to generate variation control instructions
   const getVariationControl = (variationNumber: number, themeDescription: string): string => {
@@ -227,9 +206,6 @@ export const generatePromptWithChatGPT = async (
 
     // Get global variation control
     const variationControl = getVariationControl(variationNumber, themeDescription);
-    
-    // Get focus rotation for this variation
-    const focusRotation = getFocusRotation(variationNumber);
 
     const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
@@ -290,9 +266,6 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
   if (customThemePrompt && customThemePrompt.trim()) {
     themeDescription = `${theme} with ${customThemePrompt.trim()}`;
   }
-
-  // Get focus rotation for this variation (needed for all modes)
-  const focusRotation = getFocusRotation(variationNumber);
 
   // Get global variation control for all modes
   const variationControl = getVariationControl(variationNumber, themeDescription);

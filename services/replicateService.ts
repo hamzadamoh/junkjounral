@@ -74,9 +74,12 @@ export const generateJournalPage = async (
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
-    // CRITICAL: Always append flat printable page constraints to ensure no 3D photography
-    // This is especially important for ChatGPT-generated prompts which might not include these constraints
-    if (customPrompt) {
+    // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, no style constraints
+    if (customPrompt && settings.colorIntensity === 'Custom / Override') {
+      // For Custom / Override: Trust ChatGPT prompt entirely, DO NOT add any style constraints
+      // Aspect ratio is handled by the model parameters below
+    } else if (customPrompt) {
+      // For other modes: Append flat printable page constraints to ensure no 3D photography
       prompt = `${prompt}. Digital junk journal page design, flat printable page, no 3D objects, no shadows, no depth, no realistic photography, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design.`;
     }
     

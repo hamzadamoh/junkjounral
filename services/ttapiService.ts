@@ -529,12 +529,16 @@ export const generateJournalPage = async (
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
-    // For custom prompts from ChatGPT, trust the prompt and only add minimal constraints
-    // For constructed prompts, add full constraints
-    if (customPrompt) {
-      // Custom prompt from ChatGPT - only add aspect ratio and flat design constraints
-      // Don't override the style ChatGPT generated
-      if (settings.aspectRatio && settings.aspectRatio !== '1:1') {
+    // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, only add aspect ratio
+    if (settings.colorIntensity === 'Custom / Override') {
+      // For Custom / Override: Only add aspect ratio, DO NOT add any style constraints
+      // Trust the ChatGPT prompt entirely
+      if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
+        prompt += ` --ar ${aspectRatio}`;
+      }
+    } else if (customPrompt) {
+      // For other modes with custom prompts: Add minimal flat design constraints
+      if (settings.aspectRatio && settings.aspectRatio !== '1:1' && !prompt.includes('--ar')) {
         prompt += ` --ar ${settings.aspectRatio}`;
       }
       // Add minimal flat design constraints if not already present
@@ -563,12 +567,11 @@ export const generateJournalPage = async (
       }
       
       prompt = `${prompt} ${strictConstraints}`;
-    }
-
-    // Aspect ratio is already added above if customPrompt, or will be added in constructPrompt
-    // Only add here if not already added
-    if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
-      prompt += ` --ar ${aspectRatio}`;
+      
+      // Add aspect ratio if not already added
+      if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
+        prompt += ` --ar ${aspectRatio}`;
+      }
     }
 
     console.log(`[Ttapi] Generating journal page with prompt: ${prompt.substring(0, 100)}...`);
