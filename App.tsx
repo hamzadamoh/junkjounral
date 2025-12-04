@@ -1158,7 +1158,15 @@ const App: React.FC = () => {
               </label>
               <textarea
                 value={customThemePrompt}
-                onChange={(e) => setCustomThemePrompt(e.target.value)}
+                onChange={(e) => {
+                  const newTheme = e.target.value;
+                  setCustomThemePrompt(newTheme);
+                  // Clear master subject list when theme changes
+                  if (newTheme !== currentTheme && newTheme.trim() !== '') {
+                    setCurrentTheme(newTheme.trim());
+                    setMasterSubjectList([]); // Forces regeneration on next Generate click
+                  }
+                }}
                 placeholder="e.g., 'Vintage botanical journal with pressed flowers, dried herbs, and botanical illustrations', 'Steampunk adventure journal with gears, maps, and mechanical drawings', 'Dark romantic gothic journal with roses, lace, and vintage photographs'..."
                 rows={6}
                 className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors resize-none"
