@@ -27,7 +27,7 @@ import { generateJournalPage as generateWithPollinations } from './services/poll
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
-import { generatePromptWithChatGPT, analyzeReferenceImage } from './services/chatgptService';
+import { generatePromptWithChatGPT, analyzeReferenceImage, generateMasterSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 
 const App: React.FC = () => {
@@ -329,6 +329,30 @@ const App: React.FC = () => {
     let promptsToGenerate: number;
     let generatedPrompts: string[];
     
+    // Generate master subject list for the batch
+    const usedSubjects = new Set<string>();
+    let masterSubjectList: string[] = [];
+    try {
+      const apiKey = settings.promptService === 'openrouter' 
+        ? (import.meta.env.VITE_OPENROUTER_API_KEY || '')
+        : (import.meta.env.VITE_OPENAI_API_KEY || '');
+      const apiUrl = settings.promptService === 'openrouter'
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
+      const useOpenRouter = settings.promptService === 'openrouter';
+      
+      if (apiKey) {
+        masterSubjectList = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
+        addLog(`[Master Subject List] Generated ${masterSubjectList.length} unique subjects`, 'success');
+        console.log('[Master Subject List]', masterSubjectList);
+      } else {
+        addLog(`[Master Subject List] API key not configured, using fallback subjects`, 'error');
+      }
+    } catch (error: any) {
+      console.error('[Master Subject List] Generation failed:', error);
+      addLog(`[Master Subject List] Failed: ${error.message}`, 'error');
+    }
+    
     if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
@@ -347,7 +371,9 @@ const App: React.FC = () => {
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
           settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
-          settings.promptService || 'openai'
+          settings.promptService || 'openai',
+          masterSubjectList,
+          usedSubjects
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -357,6 +383,27 @@ const App: React.FC = () => {
       );
       
       const requestPrompts = await Promise.all(promptPromises);
+      
+      // Duplicate detection: check for repeated PRIMARY SUBJECT headers
+      const subjectMap = new Map<string, number[]>();
+      requestPrompts.forEach((prompt, idx) => {
+        const match = prompt.match(/^PRIMARY SUBJECT:\s*(.+?)(?:\.|$)/i);
+        if (match) {
+          const subject = match[1].toLowerCase().trim();
+          if (!subjectMap.has(subject)) {
+            subjectMap.set(subject, []);
+          }
+          subjectMap.get(subject)!.push(idx);
+        }
+      });
+      
+      // Log duplicates
+      subjectMap.forEach((indices, subject) => {
+        if (indices.length > 1) {
+          console.warn(`[Duplicate Detection] Subject "${subject}" appears in variations: ${indices.join(', ')}`);
+          addLog(`⚠️ Duplicate subject detected: "${subject}" in variations ${indices.join(', ')}`, 'error');
+        }
+      });
       
       // Expand prompts: each request prompt is used for 4 images
       generatedPrompts = [];
@@ -381,7 +428,9 @@ const App: React.FC = () => {
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
           settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
-          settings.promptService || 'openai'
+          settings.promptService || 'openai',
+          masterSubjectList,
+          usedSubjects
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);

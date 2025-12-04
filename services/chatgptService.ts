@@ -159,6 +159,125 @@ function resetBatchIfNeeded(variationNumber: number): void {
   lastVariationNumber = variationNumber;
 }
 
+// ============================================
+// MASTER SUBJECT LIST (Per Batch)
+// ============================================
+let masterSubjectList: string[] = [];
+let masterSubjectListGenerated = false;
+
+/**
+ * Generates a master subject list for the batch (36 unique subjects)
+ * Uses lower temperature for more deterministic results
+ */
+export async function generateMasterSubjectList(
+  theme: string,
+  batchSize: number,
+  apiKey: string,
+  apiUrl: string,
+  useOpenRouter: boolean
+): Promise<string[]> {
+  if (masterSubjectListGenerated && masterSubjectList.length > 0) {
+    return masterSubjectList;
+  }
+
+  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  const listSize = Math.max(batchSize, 36); // Generate at least 36 subjects
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
+    
+    if (useOpenRouter) {
+      headers['HTTP-Referer'] = window.location.origin;
+      headers['X-Title'] = 'Junk Journal Generator';
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: `You are a subject list generator. Produce exactly ${listSize} unique short subject phrases (2-3 words each) for theme "${theme}". No synonyms, no duplicates, no variations of the same object. Output ONLY a numbered list, one subject per line. Each subject must be distinct and specific (e.g., "ornate pastel teapot" not just "teapot").`
+          },
+          {
+            role: 'user',
+            content: `Generate ${listSize} unique subjects for "${theme}". Each must be 2-3 words, specific, and visually distinct. Output numbered list only.`
+          }
+        ],
+        temperature: 0.6, // Lower temperature for more deterministic results
+        max_tokens: 1000,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate master subject list: ${response.status}`);
+    }
+
+    const data: ChatGPTResponse = await response.json();
+    if (data.choices && data.choices.length > 0) {
+      const content = data.choices[0].message.content;
+      // Parse numbered list
+      const subjects = content
+        .split('\n')
+        .map(line => line.replace(/^\d+[\.\)]\s*/, '').trim())
+        .filter(line => line.length > 0 && line.length < 50) // Filter valid subjects
+        .slice(0, listSize);
+      
+      if (subjects.length >= batchSize) {
+        masterSubjectList = subjects;
+        masterSubjectListGenerated = true;
+        console.log(`[Master Subject List] Generated ${subjects.length} subjects for theme "${theme}"`);
+        return subjects;
+      }
+    }
+  } catch (error) {
+    console.error('[Master Subject List] Generation failed:', error);
+  }
+
+  // Fallback: generate simple subjects based on theme
+  const fallbackSubjects: string[] = [];
+  const baseSubjects = ['teapot', 'teacup', 'shell', 'rose', 'vintage label', 'postage stamp', 'botanical sketch', 'handwritten note', 'lace trim', 'ribbon', 'crystal stopper', 'porcelain plate', 'sugar spoon', 'pastry tray', 'window seat', 'coastal path', 'sandcastle', 'seashell cluster', 'floral pattern', 'ornate frame', 'vintage ticket', 'old map', 'sheet music', 'pressed flower', 'wax seal', 'antique key', 'candle holder', 'old book', 'quill pen', 'crystal ball', 'geometric pattern', 'art nouveau border', 'gothic arch', 'stained glass', 'tapestry detail', 'illuminated letter'];
+  
+  for (let i = 0; i < listSize; i++) {
+    const base = baseSubjects[i % baseSubjects.length];
+    const modifier = ['ornate', 'delicate', 'vintage', 'antique', 'decorative', 'elaborate'][i % 6];
+    fallbackSubjects.push(`${modifier} ${base}`);
+  }
+
+  masterSubjectList = fallbackSubjects.slice(0, listSize);
+  masterSubjectListGenerated = true;
+  return masterSubjectList;
+}
+
+/**
+ * Ensures PRIMARY SUBJECT header is present and correct
+ */
+function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string): string {
+  const trimmed = (gptText || '').trim();
+  
+  if (/^PRIMARY SUBJECT:\s*/i.test(trimmed)) {
+    // Check if header matches required subject
+    const header = trimmed.split('\n')[0];
+    if (!header.toLowerCase().includes(requiredSubject.toLowerCase())) {
+      // Replace header
+      const rest = trimmed.split('\n').slice(1).join('\n').trim();
+      console.warn(`[Primary Subject] Header mismatch. Expected: "${requiredSubject}", got: "${header}". Correcting...`);
+      return `PRIMARY SUBJECT: ${requiredSubject}. ${rest}`;
+    }
+    return trimmed;
+  } else {
+    // Prepend header
+    console.warn(`[Primary Subject] Missing header in prompt. Adding: "${requiredSubject}"`);
+    return `PRIMARY SUBJECT: ${requiredSubject}. ${trimmed}`;
+  }
+}
+
 /**
  * Composable variation instruction selection
  * Combines time, composition, and mood for more variety
@@ -246,6 +365,38 @@ export const generatePromptWithChatGPT = async (
   // ============================================
   // Reset batch state if starting a new batch
   resetBatchIfNeeded(variationNumber);
+
+  // ============================================
+  // PRIMARY SUBJECT SELECTION (From Master List)
+  // ============================================
+  let primarySubject: string;
+  const forbiddenSubjects = usedSubjects ? Array.from(usedSubjects) : [];
+  
+  if (masterSubjectList && masterSubjectList.length > 0) {
+    // Select subject from master list, avoiding used ones
+    let attempts = 0;
+    do {
+      const subjectIndex = hash32(variationNumber + attempts * 100, masterSubjectList.length);
+      primarySubject = masterSubjectList[subjectIndex];
+      attempts++;
+    } while (usedSubjects?.has(primarySubject.toLowerCase()) && attempts < 10);
+    
+    // If still using a forbidden subject, pick next available
+    if (usedSubjects?.has(primarySubject.toLowerCase())) {
+      const available = masterSubjectList.filter(s => !usedSubjects.has(s.toLowerCase()));
+      if (available.length > 0) {
+        primarySubject = available[hash32(variationNumber, available.length)];
+      }
+    }
+    
+    // Mark as used
+    if (usedSubjects) {
+      usedSubjects.add(primarySubject.toLowerCase());
+    }
+  } else {
+    // Fallback: generate simple subject
+    primarySubject = `${theme} element ${variationNumber}`;
+  }
 
   // ============================================
   // SELECT STYLE (Fixed for entire batch - consistent across all variations)
@@ -495,7 +646,10 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
         console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Raw Model Output:`, rawContent);
         
         // Clean DeepSeek R1 reasoning tags IMMEDIATELY after receiving response (before any validation)
-        const generatedPrompt = cleanDeepSeekOutput(rawContent);
+        let generatedPrompt = cleanDeepSeekOutput(rawContent);
+        
+        // Enforce PRIMARY SUBJECT header
+        generatedPrompt = ensurePrimarySubjectHeader(primarySubject, generatedPrompt);
         
         // Debug: Log cleaned response
         console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Cleaned Prompt:`, generatedPrompt);
@@ -533,9 +687,11 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
   // Default prompts (existing logic)
   // Check for 'Custom / Override' first
   const systemPrompt = colorIntensity === 'Custom / Override'
-    ? `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+    ? `You are a strict prompt generator. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
 
 🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
+
+🚨 CRITICAL: You MUST begin your response with "PRIMARY SUBJECT: <subject>" exactly as specified in the user prompt. Do NOT change the subject. Do NOT repeat that PRIMARY SUBJECT in other variations. Return 2-3 sentences only.
 
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
@@ -617,10 +773,16 @@ CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages -
     }
   }
 
+  const forbiddenText = forbiddenSubjects.length > 0 
+    ? `\n\nFORBIDDEN: Do not use these subjects (already used in other variations): ${forbiddenSubjects.join(', ')}.`
+    : '';
+
   const userPrompt = colorIntensity === 'Custom / Override'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
-CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+PRIMARY SUBJECT (REQUIRED): ${primarySubject}
+
+CRITICAL: Begin your response with "PRIMARY SUBJECT: ${primarySubject}" and do NOT change it or reuse that subject for any other variation in this batch. This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.${forbiddenText}
 
 ${variationSpecifies}
 
@@ -639,6 +801,10 @@ EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter
 Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurately and artistically. 2-3 sentences. Return ONLY the prompt description.`
     : colorIntensity === 'Multicolored'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} MODERN WATERCOLOR ILLUSTRATION. 
+
+PRIMARY SUBJECT (REQUIRED): ${primarySubject}
+
+CRITICAL: Begin your response with "PRIMARY SUBJECT: ${primarySubject}" and do NOT change it or reuse that subject for any other variation in this batch.${forbiddenText}
 
 🚨 CRITICAL: This is a MODERN, VIVID, COLORFUL watercolor illustration - NOT a journal page, NOT vintage, NOT antique, NOT junk journal.
 
@@ -682,9 +848,11 @@ ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the cu
 3. ✅ Is it describing a modern, colorful illustration with vibrant colors?
 
 Create a DISTINCT and UNIQUE MODERN WATERCOLOR ILLUSTRATION prompt. Start with "A vivid, modern watercolor illustration..." or "A colorful watercolor painting..." - describe it as a pure, modern, colorful watercolor painting of ${themeDescription} with vibrant colors. DO NOT mention journal, vintage, antique, stamps, handwritten text, or any vintage elements. 2-3 sentences. Return ONLY the prompt description.`
-    : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page. 
+    : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page.
 
-CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
+PRIMARY SUBJECT (REQUIRED): ${primarySubject}
+
+CRITICAL: Begin your response with "PRIMARY SUBJECT: ${primarySubject}" and do NOT change it or reuse that subject for any other variation in this batch. This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.${forbiddenText}
 
 ${variationSpecifies}
 
