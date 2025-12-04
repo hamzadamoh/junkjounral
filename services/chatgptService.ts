@@ -33,6 +33,95 @@ export const generatePromptWithChatGPT = async (
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your environment variables.');
   }
 
+  // ============================================
+  // GLOBAL CONTENT VARIABLES (Apply to ALL Modes)
+  // These ensure variety in WHAT is shown, regardless of style
+  // ============================================
+  const subjectFocus = [
+    "Single Hero Object (Central)",
+    "Wide Atmospheric Scene",
+    "Macro Detail/Texture",
+    "Knolling (Flat Lay of multiple items)",
+    "Asymmetrical Corner Composition",
+    "Pattern-Focused (No central object)",
+    "Collage of Scattered Elements",
+    "Framed Vignette"
+  ];
+
+  const cameraAngles = [
+    "Top-Down / Flat Lay",
+    "Straight-On Front View",
+    "Macro Close-Up",
+    "Isometric Angle",
+    "Dutch Angle (Dynamic tilt)"
+  ];
+
+  // ============================================
+  // STYLE VARIABLES (Apply ONLY to Custom Mode)
+  // ============================================
+  const artTechniques = [
+    "Watercolor",
+    "Vector Illustration",
+    "Etching",
+    "Gouache",
+    "Ink Drawing",
+    "Digital Painting",
+    "Linocut",
+    "Screen Print",
+    "Charcoal Sketch",
+    "Pastel Drawing",
+    "Acrylic Paint",
+    "Oil Painting"
+  ];
+
+  const palettes = [
+    "Pastel",
+    "Neon",
+    "Vintage",
+    "Monochrome",
+    "Earth Tones",
+    "Cool Tones",
+    "Warm Tones",
+    "High Contrast",
+    "Muted",
+    "Vibrant",
+    "Desaturated",
+    "Saturated"
+  ];
+
+  // ============================================
+  // RANDOMIZE CONTENT (For ALL Modes)
+  // ============================================
+  // Use variationNumber as seed for consistent randomization per variation
+  // This ensures each variation gets a unique but deterministic content assignment
+  // Using prime number multipliers to ensure good distribution
+  const seed = variationNumber;
+  const randomFocus = subjectFocus[Math.floor((seed * 17 + seed * 7) % subjectFocus.length)];
+  const randomAngle = cameraAngles[Math.floor((seed * 23 + seed * 11) % cameraAngles.length)];
+
+  // ============================================
+  // SELECT STYLE (Logic Branch)
+  // ============================================
+  let styleInstruction = '';
+  if (colorIntensity === 'Custom / Override') {
+    // Custom Mode gets random styles
+    const randomTech = artTechniques[Math.floor((seed * 31 + seed * 13) % artTechniques.length)];
+    const randomPalette = palettes[Math.floor((seed * 37 + seed * 19) % palettes.length)];
+    styleInstruction = `STYLE: ${randomTech} technique. Color Palette: ${randomPalette}. ${customArtStyle && customArtStyle.trim() ? `Additionally, follow this custom art style: "${customArtStyle.trim()}".` : ''}`;
+  } else if (colorIntensity === 'Multicolored') {
+    // Multicolored: Modern, Vivid, Colorful
+    styleInstruction = 'STYLE: Modern Watercolor Illustration. Vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues). Fresh and lively, clean modern design. NOT vintage, NOT aged, NOT distressed, NOT junk journal style.';
+  } else if (colorIntensity === 'Muted') {
+    // Muted: Vintage Junk Journal with muted colors
+    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, muted sepia and brown tones, old faded colors, muted color palette. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
+  } else if (colorIntensity === 'Normal') {
+    // Normal: Vintage Junk Journal with normal colors
+    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, normal colors (deep burgundy, maroon, dark grey, black, antique gold, rich but not faded). Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, worn edges.';
+  } else if (colorIntensity === 'Colorful') {
+    // Colorful: Vintage Junk Journal with vibrant colors
+    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
+  }
+
   // Global helper function to get focus rotation based on variation number (defined at function scope)
   const getFocusRotation = (variationNumber: number): { type: string; description: string } => {
     const lastDigit = variationNumber % 10;
@@ -146,34 +235,11 @@ export const generatePromptWithChatGPT = async (
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
-🎯 VARIATION CONTROLLER (Image ${variationNumber}):
-- ROLE: You are creating image #${variationNumber} of a collection.
-- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
-- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
+${variationSpecifies}
 
 ${variationControl}
 
-${variationDirection}
-
-${variationInstruction}
-
-Think creatively and explore WIDELY different scenes within ${themeDescription}:
-- Vary TIME OF DAY: morning, noon, evening, night, dawn, dusk, sunset, sunrise - each creates unique lighting and mood
-- Vary COMPOSITION: close-up details, wide landscape, path/road view, single focus element, dense grouping, open area
-- Vary ELEMENTS: different subjects, objects, structures, natural/man-made features, environmental conditions within the theme
-- Vary PERSPECTIVE: bird's eye view, ground level, looking up, looking down path/road, side view, angled view
-- Vary MOOD: serene, dramatic, mystical, cozy, crisp, peaceful, magical, energetic - each variation should have a distinct emotional feel
-- Vary SCALE: macro close-up details, medium scene view, wide expansive landscape - change the viewing distance
-- Vary WEATHER/ATMOSPHERE: clear day, misty, foggy, moonlit, stormy, atmospheric lighting - change environmental conditions
-- Vary SCENE TYPE: path/road view, water feature, structure/building, open area, dense area, elevated view - change the scene structure
-
-Each variation should feel like a COMPLETELY DIFFERENT scene - like different photographs or paintings of the same theme. Avoid any visual similarity between variations. Change multiple aspects (time, composition, elements, perspective) to ensure maximum diversity.
-
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
-
-${customArtStyle && customArtStyle.trim() ? `CUSTOM ART STYLE: Follow this art style rigorously: "${customArtStyle.trim()}". Do NOT add elements that are not part of this style.` : ''}
-
-IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme or style explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
 
 Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
 
@@ -230,6 +296,35 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
 
   // Get global variation control for all modes
   const variationControl = getVariationControl(variationNumber, themeDescription);
+
+  // ============================================
+  // CONSTRUCT VARIATION SPECIFICS (Content + Style)
+  // ============================================
+  const variationSpecifies = `VARIATION SPECIFICS (Image ${variationNumber}):
+- VISUAL FOCUS: ${randomFocus}
+- VIEWING ANGLE: ${randomAngle}
+- THEME: ${themeDescription}
+
+${styleInstruction}
+
+INSTRUCTION: Depict the Theme '${themeDescription}' using the assigned VISUAL FOCUS.
+- If Focus is 'Single Hero Object (Central)', show a prominent central subject (e.g., a single flower, a key, a skull, a character).
+- If Focus is 'Wide Atmospheric Scene', show a broader landscape or environment view.
+- If Focus is 'Macro Detail/Texture', show a close-up of intricate details, textures, or patterns.
+- If Focus is 'Knolling (Flat Lay of multiple items)', arrange multiple related items in a flat lay composition.
+- If Focus is 'Asymmetrical Corner Composition', place the main subject in a corner with negative space.
+- If Focus is 'Pattern-Focused (No central object)', create a repeating pattern or texture without a central focal point.
+- If Focus is 'Collage of Scattered Elements', arrange various elements scattered across the page.
+- If Focus is 'Framed Vignette', show a scene or object within a decorative frame or border.
+
+The VIEWING ANGLE determines the perspective:
+- 'Top-Down / Flat Lay': Bird's eye view, looking straight down
+- 'Straight-On Front View': Direct frontal perspective
+- 'Macro Close-Up': Extreme close-up of details
+- 'Isometric Angle': 3D isometric perspective
+- 'Dutch Angle (Dynamic tilt)': Tilted, dynamic angle
+
+CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore a DIFFERENT aspect of the theme.`;
 
   // Default prompts (existing logic)
   // Check for 'Custom / Override' first
@@ -321,36 +416,15 @@ CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages -
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
-🎯 VARIATION CONTROLLER (Image ${variationNumber}):
-- ROLE: You are creating image #${variationNumber} of a collection.
-- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
-- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
+${variationSpecifies}
 
 ${variationControl}
-
-${variationDirection}
-
-${variationInstruction}
-
-Think creatively and explore WIDELY different scenes within ${themeDescription}:
-- Vary TIME OF DAY: morning, noon, evening, night, dawn, dusk, sunset, sunrise - each creates unique lighting and mood
-- Vary COMPOSITION: close-up details, wide landscape, path/road view, single focus element, dense grouping, open area
-- Vary ELEMENTS: different subjects, objects, structures, natural/man-made features, environmental conditions within the theme
-- Vary PERSPECTIVE: bird's eye view, ground level, looking up, looking down path/road, side view, angled view
-- Vary MOOD: serene, dramatic, mystical, cozy, crisp, peaceful, magical, energetic - each variation should have a distinct emotional feel
-- Vary SCALE: macro close-up details, medium scene view, wide expansive landscape - change the viewing distance
-- Vary WEATHER/ATMOSPHERE: clear day, misty, foggy, moonlit, stormy, atmospheric lighting - change environmental conditions
-- Vary SCENE TYPE: path/road view, water feature, structure/building, open area, dense area, elevated view - change the scene structure
-
-Each variation should feel like a COMPLETELY DIFFERENT scene - like different photographs or paintings of the same theme. Avoid any visual similarity between variations. Change multiple aspects (time, composition, elements, perspective) to ensure maximum diversity.
 
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
 IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
 
 Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
-
-${customArtStyle && customArtStyle.trim() ? `CUSTOM ART STYLE: Follow this art style rigorously: "${customArtStyle.trim()}". Do NOT add elements that are not part of this style.` : ''}
 
 EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
 
@@ -375,18 +449,9 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
 
 This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
-🎯 VARIATION CONTROLLER (Image ${variationNumber}):
-- ROLE: You are creating image #${variationNumber} of a collection.
-- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
-- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
+${variationSpecifies}
 
 ${variationControl}
-
-${variationDirection}
-
-${variationInstruction}
-
-Think creatively: What are different ways to represent ${themeDescription}? What other subjects, elements, scenes, or compositions could relate to this theme? Each variation should feel naturally varied, not repetitive.
 
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
@@ -398,32 +463,6 @@ ABSOLUTELY FORBIDDEN WORDS AND PHRASES - DO NOT USE ANY OF THESE:
 ❌ "sepia", "muted", "coffee-stained", "tea-stained", "parchment", "aged paper"
 ❌ "faded", "distressed texture", "antique-style", "vintage-style", "old-world"
 ❌ "nostalgic", "wistful", "memory", "echoed memory", "past", "reminiscing"
-
-EXAMPLE OF WHAT NOT TO WRITE:
-❌ "Craft a vintage junk journal page..." 
-❌ "Imagine a Winter Wonderland junk journal page..."
-❌ "antique-style journal page showcasing..."
-❌ "vintage botanical illustrations"
-❌ "handwritten poem reminiscing"
-❌ "aged postage stamps"
-❌ "sepia tones"
-
-REQUIRED - MUST DESCRIBE AS:
-✅ MODERN, VIVID, COLORFUL watercolor illustration
-✅ VIBRANT COLORS: vivid blues, greens, purples, oranges, yellows, pinks, teals - bright and colorful
-✅ MODERN WATERCOLOR STYLE: fresh, lively, vibrant watercolor painting
-✅ CLEAN, MODERN design - think contemporary art, modern illustration
-✅ Pure, modern, colorful watercolor painting of ${themeDescription}
-✅ FLAT printable page design
-✅ NO photorealistic rendering, NO realistic photography
-✅ NO 3D objects, NO depth, NO shadows, NO realistic lighting
-✅ NO still life compositions
-✅ Top-down view, flat illustration style
-
-EXAMPLE OF WHAT TO WRITE:
-✅ "A vivid, modern watercolor illustration of a winter forest scene with bright blues, greens, and whites..."
-✅ "A colorful watercolor painting depicting a serene snowy landscape with vibrant hues..."
-✅ "A fresh, lively watercolor illustration of a winter scene with vivid colors..."
 
 EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
 
@@ -439,30 +478,9 @@ Create a DISTINCT and UNIQUE MODERN WATERCOLOR ILLUSTRATION prompt. Start with "
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
-🎯 VARIATION CONTROLLER (Image ${variationNumber}):
-- ROLE: You are creating image #${variationNumber} of a collection.
-- REQUIREMENT: You MUST strictly follow this composition focus: ${focusRotation.description}
-- CONSTRAINT: Do NOT repeat the exact subject from previous images. If Image 1 was a Deer, Image 2 CANNOT be a Deer. Explore the full depth of the theme '${themeDescription}'.
+${variationSpecifies}
 
 ${variationControl}
-
-${variationDirection}
-
-${variationInstruction}
-
-${colorIntensity === 'Normal' 
-  ? `Think creatively and explore WIDELY different scenes within ${themeDescription}:
-- Vary TIME OF DAY: morning, noon, evening, night, dawn, dusk, sunset, sunrise - each creates unique lighting and mood
-- Vary COMPOSITION: close-up details, wide landscape, path/road view, single focus element, dense grouping, open area
-- Vary ELEMENTS: different subjects, objects, structures, natural/man-made features, environmental conditions within the theme
-- Vary PERSPECTIVE: bird's eye view, ground level, looking up, looking down path/road, side view, angled view
-- Vary MOOD: serene, dramatic, mystical, cozy, crisp, peaceful, magical, energetic - each variation should have a distinct emotional feel
-- Vary SCALE: macro close-up details, medium scene view, wide expansive landscape - change the viewing distance
-- Vary WEATHER/ATMOSPHERE: clear day, misty, foggy, moonlit, stormy, atmospheric lighting - change environmental conditions
-- Vary SCENE TYPE: path/road view, water feature, structure/building, open area, dense area, elevated view - change the scene structure
-
-Each variation should feel like a COMPLETELY DIFFERENT scene - like different photographs or paintings of the same theme. Avoid any visual similarity between variations. Change multiple aspects (time, composition, elements, perspective) to ensure maximum diversity.`
-  : `Think creatively: What are different ways to represent ${themeDescription}? What other subjects, elements, scenes, or compositions could relate to this theme? Each variation should feel like a different page from a collection - naturally varied, not repetitive.`}
 
 Style: ${pageStyle}. Texture: ${textureIntensity}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
