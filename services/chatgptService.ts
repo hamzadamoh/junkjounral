@@ -298,8 +298,10 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
         headers['X-Title'] = 'Junk Journal Generator';
       }
       
-      // Set timeout (60 seconds for reasoning models)
-      timeoutId = setTimeout(() => controller.abort(), 60000);
+      // Set timeout (120 seconds for reasoning models - DeepSeek R1 can take 60+ seconds)
+      timeoutId = setTimeout(() => controller.abort(), 120000);
+      
+      console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Starting API request with 120s timeout...`);
       
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -321,6 +323,11 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
         clearTimeout(timeoutId);
         const errorData = await response.json().catch(() => ({}));
         const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
+        console.error(`[${serviceName}] API Error Details:`, {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
         throw new Error(`${serviceName} API error: ${response.status} ${errorData.error?.message || response.statusText}`);
       }
 
@@ -331,8 +338,16 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
       
       if (data.choices && data.choices.length > 0) {
         const rawContent = data.choices[0].message.content;
-        // Clean DeepSeek R1 reasoning tags if present
+        
+        // Debug: Log raw response BEFORE cleaning
+        console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Raw Model Output:`, rawContent);
+        
+        // Clean DeepSeek R1 reasoning tags IMMEDIATELY after receiving response (before any validation)
         const generatedPrompt = cleanDeepSeekOutput(rawContent);
+        
+        // Debug: Log cleaned response
+        console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Cleaned Prompt:`, generatedPrompt);
+        
         return generatedPrompt;
       } else {
         throw new Error(`No response from ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API`);
@@ -343,11 +358,17 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
         clearTimeout(timeoutId);
       }
       
-      console.error(`${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API Error:`, error);
+      // Debug: Log full error details
+      console.error(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] API Error Details:`, {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        error: error
+      });
       
       // Handle timeout errors specifically
       if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-        throw new Error(`Request timeout: The ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API took longer than 60 seconds to respond. This may happen with reasoning models. Please try again.`);
+        throw new Error(`Request timeout: The ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API took longer than 120 seconds to respond. This may happen with reasoning models. Please try again.`);
       }
       
       throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
@@ -595,8 +616,10 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
       headers['X-Title'] = 'Junk Journal Generator';
     }
     
-    // Set timeout (60 seconds for reasoning models)
-    timeoutId = setTimeout(() => controller.abort(), 60000);
+    // Set timeout (120 seconds for reasoning models - DeepSeek R1 can take 60+ seconds)
+    timeoutId = setTimeout(() => controller.abort(), 120000);
+    
+    console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Starting API request with 120s timeout...`);
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -618,6 +641,11 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
       clearTimeout(timeoutId);
       const errorData = await response.json().catch(() => ({}));
       const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
+      console.error(`[${serviceName}] API Error Details:`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      });
       throw new Error(`${serviceName} API error: ${response.status} ${errorData.error?.message || response.statusText}`);
     }
 
@@ -628,8 +656,16 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     
     if (data.choices && data.choices.length > 0) {
       const rawContent = data.choices[0].message.content;
-      // Clean DeepSeek R1 reasoning tags if present
+      
+      // Debug: Log raw response BEFORE cleaning
+      console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Raw Model Output:`, rawContent);
+      
+      // Clean DeepSeek R1 reasoning tags IMMEDIATELY after receiving response (before any validation)
       const generatedPrompt = cleanDeepSeekOutput(rawContent);
+      
+      // Debug: Log cleaned response
+      console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Cleaned Prompt:`, generatedPrompt);
+      
       return generatedPrompt;
     } else {
       throw new Error(`No response from ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API`);
@@ -640,11 +676,17 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
       clearTimeout(timeoutId);
     }
     
-    console.error(`${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API Error:`, error);
+    // Debug: Log full error details
+    console.error(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] API Error Details:`, {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      error: error
+    });
     
     // Handle timeout errors specifically
     if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-      throw new Error(`Request timeout: The ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API took longer than 60 seconds to respond. This may happen with reasoning models. Please try again.`);
+      throw new Error(`Request timeout: The ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API took longer than 120 seconds to respond. This may happen with reasoning models. Please try again.`);
     }
     
     throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
