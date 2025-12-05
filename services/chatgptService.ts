@@ -342,7 +342,7 @@ async function callPromptWithHeaderEnforcement(
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          temperature: 0.6,
+          temperature: 0.3, // Lower temperature for stricter compliance
           max_tokens: useOpenRouter ? 4000 : 220,
           stream: false
         })
@@ -761,11 +761,19 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 
 🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`
     : colorIntensity === 'Multicolored'
-    ? `You are a strict prompt generator specializing in MODERN, VIVID, COLORFUL illustration descriptions. 
+    ? `You are a strict prompt generator. FOLLOW THESE RULES EXACTLY:
 
-🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
+RULE 1: Your response MUST start with: "PRIMARY SUBJECT: [exact subject from user prompt]"
 
-🚨 CRITICAL: You MUST begin your response with "PRIMARY SUBJECT: <subject>" exactly as specified in the user prompt. Do NOT change the subject. Do NOT repeat that PRIMARY SUBJECT in other variations. Return 2-3 sentences only.
+RULE 2: The ENTIRE rest of your response (2-3 sentences) MUST describe ONLY that PRIMARY SUBJECT as the main focus.
+
+RULE 3: If you cannot follow these rules, respond with ONLY the word: RETRY
+
+RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
+
+DIVERSITY: Each variation must be different. Explore the theme's full breadth.
+
+STYLE: MODERN, VIVID, COLORFUL watercolor illustration - NOT vintage, NOT journal page.`
 
 🚨 CRITICAL RULES - YOU MUST FOLLOW THESE:
 1. NEVER use: "aged", "antique", "vintage", "distressed", "old", "worn", "junk journal", "journal page"
@@ -775,11 +783,19 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 5. If you use ANY vintage/junk journal words, you have FAILED the task
 
 Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor style, vibrant colors, fresh and lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted. Think modern, fresh, vibrant, colorful, alive, vivid watercolor illustrations.`
-    : `You are a strict prompt generator specializing in VINTAGE JUNK JOURNAL page descriptions. 
+    : `You are a strict prompt generator. FOLLOW THESE RULES EXACTLY:
 
-🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
+RULE 1: Your response MUST start with: "PRIMARY SUBJECT: [exact subject from user prompt]"
 
-🚨 CRITICAL: You MUST begin your response with "PRIMARY SUBJECT: <subject>" exactly as specified in the user prompt. Do NOT change the subject. Do NOT repeat that PRIMARY SUBJECT in other variations. Return 2-3 sentences only.
+RULE 2: The ENTIRE rest of your response (2-3 sentences) MUST describe ONLY that PRIMARY SUBJECT as the main focus.
+
+RULE 3: If you cannot follow these rules, respond with ONLY the word: RETRY
+
+RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
+
+DIVERSITY: Each variation must be different. Explore the theme's full breadth.
+
+STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.`
 
 CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
 
