@@ -263,6 +263,97 @@ function normalize(text: string): string {
 }
 
 /**
+ * Cleans master subject list by replacing poetic/abstract subjects with concrete noun phrases
+ * @param masterArray The raw master subject list from GPT
+ * @param desiredCount Target number of subjects (default 36)
+ * @returns Cleaned array of concrete noun phrases
+ */
+export function cleanMasterList(masterArray: string[], desiredCount: number = 36): string[] {
+  // Curated fallback pool (concrete, noun-focused)
+  const fallbackPool = [
+    "Cluster of glowing mushrooms", "Hidden lantern on post", "Hooded figure silhouette",
+    "Moonlit crystal pond", "Majestic stag silhouette", "Tree hollow doorway",
+    "Winding ivy tendril", "Stone pathway with moss", "Low-lying fog bank",
+    "Velvet moss patch", "Ancient twisted oak tree", "Sparkling brook reflection",
+    "Moss-covered stone altar", "Pair of glowing eyes in brush", "Twisted vine archway",
+    "Glistening spiderweb strand", "Luminescent beetle cluster", "Twinkling firefly swarm",
+    "Delicate butterfly wing", "Softly glowing orb on stump", "Hidden fairy circle of stones",
+    "Gnarled root formation", "Stone bench with lichens",
+    "Weathered wooden signpost", "Small ruined stone shrine", "Silver-leaf canopy",
+    "Crumbling stone step", "Ivy-wrapped stone arch", "Mossy tree stump altar",
+    "Moonlit river bend", "Low stone bridge", "Small wooden lantern",
+    "Weathered leather satchel", "Field of night-blooming flowers", "Ancient rune carving"
+  ];
+
+  // Replacement dictionary for commonly generated poetic phrases
+  const replacements: Record<string, string> = {
+    "whispering willow branches": "Willow branch cluster",
+    "whispering willow": "Willow branch cluster",
+    "whispering breeze sound": "Wind-swept leaf cluster",
+    "whispering breath": "Wind-swept leaf cluster",
+    "whispering night breeze": "Wind-swept leaf cluster",
+    "radiant night blooming": "Moonlit blossom",
+    "mystic river reflection": "Moonlit river reflection",
+    "mystic river": "Moonlit river reflection",
+    "enchanted fog veil": "Low-lying fog bank",
+    "mysterious fog blanket": "Low-lying fog bank",
+    "mysterious glowing eyes": "Pair of glowing eyes in brush",
+    "silken spider silk": "Silken spider thread",
+    "flickering candlelight shadows": "Soft candlelight shadow",
+    "flickering shadow play": "Shadowed movement of leaves",
+    "hidden treasure chest": "Partially-buried wooden chest",
+    "enchanted nightingale song": "Nightingale perched on branch",
+    "velvet moss carpet": "Velvet moss patch",
+    "luminescent flower petals": "Luminescent flower petals",
+    "ethereal silver mist": "Low-lying silver mist"
+  };
+
+  // Simple ambiguous pattern to drop overly poetic entries not caught by replacements
+  const ambiguousPattern = /\b(whisper|whispering|radiant|mystic|mysterious|breeze|song|reflection|bloom|shimmer|ethereal|veil|blanket)\b/i;
+
+  // Normalize helper
+  const norm = (s: string) => (s || '').toString().trim().toLowerCase().replace(/[^a-z0-9\s']/g, '');
+
+  // Start cleaning
+  let cleaned = masterArray.map(s => {
+    const key = norm(s);
+    if (replacements[key]) return replacements[key];
+    return s;
+  });
+
+  // Drop entries that still look ambiguous
+  cleaned = cleaned.filter(s => {
+    if (!s) return false;
+    if (ambiguousPattern.test(s)) return false;
+    // Require at least one reasonably long token
+    const tokens = (s || '').split(/\s+/).filter(t => t.length > 2);
+    return tokens.length > 0;
+  });
+
+  // Dedupe while preserving order
+  const seen = new Set<string>();
+  cleaned = cleaned.filter(s => {
+    const k = norm(s);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  // Fill with fallback if not enough items
+  let i = 0;
+  while (cleaned.length < desiredCount && i < fallbackPool.length) {
+    const candidate = fallbackPool[i++];
+    if (!seen.has(norm(candidate))) {
+      cleaned.push(candidate);
+      seen.add(norm(candidate));
+    }
+  }
+
+  // Final trim to desiredCount
+  return cleaned.slice(0, desiredCount);
+}
+
+/**
  * Validates if the prompt text actually describes the required subject
  */
 function subjectMatchesPrompt(subject: string, promptText: string): boolean {
@@ -313,7 +404,7 @@ async function callPromptWithHeaderEnforcement(
   apiKey: string,
   apiUrl: string,
   useOpenRouter: boolean,
-  maxAttempts: number = 3
+  maxAttempts: number = 4 // Allow extra retry for tricky subjects
 ): Promise<{ text: string; corrected: boolean; attempt: number; matched: boolean }> {
   const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
   
