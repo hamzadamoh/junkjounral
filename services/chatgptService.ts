@@ -774,13 +774,6 @@ RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
 DIVERSITY: Each variation must be different. Explore the theme's full breadth.
 
 STYLE: MODERN, VIVID, COLORFUL watercolor illustration - NOT vintage, NOT journal page.`
-1. NEVER use: "aged", "antique", "vintage", "distressed", "old", "worn", "junk journal", "journal page"
-2. NEVER use: "handwritten", "cursive", "letters", "postage stamps", "ephemera", "sepia", "muted", "faded"
-3. ALWAYS start prompts with: "A vivid, modern watercolor illustration..." or "A colorful watercolor painting..."
-4. ALWAYS describe: modern, fresh, vibrant, colorful, vivid, bright, alive illustrations
-5. If you use ANY vintage/junk journal words, you have FAILED the task
-
-Generate prompts for MODERN, VIVID, COLORFUL illustrations - modern watercolor style, vibrant colors, fresh and lively, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT sepia, NOT muted. Think modern, fresh, vibrant, colorful, alive, vivid watercolor illustrations.`
     : `You are a strict prompt generator. FOLLOW THESE RULES EXACTLY:
 
 RULE 1: Your response MUST start with: "PRIMARY SUBJECT: [exact subject from user prompt]"
@@ -793,9 +786,7 @@ RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
 
 DIVERSITY: Each variation must be different. Explore the theme's full breadth.
 
-STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.`
-
-CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art, NOT bright watercolor illustrations, NOT clean modern designs, NOT photorealistic, NOT realistic photography. The output must look like an old, worn, vintage journal page with aged paper, distressed textures, muted sepia/brown tones, and handwritten script. Think antique, vintage, aged, distressed, worn, sepia-toned, muted colors, illustrated style, artistic rendering, NOT realistic.`;
+STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.`;
 
   // Create variation-specific instructions to ensure diversity
   // For Normal color intensity, add more specific diversity instructions that work for ANY theme
