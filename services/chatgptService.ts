@@ -56,11 +56,32 @@ interface ChatGPTResponse {
   }>;
 }
 
-interface ImageAnalysisResponse {
+interface ColorPalette {
+  name: string;
+  hex: string;
+}
+
+interface ImageCluster {
+  id: string;
   theme: string;
+  primary_subject: string;
   style: string;
-  colors?: string; // Optional: extracted color palette
-  vibe?: string; // Optional: extracted mood/vibe/atmosphere
+  technique: string;
+  palette: ColorPalette[];
+  vibe: string;
+  dominant_textures?: string[];
+  recommended_prompt_example: string;
+}
+
+interface ImageAnalysisResponse {
+  clusters: ImageCluster[];
+  global_tags?: string[];
+  confidence: number;
+  // Legacy fields for backward compatibility (extracted from first cluster)
+  theme?: string;
+  style?: string;
+  colors?: string;
+  vibe?: string;
 }
 
 // ============================================
@@ -1445,7 +1466,45 @@ export const analyzeReferenceImage = async (base64Image: string): Promise<ImageA
             content: [
               {
                 type: 'text',
-                text: 'Analyze this image to create a generative art prompt. Return a JSON object with exactly four fields: 1. "theme": The main subject/theme category (e.g., "Christmas", "Winter Wonderland", "Gothic Architecture", "Botanical Garden"). This should be a broad category that can have many variations. 2. "style": A detailed style descriptor including medium, texture, and artistic approach (e.g., "Soft atmospheric watercolor, traditional art style", "Vintage illustration with ink details", "Modern digital painting"). 3. "colors": A specific color palette extracted from the image, listing the dominant colors in order of prominence (e.g., "Rich emerald green, warm orange, soft pink, deep indigo, golden yellow accents"). Focus on the actual colors present in the image. 4. "vibe": The mood, atmosphere, or emotional feeling of the image (e.g., "Cozy and warm", "Mystical and ethereal", "Festive and joyful", "Dark and mysterious", "Serene and peaceful"). This captures the overall feeling/atmosphere.'
+                text: `SYSTEM TASK — Image Analysis for Prompt Generation (STRICT JSON OUTPUT)
+
+You are an image analysis assistant whose job is to extract precise, machine-friendly metadata for generating art prompts. For each input image, return **only** a single JSON object (no markdown, no extra text) that exactly follows the schema below. If the image clearly belongs to more than one visual cluster, return a "clusters" array with one entry per cluster.
+
+REQUIRED JSON SCHEMA (exact keys):
+{
+  "clusters": [
+    {
+      "id": "coastal-001",
+      "theme": "Coastal Landscape",
+      "primary_subject": "Rugged coastal cliffs",
+      "style": "Painterly digital impressionism with visible brushstrokes",
+      "technique": "digital painting",
+      "palette": [
+        {"name":"Peach sunlight","hex":"#F5C9A9"},
+        {"name":"Terracotta","hex":"#B85A2A"},
+        {"name":"Teal ocean","hex":"#2E9AA8"},
+        {"name":"Dusty lavender","hex":"#BFA6C7"}
+      ],
+      "vibe": "serene, cinematic, expansive",
+      "dominant_textures": ["soft haze","rough rock"],
+      "recommended_prompt_example": "PRIMARY SUBJECT: Rugged coastal cliffs. Painterly digital illustration of dramatic terracotta cliffs glowing in peach sunlight with teal-blue water below; soft atmospheric haze and cinematic perspective, visible brush texture — serene and expansive."
+    }
+  ],
+  "global_tags": ["hand-painted look","printable","no photorealism"],
+  "confidence": 0.92
+}
+
+RULES:
+1. Always output valid JSON exactly matching the schema above. No extra commentary or wrapping text.
+2. For "palette" include human-readable color name AND a HEX code. Prefer 4-7 colors (if fewer, include what you can).
+3. "technique" must be one of: watercolor, gouache, ink, digital painting, alcohol-ink, mixed-media, engraving, vector. If uncertain, choose the best match.
+4. "vibe" must be 1–5 short adjectives (comma-separated). Avoid generic single words like "nature"—use mood words (e.g., "dreamy, whimsical, majestic").
+5. If an image contains clear multiple styles or groups, split into separate cluster objects (clusters array). Otherwise return a single cluster.
+6. "recommended_prompt_example" must be 1 sentence, start with PRIMARY SUBJECT: and be 15–30 words, strictly illustrative (no camera/photography terms). Must reflect the cluster's style, palette, and vibe.
+7. Do NOT output photography/camera language anywhere.
+8. Keep "confidence" as your best estimate (0.0–1.0).
+
+Now analyze the provided image and produce the JSON object described above.`
               },
               {
                 type: 'image_url',
@@ -1457,7 +1516,7 @@ export const analyzeReferenceImage = async (base64Image: string): Promise<ImageA
           }
         ],
         response_format: { type: 'json_object' },
-        max_tokens: 500
+        max_tokens: 1500
       })
     });
 
@@ -1474,15 +1533,36 @@ export const analyzeReferenceImage = async (base64Image: string): Promise<ImageA
         const analysis: ImageAnalysisResponse = JSON.parse(content);
         
         // Validate response structure
-        if (!analysis.theme || !analysis.style) {
-          throw new Error('Invalid response format: missing theme or style field');
+        if (!analysis.clusters || !Array.isArray(analysis.clusters) || analysis.clusters.length === 0) {
+          throw new Error('Invalid response format: missing or empty clusters array');
         }
 
+        // Use the first cluster as the primary analysis
+        const primaryCluster = analysis.clusters[0];
+
+        // Validate primary cluster has required fields
+        if (!primaryCluster.theme || !primaryCluster.style || !primaryCluster.palette) {
+          throw new Error('Invalid response format: missing required fields in cluster');
+        }
+
+        // Build colors string from palette
+        const colorsString = primaryCluster.palette
+          .map(c => `${c.name} (${c.hex})`)
+          .join(', ');
+
+        // Build style string with technique
+        const styleString = primaryCluster.technique 
+          ? `${primaryCluster.style} Technique: ${primaryCluster.technique}.`
+          : primaryCluster.style;
+
+        // Return structured response with backward compatibility fields
         return {
-          theme: analysis.theme.trim(),
-          style: analysis.style.trim(),
-          colors: analysis.colors ? analysis.colors.trim() : undefined,
-          vibe: analysis.vibe ? analysis.vibe.trim() : undefined
+          ...analysis, // Include full structured response
+          // Legacy fields extracted from first cluster for backward compatibility
+          theme: primaryCluster.theme.trim(),
+          style: styleString.trim(),
+          colors: colorsString,
+          vibe: primaryCluster.vibe ? primaryCluster.vibe.trim() : undefined
         };
       } catch (parseError) {
         throw new Error(`Failed to parse analysis response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);

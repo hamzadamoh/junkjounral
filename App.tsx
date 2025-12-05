@@ -193,8 +193,20 @@ const App: React.FC = () => {
         // If this is the first image, auto-fill the fields
         if (uploadedImages.length === 0) {
           setCustomThemePrompt(theme);
-          // Build style description with colors and vibe
+          // Build style description with technique, vibe, colors, and textures
           let styleDescription = style;
+          
+          // Add technique if available from structured response
+          if (analysis.status === 'fulfilled' && analysis.value.clusters && analysis.value.clusters[0]) {
+            const cluster = analysis.value.clusters[0];
+            if (cluster.technique && !styleDescription.includes(cluster.technique)) {
+              styleDescription = `${styleDescription} Technique: ${cluster.technique}.`;
+            }
+            if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
+              styleDescription += ` Textures: ${cluster.dominant_textures.join(', ')}.`;
+            }
+          }
+          
           if (vibe) {
             styleDescription += ` Vibe/Atmosphere: ${vibe}.`;
           }
