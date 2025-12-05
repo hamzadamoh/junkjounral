@@ -27,7 +27,7 @@ import { generateJournalPage as generateWithPollinations } from './services/poll
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
-import { generatePromptWithChatGPT, analyzeReferenceImage, generateMasterSubjectList } from './services/chatgptService';
+import { generatePromptWithChatGPT, analyzeReferenceImage, generateMasterSubjectList, cleanMasterList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 
 const App: React.FC = () => {
