@@ -22,6 +22,32 @@ const metrics = {
 // Failed subjects tracking (module-level)
 const failedSubjects = new Set<string>();
 
+/**
+ * Logs current metrics for debugging/monitoring
+ */
+export function logMetrics(): void {
+  console.log('[Metrics]', {
+    headerMissing: metrics.headerMissing,
+    rewrites: metrics.rewrites,
+    semanticMismatch: metrics.semanticMismatch,
+    retries: metrics.retries,
+    swaps: metrics.swaps,
+    failedSubjects: failedSubjects.size
+  });
+}
+
+/**
+ * Resets metrics (useful for testing or per-batch tracking)
+ */
+export function resetMetrics(): void {
+  metrics.headerMissing = 0;
+  metrics.rewrites = 0;
+  metrics.semanticMismatch = 0;
+  metrics.retries = 0;
+  metrics.swaps = 0;
+  failedSubjects.clear();
+}
+
 interface ChatGPTResponse {
   choices: Array<{
     message: {
@@ -590,6 +616,8 @@ async function callPromptWithHeaderEnforcement(
           return { ...result, attempt, matched: true };
         } else {
           console.warn(`[PromptGen] Semantic mismatch for "${subject}" (attempt ${attempt}/${maxAttempts}). Prompt doesn't describe the subject.`);
+          metrics.semanticMismatch++;
+          metrics.retries++;
           if (attempt < maxAttempts) continue;
           return { ...result, attempt, matched: false };
         }
@@ -598,12 +626,14 @@ async function callPromptWithHeaderEnforcement(
       // Header missing - retry if not last attempt
       if (attempt < maxAttempts) {
         console.warn(`[PromptGen] Header missing for "${subject}" (attempt ${attempt}/${maxAttempts}). Retrying...`);
+        metrics.headerMissing++;
+        metrics.retries++;
         continue;
       }
 
       // Final fallback: force header
       const forced = `PRIMARY SUBJECT: ${subject}. ${text.replace(/^(\s*PRIMARY SUBJECT:.*?\.)/i, '').trim()}`;
-      const matched = subjectMatchesPrompt(subject, forced);
+      const matched = await subjectMatchesPrompt(subject, forced, apiKey, apiUrl, useOpenRouter);
       return { text: forced, corrected: true, attempt, matched };
     } catch (error: any) {
       console.error(`[PromptGen] Error on attempt ${attempt}/${maxAttempts} for "${subject}":`, error);
@@ -650,24 +680,21 @@ function getComposableVariationInstruction(variationNumber: number): string {
  * Cleans DeepSeek R1 output by removing reasoning tags and markdown formatting
  */
 function cleanDeepSeekOutput(content: string): string {
-  let cleaned = content;
-  
-  // Remove everything between <think> and </think> (including newlines)
-  cleaned = cleaned.replace(/<think>[\s\S]*?<\/redacted_reasoning>/gi, '');
-  
-  // Also handle <think>...</think> tags (common in reasoning models)
-  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  
-  // Remove any markdown code block syntax if present
-  cleaned = cleaned.replace(/^```(json|text|markdown)?/i, '').replace(/```$/i, '');
-  
-  // Remove double-dash separators that confuse Midjourney
-  // Remove double em-dash (——) with optional whitespace
-  cleaned = cleaned.replace(/——\s*/g, '');
-  // Remove double dash (--) followed by a letter (Midjourney interprets -- as commands)
-  cleaned = cleaned.replace(/--\s*([A-Za-z])/g, '$1');
-  
-  // Remove any leading/trailing whitespace and newlines
+  let cleaned = content || '';
+
+  // Remove common reasoning/redacted blocks (either tag form)
+  cleaned = cleaned.replace(/<(?:think|redacted_reasoning)[\s\S]*?<\/(?:think|redacted_reasoning)>/gi, '');
+
+  // Remove any other redacted blocks if present
+  cleaned = cleaned.replace(/<redacted>[\s\S]*?<\/redacted>/gi, '');
+
+  // Remove any markdown code block fences if present
+  cleaned = cleaned.replace(/```(?:json|text|markdown)?/gi, '').replace(/```/g, '');
+
+  // Remove double em-dash or double dash sequences that confuse image engines
+  cleaned = cleaned.replace(/——\s*/g, '').replace(/--\s*([A-Za-z])/g, '$1');
+
+  // Trim whitespace/newlines
   cleaned = cleaned.trim();
   
   return cleaned;
@@ -690,7 +717,8 @@ export const generatePromptWithChatGPT = async (
   promptService: 'openai' | 'openrouter' = 'openai',
   masterSubjectList?: string[],
   usedSubjects?: Set<string>,
-  primarySubjectOverride?: string // Optional: override subject selection for swapping
+  primarySubjectOverride?: string, // Optional: override subject selection for swapping
+  recursionDepth: number = 0 // NEW: explicit recursion depth counter
 ): Promise<string | null> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
@@ -1272,6 +1300,8 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     // Mark subject as failed so we won't retry it in this batch
     if (usedSubjects) {
       usedSubjects.add(`${primarySubject.toLowerCase()}##FAILED`);
+      failedSubjects.add(primarySubject.toLowerCase());
+      metrics.swaps++;
     }
     
     // Pick next available subject from master list
@@ -1290,26 +1320,28 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     
     // Recursively call with next subject (limit recursion depth to prevent infinite loops)
     const maxRecursion = 3;
-    const recursionDepth = (arguments as any).__recursionDepth || 0;
     if (recursionDepth >= maxRecursion) {
       console.error(`[PromptGen] Max recursion depth reached for subject swapping. Returning null.`);
       return null;
     }
-    
-    // Create new arguments with next subject
-    const newArgs = {
-      theme, pageStyle, textureIntensity, elements, includeFrames, includeBorders,
-      variationNumber, customThemePrompt, colorIntensity, customArtStyle, promptService,
-      masterSubjectList, usedSubjects, primarySubjectOverride: nextSubject
-    };
-    (newArgs as any).__recursionDepth = recursionDepth + 1;
-    
+
+    // Call recursively with the next subject and increase recursionDepth
     return await generatePromptWithChatGPT(
-      newArgs.theme, newArgs.pageStyle, newArgs.textureIntensity, newArgs.elements,
-      newArgs.includeFrames, newArgs.includeBorders, newArgs.variationNumber,
-      newArgs.customThemePrompt, newArgs.colorIntensity, newArgs.customArtStyle,
-      newArgs.promptService, newArgs.masterSubjectList, newArgs.usedSubjects,
-      newArgs.primarySubjectOverride
+      theme,
+      pageStyle,
+      textureIntensity,
+      elements,
+      includeFrames,
+      includeBorders,
+      variationNumber,
+      customThemePrompt,
+      colorIntensity,
+      customArtStyle,
+      promptService,
+      masterSubjectList,
+      usedSubjects,
+      nextSubject,
+      recursionDepth + 1
     );
   }
 
