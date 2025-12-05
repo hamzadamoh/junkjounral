@@ -1069,8 +1069,14 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     apiKey,
     apiUrl,
     useOpenRouter,
-    3 // maxAttempts
+    4 // maxAttempts
   );
+
+  // If generation failed (returned null), return null so caller can swap subjects
+  if (!result.text) {
+    console.warn(`[PromptGen] Failed to generate valid prompt for "${primarySubject}" after ${result.attempt} attempts`);
+    return null; // Caller should swap to next subject from master list
+  }
 
   // Log result for audit
   if (result.corrected) {
