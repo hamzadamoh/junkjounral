@@ -139,11 +139,28 @@ function hash32(seed: number, arrayLength: number): number {
 /**
  * Selects a unique (focus, angle) combination for a variation
  * Retries with offset if collision detected
+ * After all combinations are exhausted, allows reuse with variation modifiers
  */
 function selectUniqueContent(
   variationNumber: number,
   maxAttempts: number = 10
 ): { focus: string; angle: string } {
+  const maxCombinations = subjectFocus.length * cameraAngles.length; // 8 × 5 = 40
+  
+  // If all combinations are exhausted, allow reuse (for batches > 40)
+  if (usedCombinations.size >= maxCombinations) {
+    // Use variation number to cycle through combinations with some variation
+    const cycleIndex = (variationNumber - 1) % maxCombinations;
+    const focusIndex = Math.floor(cycleIndex / cameraAngles.length) % subjectFocus.length;
+    const angleIndex = cycleIndex % cameraAngles.length;
+    
+    const focus = subjectFocus[focusIndex];
+    const angle = cameraAngles[angleIndex];
+    // Don't add to usedCombinations since we're allowing reuse
+    return { focus, angle };
+  }
+
+  // Normal case: try to find unique combination
   let attempts = 0;
   let focus: string;
   let angle: string;
