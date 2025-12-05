@@ -715,64 +715,6 @@ EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter
 
 Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure while incorporating the ${themeDescription} theme elements appropriately. 2-3 sentences. Return ONLY the prompt description.`;
 
-    // Create AbortController for timeout (120 seconds for reasoning models)
-    const controller = new AbortController();
-    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
-    
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      };
-      
-      // OpenRouter requires HTTP-Referer header (optional but recommended)
-      if (useOpenRouter) {
-        headers['HTTP-Referer'] = window.location.origin;
-        headers['X-Title'] = 'Junk Journal Generator';
-      }
-      
-      // Set timeout (120 seconds for reasoning models - DeepSeek R1 can take 60+ seconds)
-      timeoutId = setTimeout(() => controller.abort(), 120000);
-      
-      console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Starting API request with 120s timeout...`);
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-          temperature: 1.2,
-          max_tokens: 4000, // FORCE THIS TO 4000 for DeepSeek R1 reasoning model
-          stream: false
-        }),
-        signal: controller.signal
-      });
-      
-      if (!response.ok) {
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-        const errorData = await response.json().catch(() => ({}));
-        const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
-        console.error(`[${serviceName}] API Error Details:`, {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        });
-        throw new Error(`${serviceName} API error: ${response.status} ${errorData.error?.message || response.statusText}`);
-      }
-
-      const data: ChatGPTResponse = await response.json();
-      
-      // Clear timeout if request completes successfully
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
-      
     // Use retry wrapper with header enforcement
     const result = await callPromptWithHeaderEnforcement(
       primarySubject,
