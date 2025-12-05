@@ -467,13 +467,36 @@ async function callPromptWithHeaderEnforcement(
 
       // Check if header is present
       if (/^PRIMARY SUBJECT:\s*/i.test(text)) {
+        // First check: Does the header subject match the expected subject?
+        const headerMatch = text.match(/^PRIMARY SUBJECT:\s*(.+?)(?:\.|$)/i);
+        if (headerMatch) {
+          const headerSubject = headerMatch[1].trim();
+          const expectedSubject = subject.trim();
+          
+          // Normalize for comparison (case-insensitive, remove extra spaces)
+          const normalizedHeader = headerSubject.toLowerCase().replace(/\s+/g, ' ').trim();
+          const normalizedExpected = expectedSubject.toLowerCase().replace(/\s+/g, ' ').trim();
+          
+          // If subjects don't match, this is a critical error - the model ignored our instruction
+          if (normalizedHeader !== normalizedExpected) {
+            console.warn(`[Primary Subject] Header mismatch. Expected: "${expectedSubject}", got: "${headerSubject}". Retrying...`);
+            if (attempt < maxAttempts) continue;
+            // On final attempt, force correct header
+            const corrected = `PRIMARY SUBJECT: ${expectedSubject}. ${text.replace(/^PRIMARY SUBJECT:\s*.*?\./i, '').trim()}`;
+            const matched = await subjectMatchesPrompt(expectedSubject, corrected, apiKey, apiUrl, useOpenRouter);
+            return { text: corrected, corrected: true, attempt, matched };
+          }
+        }
+        
+        // Header subject matches - now check semantic match
         const result = ensurePrimarySubjectHeader(subject, text);
-        if (result.matched) {
-          return { ...result, attempt };
+        const semanticMatched = await subjectMatchesPrompt(subject, result.text, apiKey, apiUrl, useOpenRouter);
+        if (semanticMatched) {
+          return { ...result, attempt, matched: true };
         } else {
           console.warn(`[PromptGen] Semantic mismatch for "${subject}" (attempt ${attempt}/${maxAttempts}). Prompt doesn't describe the subject.`);
           if (attempt < maxAttempts) continue;
-          return { ...result, attempt };
+          return { ...result, attempt, matched: false };
         }
       }
 
@@ -778,7 +801,17 @@ REMEMBER: Start EVERY response with "PRIMARY SUBJECT: [subject]." (with the peri
     // Get global variation control
     const variationControl = getVariationControl(variationNumber, themeDescription);
 
-    const userPrompt = `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
+    const userPrompt = `🚨 CRITICAL: You MUST use this EXACT subject: "${primarySubject}"
+
+Generate an image prompt following this EXACT format:
+
+PRIMARY SUBJECT: ${primarySubject}.
+
+[Then write 1-2 sentences describing ONLY "${primarySubject}" as the main visual focus]
+
+DO NOT change the subject. DO NOT use a different subject. DO NOT generate your own subject. You MUST use "${primarySubject}" exactly as provided.
+
+Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
 CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
 
