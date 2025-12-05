@@ -59,6 +59,8 @@ interface ChatGPTResponse {
 interface ImageAnalysisResponse {
   theme: string;
   style: string;
+  colors?: string; // Optional: extracted color palette
+  vibe?: string; // Optional: extracted mood/vibe/atmosphere
 }
 
 // ============================================
@@ -737,7 +739,7 @@ export const generatePromptWithChatGPT = async (
   includeBorders: boolean,
   variationNumber: number,
   customThemePrompt?: string,
-  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' = 'Muted',
+  colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' | 'Custom / Override' = 'Muted',
   customArtStyle?: string,
   promptService: 'openai' | 'openrouter' = 'openai',
   masterSubjectList?: string[],
@@ -1031,47 +1033,8 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
   const variationControl = getVariationControl(variationNumber, themeDescription);
 
   // Default prompts (existing logic)
-  // Check for 'Custom / Override' first
-    const systemPrompt = colorIntensity === 'Custom / Override'
-    ? `You are a strict prompt generator that MUST output illustrated-style prompts only. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
-
-🚨 CRITICAL FORMAT REQUIREMENT:
-Your response MUST start with this EXACT line (copy it exactly, do not modify):
-PRIMARY SUBJECT: [the exact subject name provided by the user]
-
-Then, in 1-2 sentences, describe ONLY that subject as the main visual focus.
-
-ABSOLUTE RULES (must follow exactly):
-- This must be an ILLUSTRATION, NOT a photograph.
-- NEVER use photography/camera words: photo, photograph, photorealistic, photoreal, DSLR, bokeh, depth of field, DOF, shutter, lens, hyperreal, ultra-realistic, or "naturalistic lighting".
-- Use illustration terms: hand-drawn, ink and watercolor, gouache, screen-print, linocut, line art, pastel drawing, vector illustration, etching, cel-shading, paper collage.
-- Keep output 1-2 sentences describing ONLY the PRIMARY SUBJECT. No lists, no extra formatting.
-- If you cannot produce an illustrated description, respond with ONLY: RETRY
-
-🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
-
-🚨 CRITICAL RULES:
-1. You MUST begin your response with "PRIMARY SUBJECT: <subject>" exactly as specified in the user prompt.
-2. The ENTIRE prompt must describe and focus on THAT SPECIFIC PRIMARY SUBJECT. Do NOT describe a different object or scene.
-3. If the PRIMARY SUBJECT is "Cursed tarot deck", your prompt MUST describe a cursed tarot deck, NOT a pattern, NOT a spellbook, NOT anything else.
-4. Do NOT change the subject. Do NOT replace it with a similar item. Do NOT describe a scene that doesn't feature the PRIMARY SUBJECT as the main focus.
-5. Return 2-3 sentences ONLY, describing the PRIMARY SUBJECT in detail.
-
-EXAMPLES (required format):
-
-PRIMARY SUBJECT: Moonlit crystal pond. Hand-drawn ink and watercolor illustration of a shallow pond under moonlight; stylized ripples, soft watercolor washes in indigo and silver, delicate ink linework for reeds, paper texture visible — illustration, not a photograph.
-
-PRIMARY SUBJECT: Velvet moss patch. Pastel drawing with stippled highlights and flattened perspective; decorative macro shapes, soft textured background, clearly hand-drawn.
-
-PRIMARY SUBJECT: Celestial unicorn silhouette. Etching-style line art with subtle watercolor wash for the sky; simplified shapes and decorative stars — illustrative and stylized.
-
-- Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
-- Do NOT default to 'modern' or 'flat' unless explicitly asked.
-- If the user provides a 'Custom Art Style', follow it rigorously.
-- If no style is provided, generate a high-quality, artistic representation of the Theme.
-
-🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`
-    : colorIntensity === 'Multicolored'
+  // Note: 'Custom / Override' is already handled above with early return
+    const systemPrompt = colorIntensity === 'Multicolored'
     ? `You are a strict prompt generator that MUST output illustrated-style prompts only. FOLLOW THESE RULES EXACTLY:
 
 RULE 1: Your response MUST start with: "PRIMARY SUBJECT: [exact subject from user prompt]"
@@ -1127,7 +1090,9 @@ STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.
 
   // Create variation-specific instructions to ensure diversity
   // For Normal color intensity, add more specific diversity instructions that work for ANY theme
-  const variationInstructions = colorIntensity === 'Normal' ? [
+  
+  // Reusable variation instruction pools
+  const variationInstructionsNormal = [
     'Explore a DIFFERENT time of day: morning, noon, evening, night, dawn, or dusk - each creates a unique mood and lighting',
     'Create a DIFFERENT composition: close-up of details, wide landscape view, path/road leading into distance, single focus element, or dense grouping',
     'Focus on DIFFERENT elements: vary the subjects, objects, structures, natural features, or environmental conditions within the theme',
@@ -1140,7 +1105,9 @@ STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.
     'Create a DIFFERENT focal point: a single prominent element, a winding path/road, a structure, a natural feature, or a wide landscape',
     'Focus on DIFFERENT lighting: bright sunlight, soft diffused light, dramatic shadows, warm sunset/rise glow, cool moonlit, or atmospheric lighting',
     'Design a DIFFERENT scale: macro close-up details, medium view of a scene, or wide expansive landscape'
-  ] : [
+  ];
+
+  const variationInstructionsGeneric = [
     'Explore a different aspect or element of the theme - think creatively about what else could represent this theme',
     'Create a completely different composition, subject, or focal point while staying within the theme',
     'Focus on different visual elements, objects, or motifs that relate to the theme',
@@ -1154,8 +1121,12 @@ STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.
     'Explore different subjects, elements, or compositions within the theme',
     'Create a unique design that represents the theme in a different way'
   ];
-  
-  const variationInstruction = variationInstructions[(variationNumber - 1) % variationInstructions.length];
+
+  // Choose appropriate instruction array based on colorIntensity (or other logic)
+  const _variationInstructions = colorIntensity === 'Normal' ? variationInstructionsNormal : variationInstructionsGeneric;
+
+  // Safely choose one entry from the array using the provided hash32 function (deterministic)
+  const variationInstruction = _variationInstructions[(variationNumber - 1) % _variationInstructions.length];
   
   // Add specific variation direction - emphasize natural variety
   // For Normal color intensity, add more specific diversity guidance that works for ANY theme
@@ -1184,6 +1155,10 @@ STYLE: VINTAGE, AGED, ANTIQUE-STYLE junk journal pages - NOT modern digital art.
     ? `\n\nFORBIDDEN: Do not use these subjects (already used in other variations): ${forbiddenSubjects.join(', ')}.`
     : '';
 
+  // Check if customArtStyle contains color palette or vibe information
+  const hasColorPalette = customArtStyle && /color palette:/i.test(customArtStyle);
+  const hasVibe = customArtStyle && /vibe\/atmosphere:/i.test(customArtStyle);
+  
   const userPrompt = colorIntensity === 'Custom / Override'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
@@ -1202,9 +1177,17 @@ ${variationControl}
 
 Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
 
+🎯 CRITICAL: MAINTAIN CONSISTENCY WHILE VARYING SUBJECTS
+The style description (including vibe/atmosphere and color palette if provided) was extracted from a reference image. You MUST:
+- MAINTAIN the same vibe/atmosphere, style, and color palette across ALL variations
+- VARY the SUBJECTS within the ${themeDescription} theme (e.g., if theme is "Christmas", use different subjects like "deer", "santa", "presents", "winter trees", "snowflakes", "winter clothing", etc.)
+- Each variation should have a DIFFERENT subject but the SAME overall vibe, style, and colors
+- Think of it like: "Same winter/Christmas vibe, different things in the images"
+
 IMPORTANT: Generate a high-quality, artistic representation of ${themeDescription}. Do NOT automatically add junk journal elements (stamps, ephemera, handwritten text, distressed textures) unless the theme explicitly calls for them. Do NOT force 'modern' or 'flat' styles unless requested. Follow the theme description exactly as provided.
 
-🎨 COLOR SAFETY RULE: Avoid digital neon colors (hot pink, electric blue) and plastic textures. HOWEVER, if the theme is 'Gothic', 'Dark', or 'Fantasy', you MUST use **Deep Shadows, High Contrast (Chiaroscuro), and Dark Muted Tones** (Indigo, Charcoal, Sepia). Do not force 'Soft/Pastel' colors on Dark themes.
+${hasVibe ? '🎨 VIBE/ATMOSPHERE REQUIREMENT: The style description includes a specific vibe/atmosphere extracted from a reference image. You MUST maintain this exact vibe/atmosphere in your prompt. The mood and feeling should be consistent across all variations.' : ''}
+${hasColorPalette ? '🎨 COLOR PALETTE REQUIREMENT: The style description includes a specific color palette extracted from a reference image. You MUST use these exact colors prominently in your prompt. Match the color palette as closely as possible while maintaining artistic quality. The colors should be consistent across all variations, even though subjects change.' : '🎨 COLOR SAFETY RULE: Avoid digital neon colors (hot pink, electric blue) and plastic textures. HOWEVER, if the theme is \'Gothic\', \'Dark\', or \'Fantasy\', you MUST use **Deep Shadows, High Contrast (Chiaroscuro), and Dark Muted Tones** (Indigo, Charcoal, Sepia). Do not force \'Soft/Pastel\' colors on Dark themes.'}
 
 Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
 
@@ -1462,7 +1445,7 @@ export const analyzeReferenceImage = async (base64Image: string): Promise<ImageA
             content: [
               {
                 type: 'text',
-                text: 'Analyze this image to create a generative art prompt. Return a JSON object with exactly two fields: 1. "theme": A concise subject description (e.g., "Winter Birch Forest with intricate roots"). 2. "style": A detailed style descriptor including medium, texture, colors, and mood (e.g., "Soft atmospheric watercolor, pastel blue and white palette, traditional art style").'
+                text: 'Analyze this image to create a generative art prompt. Return a JSON object with exactly four fields: 1. "theme": The main subject/theme category (e.g., "Christmas", "Winter Wonderland", "Gothic Architecture", "Botanical Garden"). This should be a broad category that can have many variations. 2. "style": A detailed style descriptor including medium, texture, and artistic approach (e.g., "Soft atmospheric watercolor, traditional art style", "Vintage illustration with ink details", "Modern digital painting"). 3. "colors": A specific color palette extracted from the image, listing the dominant colors in order of prominence (e.g., "Rich emerald green, warm orange, soft pink, deep indigo, golden yellow accents"). Focus on the actual colors present in the image. 4. "vibe": The mood, atmosphere, or emotional feeling of the image (e.g., "Cozy and warm", "Mystical and ethereal", "Festive and joyful", "Dark and mysterious", "Serene and peaceful"). This captures the overall feeling/atmosphere.'
               },
               {
                 type: 'image_url',
@@ -1474,7 +1457,7 @@ export const analyzeReferenceImage = async (base64Image: string): Promise<ImageA
           }
         ],
         response_format: { type: 'json_object' },
-        max_tokens: 300
+        max_tokens: 500
       })
     });
 
@@ -1497,7 +1480,9 @@ export const analyzeReferenceImage = async (base64Image: string): Promise<ImageA
 
         return {
           theme: analysis.theme.trim(),
-          style: analysis.style.trim()
+          style: analysis.style.trim(),
+          colors: analysis.colors ? analysis.colors.trim() : undefined,
+          vibe: analysis.vibe ? analysis.vibe.trim() : undefined
         };
       } catch (parseError) {
         throw new Error(`Failed to parse analysis response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);

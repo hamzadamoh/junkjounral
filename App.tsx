@@ -62,7 +62,7 @@ const App: React.FC = () => {
   const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; styleRefUrl?: string }>>([]);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string }>>([]);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
@@ -175,29 +175,43 @@ const App: React.FC = () => {
       // Handle GPT vision analysis result
       let theme = '';
       let style = '';
+      let colors = '';
+      let vibe = '';
       if (analysis.status === 'fulfilled') {
         theme = analysis.value.theme;
         style = analysis.value.style;
+        colors = analysis.value.colors || '';
+        vibe = analysis.value.vibe || '';
         
         // Update the image in the list with analysis results
         setUploadedImages(prev => prev.map(img => 
           img.id === id 
-            ? { ...img, theme, style, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined }
+            ? { ...img, theme, style, colors, vibe, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined }
             : img
         ));
 
         // If this is the first image, auto-fill the fields
         if (uploadedImages.length === 0) {
           setCustomThemePrompt(theme);
+          // Build style description with colors and vibe
+          let styleDescription = style;
+          if (vibe) {
+            styleDescription += ` Vibe/Atmosphere: ${vibe}.`;
+          }
+          if (colors) {
+            styleDescription += ` Color palette: ${colors}.`;
+          }
           setSettings(prev => ({
             ...prev,
-            customArtStyle: style,
+            customArtStyle: styleDescription,
             colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
             styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl
           }));
         }
         
-        addLog(`✅ Image ${uploadedImages.length + 1} analyzed: Theme="${theme}", Style="${style}"`, 'success');
+        const colorInfo = colors ? `, Colors="${colors}"` : '';
+        const vibeInfo = vibe ? `, Vibe="${vibe}"` : '';
+        addLog(`✅ Image ${uploadedImages.length + 1} analyzed: Theme="${theme}", Style="${style}"${colorInfo}${vibeInfo}`, 'success');
       } else {
         console.error('Image analysis error:', analysis.reason);
         addLog(`❌ Failed to analyze image ${uploadedImages.length + 1}: ${analysis.reason?.message || 'Unknown error'}`, 'error');
@@ -554,9 +568,21 @@ const App: React.FC = () => {
             imageTheme = uploadedImage.theme;
           }
           if (uploadedImage.style) {
-            imageStyle = uploadedImage.style;
+            // Build style description with vibe and colors
+            let styleDescription = uploadedImage.style;
+            if (uploadedImage.vibe) {
+              styleDescription += ` Vibe/Atmosphere: ${uploadedImage.vibe}.`;
+            }
+            if (uploadedImage.colors) {
+              styleDescription += ` Color palette: ${uploadedImage.colors}.`;
+            }
+            imageStyle = styleDescription;
           }
-          addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1} theme/style`, 'log');
+          const extraInfo = [];
+          if (uploadedImage.vibe) extraInfo.push('vibe');
+          if (uploadedImage.colors) extraInfo.push('colors');
+          const extraInfoStr = extraInfo.length > 0 ? `, ${extraInfo.join(' and ')}` : '';
+          addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1} theme/style${extraInfoStr}`, 'log');
         }
         
         return generatePromptWithChatGPT(
@@ -1228,6 +1254,16 @@ const App: React.FC = () => {
                             {img.style && (
                               <div className="text-xs text-slate-500 truncate" title={img.style}>
                                 Style: {img.style.substring(0, 40)}...
+                              </div>
+                            )}
+                            {img.vibe && (
+                              <div className="text-xs text-slate-400 truncate" title={img.vibe}>
+                                Vibe: {img.vibe.substring(0, 40)}...
+                              </div>
+                            )}
+                            {img.colors && (
+                              <div className="text-xs text-slate-400 truncate" title={img.colors}>
+                                Colors: {img.colors.substring(0, 50)}...
                               </div>
                             )}
                           </div>
