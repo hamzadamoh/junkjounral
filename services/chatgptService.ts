@@ -488,6 +488,7 @@ async function ensurePrimarySubjectHeader(requiredSubject: string, gptText: stri
       // Replace header
       const rest = trimmed.split('\n').slice(1).join('\n').trim();
       console.warn(`[Primary Subject] Header mismatch. Expected: "${requiredSubject}", got: "${header}". Correcting...`);
+      metrics.rewrites++;
       const fixed = `PRIMARY SUBJECT: ${requiredSubject}. ${rest}`;
       const matched = await subjectMatchesPrompt(requiredSubject, fixed, apiKey, apiUrl, useOpenRouter);
       return { text: fixed, corrected: true, matched };
@@ -497,6 +498,7 @@ async function ensurePrimarySubjectHeader(requiredSubject: string, gptText: stri
   } else {
     // Prepend header
     console.warn(`[Primary Subject] Missing header in prompt. Adding: "${requiredSubject}"`);
+    metrics.rewrites++;
     const fixed = `PRIMARY SUBJECT: ${requiredSubject}. ${trimmed}`;
     const matched = await subjectMatchesPrompt(requiredSubject, fixed, apiKey, apiUrl, useOpenRouter);
     return { text: fixed, corrected: true, matched };
@@ -602,6 +604,8 @@ async function callPromptWithHeaderEnforcement(
           // If subjects don't match, this is a critical error - the model ignored our instruction
           if (normalizedHeader !== normalizedExpected) {
             console.warn(`[Primary Subject] Header mismatch. Expected: "${expectedSubject}", got: "${headerSubject}". Retrying...`);
+            metrics.rewrites++;
+            metrics.retries++;
             if (attempt < maxAttempts) continue;
             // On final attempt, force correct header
             const corrected = `PRIMARY SUBJECT: ${expectedSubject}. ${text.replace(/^PRIMARY SUBJECT:\s*.*?\./i, '').trim()}`;
