@@ -773,46 +773,26 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
         clearTimeout(timeoutId);
       }
       
-      if (data.choices && data.choices.length > 0) {
-        const rawContent = data.choices[0].message.content;
-        
-        // Debug: Log raw response BEFORE cleaning
-        console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Raw Model Output:`, rawContent);
-        
-        // Clean DeepSeek R1 reasoning tags IMMEDIATELY after receiving response (before any validation)
-        let generatedPrompt = cleanDeepSeekOutput(rawContent);
-        
-        // Enforce PRIMARY SUBJECT header
-        generatedPrompt = ensurePrimarySubjectHeader(primarySubject, generatedPrompt);
-        
-        // Debug: Log cleaned response
-        console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Cleaned Prompt:`, generatedPrompt);
-        
-        return generatedPrompt;
-      } else {
-        throw new Error(`No response from ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API`);
-      }
-    } catch (error: any) {
-      // Ensure timeout is cleared even on error
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
-      
-      // Debug: Log full error details
-      console.error(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] API Error Details:`, {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        error: error
-      });
-      
-      // Handle timeout errors specifically
-      if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-        throw new Error(`Request timeout: The ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API took longer than 120 seconds to respond. This may happen with reasoning models. Please try again.`);
-      }
-      
-      throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
+    // Use retry wrapper with header enforcement
+    const result = await callPromptWithHeaderEnforcement(
+      primarySubject,
+      systemPrompt,
+      userPrompt,
+      apiKey,
+      apiUrl,
+      useOpenRouter,
+      3 // maxAttempts
+    );
+
+    // Log result for audit
+    if (result.corrected) {
+      console.warn(`[PromptGen] Prompt for "${primarySubject}" was corrected (attempt ${result.attempt})`);
     }
+    if (!result.matched) {
+      console.warn(`[PromptGen] ⚠️ Semantic mismatch: Prompt for "${primarySubject}" may not describe the subject correctly`);
+    }
+
+    return result.text;
   }
 
   // Get global variation control for all modes (themeDescription already defined above)
@@ -1043,101 +1023,26 @@ ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the cu
 
 Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, composition, and style that naturally differs from other variations. 2-3 sentences. Return ONLY the prompt description (without adding "flat" or "printable" again - I'll add those constraints separately).`;
 
-  // Create AbortController for timeout (120 seconds for reasoning models)
-  const controller = new AbortController();
-  let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
-  
-  try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    };
-    
-    // OpenRouter requires HTTP-Referer header (optional but recommended)
-    if (useOpenRouter) {
-      headers['HTTP-Referer'] = window.location.origin;
-      headers['X-Title'] = 'Junk Journal Generator';
-    }
-    
-    // Set timeout (120 seconds for reasoning models - DeepSeek R1 can take 60+ seconds)
-    timeoutId = setTimeout(() => controller.abort(), 120000);
-    
-    console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Starting API request with 120s timeout...`);
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model, // Fast and cost-efficient
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 1.2, // Increased temperature for maximum creative variation (higher = more diverse)
-        max_tokens: 4000, // FORCE THIS TO 4000 for DeepSeek R1 reasoning model (needs 1000+ tokens to "think")
-        stream: false // Ensure non-streaming for parallel requests
-      }),
-      signal: controller.signal
-    });
-    
-    if (!response.ok) {
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
-      const errorData = await response.json().catch(() => ({}));
-      const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
-      console.error(`[${serviceName}] API Error Details:`, {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorData
-      });
-      throw new Error(`${serviceName} API error: ${response.status} ${errorData.error?.message || response.statusText}`);
-    }
+  // Use retry wrapper with header enforcement
+  const result = await callPromptWithHeaderEnforcement(
+    primarySubject,
+    systemPrompt,
+    userPrompt,
+    apiKey,
+    apiUrl,
+    useOpenRouter,
+    3 // maxAttempts
+  );
 
-    const data: ChatGPTResponse = await response.json();
-    
-    // Clear timeout if request completes successfully
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-    }
-    
-    if (data.choices && data.choices.length > 0) {
-      const rawContent = data.choices[0].message.content;
-      
-      // Debug: Log raw response BEFORE cleaning
-      console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Raw Model Output:`, rawContent);
-      
-      // Clean DeepSeek R1 reasoning tags IMMEDIATELY after receiving response (before any validation)
-      const generatedPrompt = cleanDeepSeekOutput(rawContent);
-      
-      // Debug: Log cleaned response
-      console.log(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] Cleaned Prompt:`, generatedPrompt);
-      
-      return generatedPrompt;
-    } else {
-      throw new Error(`No response from ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API`);
-    }
-  } catch (error: any) {
-    // Ensure timeout is cleared even on error
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-    }
-    
-    // Debug: Log full error details
-    console.error(`[${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}] API Error Details:`, {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      error: error
-    });
-    
-    // Handle timeout errors specifically
-    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-      throw new Error(`Request timeout: The ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'} API took longer than 120 seconds to respond. This may happen with reasoning models. Please try again.`);
-    }
-    
-    throw new Error(`Failed to generate prompt with ${useOpenRouter ? 'OpenRouter' : 'ChatGPT'}: ${error.message || 'Unknown error'}`);
+  // Log result for audit
+  if (result.corrected) {
+    console.warn(`[PromptGen] Prompt for "${primarySubject}" was corrected (attempt ${result.attempt})`);
   }
+  if (!result.matched) {
+    console.warn(`[PromptGen] ⚠️ Semantic mismatch: Prompt for "${primarySubject}" may not describe the subject correctly`);
+  }
+
+  return result.text;
 };
 
 /**
