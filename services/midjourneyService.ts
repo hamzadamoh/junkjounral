@@ -147,6 +147,31 @@ const getTexturePrompt = (intensity: 'Light' | 'Medium' | 'Heavy'): string => {
 };
 
 /**
+ * Cleans prompt for Midjourney by removing newlines and problematic characters
+ * Midjourney interprets newlines and certain characters as parameter separators
+ */
+const cleanPromptForMidjourney = (prompt: string): string => {
+  if (!prompt) return '';
+  
+  // Remove PRIMARY SUBJECT header if present (Midjourney doesn't need it)
+  let cleaned = prompt.replace(/^PRIMARY SUBJECT:\s*/i, '').trim();
+  
+  // Replace all newlines with spaces
+  cleaned = cleaned.replace(/\n+/g, ' ');
+  
+  // Replace multiple spaces with single space
+  cleaned = cleaned.replace(/\s+/g, ' ');
+  
+  // Remove triple dashes (---) which Midjourney might interpret as parameters
+  cleaned = cleaned.replace(/---+/g, '');
+  
+  // Remove any trailing periods before parameters
+  cleaned = cleaned.replace(/\.\s*$/, '');
+  
+  return cleaned.trim();
+};
+
+/**
  * Sends a task to Go API Midjourney
  */
 const sendTaskToGoApi = async (
@@ -159,8 +184,12 @@ const sendTaskToGoApi = async (
     throw new Error('Go API key is not configured. Please set VITE_GOAPI_API_KEY in your environment variables.');
   }
 
+  // Clean the prompt before sending to Midjourney
+  // Remove newlines and problematic characters that Midjourney interprets as parameters
+  const cleanedPrompt = cleanPromptForMidjourney(prompt);
+
   const data = {
-    prompt: prompt,
+    prompt: cleanedPrompt,
     aspect_ratio: aspectRatio,
     process_mode: processMode,
     skip_prompt_check: true,
@@ -179,7 +208,7 @@ const sendTaskToGoApi = async (
   };
 
   try {
-    console.log(`[GoAPI] Creating task with prompt: ${prompt.substring(0, 100)}...`);
+    console.log(`[GoAPI] Creating task with prompt: ${cleanedPrompt.substring(0, 100)}...`);
     const response = await fetch(`${GOAPI_BASE_URL}/mj/v2/imagine`, options);
     
     // Check response status before parsing
@@ -580,6 +609,10 @@ export const generateJournalPage = async (
     if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
       prompt += ` --ar ${aspectRatio}`;
     }
+
+    // Clean the prompt before sending to remove newlines and problematic characters
+    // This prevents Midjourney from interpreting newlines as parameter separators
+    prompt = cleanPromptForMidjourney(prompt);
 
     // Send task to Go API
     const taskId = await sendTaskToGoApi(prompt, aspectRatio, processMode);
