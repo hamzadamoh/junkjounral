@@ -385,7 +385,7 @@ export const generatePromptWithChatGPT = async (
     
     // If still using a forbidden subject, pick next available
     if (usedSubjects?.has(primarySubject.toLowerCase())) {
-      const available = masterSubjectList.filter(s => !usedSubjects.has(s.toLowerCase()));
+      const available = masterSubjectList.filter(s => !usedSubjects?.has(s.toLowerCase()));
       if (available.length > 0) {
         primarySubject = available[hash32(variationNumber, available.length)];
       }
