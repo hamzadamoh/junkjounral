@@ -205,146 +205,83 @@ export const generateJournalPage = async (
     // Build the image URL with seed for variation
     const imageUrl = `${POLLINATIONS_BASE_URL}/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&seed=${seed}&nologo=true&enhance=true`;
     
-    console.log(`Generating image with Pollinations.AI: ${imageUrl.substring(0, 100)}...`);
+    console.log(`[Pollinations] Generating image: ${imageUrl.substring(0, 100)}...`);
 
-    // Fetch the image with retry logic for rate limiting and proxy rotation
-    let imageResponse: Response | null = null;
+    // Use serverless function for proxy support and parallel requests
+    // Get a proxy for this request (rotates automatically)
+    const proxy = await getNextProxy();
+    
+    if (proxy) {
+      console.log(`[Pollinations] Using proxy ${proxy.host}:${proxy.port} for variation ${variationIndex || 'N/A'}`);
+    }
+
+    // Fetch through serverless function with proxy support
     let retryCount = 0;
-    const maxRetries = 5;
-    let useProxy = false;
+    const maxRetries = 3; // Reduced retries since we're using serverless function
     
     while (retryCount <= maxRetries) {
       try {
-        // Try to get a proxy for this request (rotates automatically)
-        const proxy = await getNextProxy();
-        
-        // Build request URL
-        // Note: Browser fetch doesn't support direct proxy configuration
-        // We'll use the direct URL, but track proxy rotation for future server-side use
-        let requestUrl = imageUrl;
-        
-        if (proxy) {
-          console.log(`[Pollinations] Using proxy ${proxy.host}:${proxy.port} for request ${retryCount + 1}`);
-          // In a server-side implementation, we would use the proxy here
-          // For browser, we'll just rotate the request timing to simulate proxy rotation
-          useProxy = true;
-        }
-        
-        // Add a small random delay to simulate different IP addresses
-        // This helps distribute requests even without direct proxy support
-        if (useProxy && retryCount > 0) {
-          const delay = Math.random() * 1000 + 500; // 500-1500ms
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-        // Pollinations API doesn't allow custom headers due to CORS restrictions
-        // Use cache: 'no-cache' in fetch options instead of headers
-        imageResponse = await fetch(requestUrl, {
-          cache: 'no-cache',
-          // Don't add custom headers - Pollinations CORS policy doesn't allow them
+        const response = await fetch('/api/pollinations/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrl,
+            proxy: proxy || null
+          })
         });
-        
-        if (imageResponse.ok) {
-          break; // Success, exit retry loop
-        }
-        
-        // Handle rate limiting (429) with retry and proxy rotation
-        if (imageResponse.status === 429) {
-          if (retryCount < maxRetries) {
-            // Get next proxy for retry
-            await getNextProxy(); // Rotate to next proxy
-            // Longer exponential backoff for rate limits: 10s, 20s, 30s, 40s, 50s
-            const retryAfter = 10 + (retryCount * 10);
-            console.warn(`[Pollinations] Rate limited (429). Rotating proxy and retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-            retryCount++;
-            continue; // Retry the request with new proxy
-          } else {
-            throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}. All retries exhausted.`);
+
+        if (!response.ok) {
+          // Handle rate limiting
+          if (response.status === 429) {
+            const data = await response.json().catch(() => ({}));
+            const retryAfter = parseInt(data.retryAfter || '10');
+            
+            if (retryCount < maxRetries) {
+              console.warn(`[Pollinations] Rate limited (429). Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+              retryCount++;
+              continue;
+            } else {
+              throw new Error(`Pollinations API error: Rate limited. All retries exhausted.`);
+            }
           }
+          
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          throw new Error(`Pollinations API error: ${response.status} ${errorData.message || response.statusText}`);
         }
+
+        const data = await response.json();
         
-        // Handle timeout errors (524) - these are server-side timeouts, retry with longer delay
-        if (imageResponse.status === 524) {
-          if (retryCount < maxRetries) {
-            await getNextProxy(); // Rotate to next proxy
-            // Longer delay for timeouts: 15s, 25s, 35s, 45s, 55s
-            const retryAfter = 15 + (retryCount * 10);
-            console.warn(`[Pollinations] Timeout (524). Server took too long to respond. Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-            retryCount++;
-            continue;
-          } else {
-            throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}. Server timeout - all retries exhausted.`);
+        if (data.success && data.image) {
+          if (onProgress) {
+            onProgress('completed');
           }
+          return data.image; // Return base64 data URL
+        } else {
+          throw new Error(data.message || 'Failed to generate image');
         }
-        
-        // Handle Bad Gateway errors (502) - server-side issues, retry with delay
-        if (imageResponse.status === 502 || imageResponse.status === 503 || imageResponse.status === 504) {
-          if (retryCount < maxRetries) {
-            await getNextProxy(); // Rotate to next proxy
-            // Moderate delay for gateway errors: 8s, 16s, 24s, 32s, 40s
-            const retryAfter = 8 + (retryCount * 8);
-            const errorName = imageResponse.status === 502 ? 'Bad Gateway' : 
-                             imageResponse.status === 503 ? 'Service Unavailable' : 'Gateway Timeout';
-            console.warn(`[Pollinations] ${errorName} (${imageResponse.status}). Server issue detected. Retrying after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-            retryCount++;
-            continue;
-          } else {
-            throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}. Server error - all retries exhausted.`);
-          }
-        }
-        
-        // For other errors, throw immediately
-        throw new Error(`Pollinations API error: ${imageResponse.status} ${imageResponse.statusText}`);
       } catch (error: any) {
-        // If it's a network error, timeout, or fetch error and we have retries left, try again
+        // If it's a network error and we have retries left, try again
         const isRetryableError = error.message?.includes('Failed to fetch') || 
                                  error.message?.includes('Network') ||
                                  error.message?.includes('timeout') ||
-                                 error.message?.includes('524') ||
-                                 error.message?.includes('429') ||
-                                 error.message?.includes('502') ||
-                                 error.message?.includes('503') ||
-                                 error.message?.includes('504') ||
-                                 error.message?.includes('Bad Gateway');
+                                 error.message?.includes('429');
         
         if (retryCount < maxRetries && isRetryableError) {
-          await getNextProxy(); // Rotate to next proxy
-          // Longer delay for network errors: 5s, 10s, 15s, 20s, 25s
-          const retryAfter = 5 + (retryCount * 5);
-          console.warn(`[Pollinations] Network/timeout error. Retrying with next proxy after ${retryAfter} seconds... (attempt ${retryCount + 1}/${maxRetries})`);
+          // Get next proxy for retry
+          const nextProxy = await getNextProxy();
+          console.warn(`[Pollinations] Network/rate limit error. Retrying with next proxy... (attempt ${retryCount + 1}/${maxRetries})`);
           retryCount++;
-          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
           continue;
         }
         throw error;
       }
     }
     
-    if (!imageResponse || !imageResponse.ok) {
-      throw new Error('Failed to fetch image from Pollinations API');
-    }
-
-    // Convert to blob then to data URL
-    const blob = await imageResponse.blob();
-    
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          if (onProgress) {
-            onProgress('completed');
-          }
-          resolve(reader.result);
-        } else {
-          reject(new Error('Failed to convert image to data URL'));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    throw new Error('Failed to generate image from Pollinations API after all retries');
   } catch (error: any) {
     console.error('Pollinations Image Generation Error:', error);
     throw error;

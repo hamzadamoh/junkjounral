@@ -600,76 +600,56 @@ const App: React.FC = () => {
       // Wait for all requests to complete
       await Promise.allSettled(requestPromises);
     } else if (settings.imageService === 'pollinations') {
-      // For Pollinations, use throttled batch processing to avoid rate limits
-      // Pollinations has strict rate limits, so we'll process in smaller batches with delays
-      const batchSize = 5; // Reduced from 10 to 5 to avoid rate limits
-      const delayBetweenBatches = 5000; // Increased to 5 seconds between batches
-      const delayBetweenRequests = 1000; // 1 second delay between individual requests in a batch
+      // For Pollinations, send ALL requests in parallel through serverless function with proxy support
+      // Each request uses a different proxy, allowing 100+ parallel requests
+      addLog(`[Pollinations] Generating ${total} images in parallel with proxy support...`);
       
-      addLog(`Processing ${total} Pollinations images in batches of ${batchSize} with ${delayBetweenBatches}ms delays...`);
-      
-      for (let batchStart = 0; batchStart < total; batchStart += batchSize) {
-        const batchEnd = Math.min(batchStart + batchSize, total);
-        addLog(`[Batch ${Math.floor(batchStart / batchSize) + 1}] Processing images ${batchStart + 1}-${batchEnd}...`);
-        
-        const batchPromises = Array.from({ length: batchEnd - batchStart }, async (_, batchIdx) => {
-          const i = batchStart + batchIdx;
+      const imagePromises = Array.from({ length: total }, async (_, i) => {
+        addLog(`[Image ${i + 1}/${total}] 🚀 Starting Pollinations generation...`);
+        try {
+          const base64Url = await generateFunction(
+            selectedTheme, 
+            settings,
+            settings.parametersForMJ,
+            settings.aspectRatio || '1:1',
+            settings.midjourneyMode || 'fast',
+            (status) => {
+              addLog(`[Image ${i + 1}/${total}] 📊 Status: ${status.toUpperCase()}`);
+              setGeneratedImages(prev => prev.map((img, idx) => 
+                idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
+              ));
+            },
+            i,
+            generatedPrompts[i]
+          );
           
-          // Add delay between individual requests to avoid hitting rate limits
-          if (batchIdx > 0) {
-            await new Promise(resolve => setTimeout(resolve, delayBetweenRequests));
-          }
+          setGeneratedImages(prev => prev.map((img, idx) => 
+            idx === i ? { 
+              ...img, 
+              url: base64Url, 
+              status: 'completed' as const 
+            } : img
+          ));
           
-          addLog(`[Image ${i + 1}/${total}] 🚀 Starting Pollinations generation...`);
-          try {
-            const base64Url = await generateFunction(
-              selectedTheme, 
-              settings,
-              settings.parametersForMJ,
-              settings.aspectRatio || '1:1',
-              settings.midjourneyMode || 'fast',
-              (status) => {
-                addLog(`[Image ${i + 1}/${total}] 📊 Status: ${status.toUpperCase()}`);
-                setGeneratedImages(prev => prev.map((img, idx) => 
-                  idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
-                ));
-              },
-              i,
-              generatedPrompts[i]
-            );
-            
-            setGeneratedImages(prev => prev.map((img, idx) => 
-              idx === i ? { 
-                ...img, 
-                url: base64Url, 
-                status: 'completed' as const 
-              } : img
-            ));
-            
-            setCurrentProgress((prev) => {
-              const completed = ((i + 1) / total) * 100;
-              return Math.min(completed, 100);
-            });
+          setCurrentProgress((prev) => {
+            const completed = ((i + 1) / total) * 100;
+            return Math.min(completed, 100);
+          });
 
-            addLog(`[Image ${i + 1}/${total}] ✅ COMPLETED`, 'success');
-            return { success: true, index: i };
-          } catch (err: any) {
-            addLog(`[Image ${i + 1}/${total}] ❌ ERROR: ${err.message || err}`, 'error');
-            setErrorMsg(err.message || "Failed to generate some pages.");
-            setGeneratedImages(prev => prev.map((img, idx) => 
-              idx === i ? { ...img, status: 'error' as const } : img
-            ));
-            return { success: false, index: i, error: err };
-          }
-        });
-        
-        await Promise.allSettled(batchPromises);
-        
-        // Wait before next batch (except for the last batch)
-        if (batchEnd < total) {
-          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+          addLog(`[Image ${i + 1}/${total}] ✅ COMPLETED`, 'success');
+          return { success: true, index: i };
+        } catch (err: any) {
+          addLog(`[Image ${i + 1}/${total}] ❌ ERROR: ${err.message || err}`, 'error');
+          setErrorMsg(err.message || "Failed to generate some pages.");
+          setGeneratedImages(prev => prev.map((img, idx) => 
+            idx === i ? { ...img, status: 'error' as const } : img
+          ));
+          return { success: false, index: i, error: err };
         }
-      }
+      });
+      
+      // Wait for all requests to complete in parallel
+      await Promise.allSettled(imagePromises);
     } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
       // For Midjourney (GoAPI, Legnext, or Ttapi), generate in parallel
       // Note: Midjourney returns 4 images per request, so we need fewer requests
