@@ -349,27 +349,36 @@ const App: React.FC = () => {
     let generatedPrompts: string[];
     
     // Generate master subject list for the batch
+    // 🔥 If subject list is empty OR theme changed → regenerate it
     const usedSubjects = new Set<string>();
-    let masterSubjectList: string[] = [];
-    try {
-      const apiKey = settings.promptService === 'openrouter' 
-        ? (import.meta.env.VITE_OPENROUTER_API_KEY || '')
-        : (import.meta.env.VITE_OPENAI_API_KEY || '');
-      const apiUrl = settings.promptService === 'openrouter'
-        ? 'https://openrouter.ai/api/v1/chat/completions'
-        : 'https://api.openai.com/v1/chat/completions';
-      const useOpenRouter = settings.promptService === 'openrouter';
-      
-      if (apiKey) {
-        masterSubjectList = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
-        addLog(`[Master Subject List] Generated ${masterSubjectList.length} unique subjects`, 'success');
-        console.log('[Master Subject List]', masterSubjectList);
-      } else {
-        addLog(`[Master Subject List] API key not configured, using fallback subjects`, 'error');
+    let subjectsToUse = masterSubjectList;
+    
+    // Check if we need to regenerate the list
+    if (subjectsToUse.length === 0 || themeName !== currentTheme) {
+      try {
+        const apiKey = settings.promptService === 'openrouter' 
+          ? (import.meta.env.VITE_OPENROUTER_API_KEY || '')
+          : (import.meta.env.VITE_OPENAI_API_KEY || '');
+        const apiUrl = settings.promptService === 'openrouter'
+          ? 'https://openrouter.ai/api/v1/chat/completions'
+          : 'https://api.openai.com/v1/chat/completions';
+        const useOpenRouter = settings.promptService === 'openrouter';
+        
+        if (apiKey) {
+          subjectsToUse = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
+          setMasterSubjectList(subjectsToUse);
+          setCurrentTheme(themeName);
+          addLog(`[Master Subject List] Generated ${subjectsToUse.length} unique subjects for theme "${themeName}"`, 'success');
+          console.log('[Master Subject List]', subjectsToUse);
+        } else {
+          addLog(`[Master Subject List] API key not configured, using fallback subjects`, 'error');
+        }
+      } catch (error: any) {
+        console.error('[Master Subject List] Generation failed:', error);
+        addLog(`[Master Subject List] Failed: ${error.message}`, 'error');
       }
-    } catch (error: any) {
-      console.error('[Master Subject List] Generation failed:', error);
-      addLog(`[Master Subject List] Failed: ${error.message}`, 'error');
+    } else {
+      addLog(`[Master Subject List] Reusing existing list (${subjectsToUse.length} subjects) for theme "${themeName}"`, 'success');
     }
     
     if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
