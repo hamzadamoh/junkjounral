@@ -415,6 +415,22 @@ const App: React.FC = () => {
       
       const requestPrompts = await Promise.all(promptPromises);
       
+      // Log metrics summary
+      addLog(`[Metrics] Header missing: ${metrics.headerMissing}, Rewrites: ${metrics.rewrites}, Semantic mismatches: ${metrics.semanticMismatches}, Null returns: ${metrics.nullReturns}, Subject swaps: ${metrics.subjectSwaps}, Final accepts: ${metrics.finalAccepts}`, 'log');
+      console.log('[Metrics Summary]', metrics);
+      
+      // Threshold / abort policy
+      const totalAttempts = requestPrompts.length;
+      const semanticMismatchRate = (metrics.semanticMismatches / totalAttempts) * 100;
+      const nullRate = (metrics.nullReturns / totalAttempts) * 100;
+      
+      if (semanticMismatchRate > 15) {
+        addLog(`⚠️ High semantic mismatch rate: ${semanticMismatchRate.toFixed(1)}% (threshold: 15%). Consider reviewing prompts.`, 'error');
+      }
+      if (nullRate > 10) {
+        addLog(`⚠️ High null return rate: ${nullRate.toFixed(1)}% (threshold: 10%). Consider reviewing master subject list.`, 'error');
+      }
+      
       // Validation: Check for corrections and semantic mismatches
       const CORRECTION_ALERT_THRESHOLD = 6; // Alert if ≥6 prompts were corrected
       let correctionCount = 0;

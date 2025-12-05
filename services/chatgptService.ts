@@ -571,8 +571,9 @@ export const generatePromptWithChatGPT = async (
   customArtStyle?: string,
   promptService: 'openai' | 'openrouter' = 'openai',
   masterSubjectList?: string[],
-  usedSubjects?: Set<string>
-): Promise<string> => {
+  usedSubjects?: Set<string>,
+  primarySubjectOverride?: string // Optional: override subject selection for swapping
+): Promise<string | null> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
   const apiKey = useOpenRouter ? getOpenRouterApiKey() : getOpenAIApiKey();
@@ -595,9 +596,12 @@ export const generatePromptWithChatGPT = async (
   // PRIMARY SUBJECT SELECTION (From Master List)
   // ============================================
   let primarySubject: string;
-  const forbiddenSubjects = usedSubjects ? Array.from(usedSubjects) : [];
+  const forbiddenSubjects = usedSubjects ? Array.from(usedSubjects).filter(s => !s.includes('##FAILED')).map(s => s.replace('##FAILED', '')) : [];
   
-  if (masterSubjectList && masterSubjectList.length > 0) {
+  // Use override if provided (for subject swapping)
+  if (primarySubjectOverride) {
+    primarySubject = primarySubjectOverride;
+  } else if (masterSubjectList && masterSubjectList.length > 0) {
     // Select subject from master list, avoiding used ones
     let attempts = 0;
     do {
@@ -613,15 +617,12 @@ export const generatePromptWithChatGPT = async (
         primarySubject = available[hash32(variationNumber, available.length)];
       }
     }
-    
-    // Mark as used
-    if (usedSubjects) {
-      usedSubjects.add(primarySubject.toLowerCase());
-    }
   } else {
     // Fallback: generate simple subject
     primarySubject = `${theme} element ${variationNumber}`;
   }
+  
+  // Note: Don't mark as used here - let the caller handle it after successful generation
 
   // ============================================
   // SELECT STYLE (Fixed for entire batch - consistent across all variations)
