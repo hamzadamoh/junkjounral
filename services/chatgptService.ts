@@ -791,9 +791,14 @@ CRITICAL: Generate prompts for VINTAGE, AGED, ANTIQUE-STYLE junk journal pages -
   const userPrompt = colorIntensity === 'Custom / Override'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
 
-PRIMARY SUBJECT (REQUIRED): ${primarySubject}
+PRIMARY SUBJECT (REQUIRED - DO NOT CHANGE): ${primarySubject}
 
-CRITICAL: Begin your response with "PRIMARY SUBJECT: ${primarySubject}" and do NOT change it or reuse that subject for any other variation in this batch. This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.${forbiddenText}
+🚨 ABSOLUTE REQUIREMENTS:
+1. Begin your response with "PRIMARY SUBJECT: ${primarySubject}" (exact text, do not modify).
+2. The ENTIRE prompt must describe ${primarySubject} as the MAIN FOCUS of the image.
+3. Do NOT describe a different object, scene, or pattern. If PRIMARY SUBJECT is "${primarySubject}", your prompt MUST be about ${primarySubject}, nothing else.
+4. Do NOT replace it with a similar item or describe a scene that doesn't feature ${primarySubject} prominently.
+5. This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements.${forbiddenText}
 
 ${variationSpecifies}
 
@@ -813,9 +818,13 @@ Create a DISTINCT and UNIQUE design that represents ${themeDescription} accurate
     : colorIntensity === 'Multicolored'
     ? `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} MODERN WATERCOLOR ILLUSTRATION. 
 
-PRIMARY SUBJECT (REQUIRED): ${primarySubject}
+PRIMARY SUBJECT (REQUIRED - DO NOT CHANGE): ${primarySubject}
 
-CRITICAL: Begin your response with "PRIMARY SUBJECT: ${primarySubject}" and do NOT change it or reuse that subject for any other variation in this batch.${forbiddenText}
+🚨 ABSOLUTE REQUIREMENTS:
+1. Begin your response with "PRIMARY SUBJECT: ${primarySubject}" (exact text, do not modify).
+2. The ENTIRE prompt must describe ${primarySubject} as the MAIN FOCUS of the image.
+3. Do NOT describe a different object, scene, or pattern. If PRIMARY SUBJECT is "${primarySubject}", your prompt MUST be about ${primarySubject}, nothing else.
+4. Do NOT replace it with a similar item or describe a scene that doesn't feature ${primarySubject} prominently.${forbiddenText}
 
 🚨 CRITICAL: This is a MODERN, VIVID, COLORFUL watercolor illustration - NOT a journal page, NOT vintage, NOT antique, NOT junk journal.
 
@@ -861,9 +870,14 @@ ${customThemePrompt && customThemePrompt.trim() ? `IMPORTANT: Incorporate the cu
 Create a DISTINCT and UNIQUE MODERN WATERCOLOR ILLUSTRATION prompt. Start with "A vivid, modern watercolor illustration..." or "A colorful watercolor painting..." - describe it as a pure, modern, colorful watercolor painting of ${themeDescription} with vibrant colors. DO NOT mention journal, vintage, antique, stamps, handwritten text, or any vintage elements. 2-3 sentences. Return ONLY the prompt description.`
     : `Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} junk journal page.
 
-PRIMARY SUBJECT (REQUIRED): ${primarySubject}
+PRIMARY SUBJECT (REQUIRED - DO NOT CHANGE): ${primarySubject}
 
-CRITICAL: Begin your response with "PRIMARY SUBJECT: ${primarySubject}" and do NOT change it or reuse that subject for any other variation in this batch. This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.${forbiddenText}
+🚨 ABSOLUTE REQUIREMENTS:
+1. Begin your response with "PRIMARY SUBJECT: ${primarySubject}" (exact text, do not modify).
+2. The ENTIRE prompt must describe ${primarySubject} as the MAIN FOCUS of the image.
+3. Do NOT describe a different object, scene, or pattern. If PRIMARY SUBJECT is "${primarySubject}", your prompt MUST be about ${primarySubject}, nothing else.
+4. Do NOT replace it with a similar item or describe a scene that doesn't feature ${primarySubject} prominently.
+5. This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements.${forbiddenText}
 
 ${variationSpecifies}
 
