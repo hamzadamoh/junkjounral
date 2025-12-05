@@ -442,16 +442,16 @@ function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string): {
       const rest = trimmed.split('\n').slice(1).join('\n').trim();
       console.warn(`[Primary Subject] Header mismatch. Expected: "${requiredSubject}", got: "${header}". Correcting...`);
       const fixed = `PRIMARY SUBJECT: ${requiredSubject}. ${rest}`;
-      const matched = subjectMatchesPrompt(requiredSubject, fixed);
+      const matched = await subjectMatchesPrompt(requiredSubject, fixed, apiKey, apiUrl, useOpenRouter);
       return { text: fixed, corrected: true, matched };
     }
-    const matched = subjectMatchesPrompt(requiredSubject, trimmed);
+    const matched = await subjectMatchesPrompt(requiredSubject, trimmed, apiKey, apiUrl, useOpenRouter);
     return { text: trimmed, corrected: false, matched };
   } else {
     // Prepend header
     console.warn(`[Primary Subject] Missing header in prompt. Adding: "${requiredSubject}"`);
     const fixed = `PRIMARY SUBJECT: ${requiredSubject}. ${trimmed}`;
-    const matched = subjectMatchesPrompt(requiredSubject, fixed);
+    const matched = await subjectMatchesPrompt(requiredSubject, fixed, apiKey, apiUrl, useOpenRouter);
     return { text: fixed, corrected: true, matched };
   }
 }
