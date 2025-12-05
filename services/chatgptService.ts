@@ -430,7 +430,7 @@ async function subjectMatchesPrompt(subject: string, promptText: string, apiKey:
  * Ensures PRIMARY SUBJECT header is present and correct
  * Returns object with text, corrected flag, and matched flag
  */
-function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string): { text: string; corrected: boolean; matched: boolean } {
+async function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string, apiKey: string, apiUrl: string, useOpenRouter: boolean): Promise<{ text: string; corrected: boolean; matched: boolean }> {
   const trimmed = (gptText || '').trim();
   let corrected = false;
   
