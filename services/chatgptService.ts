@@ -319,8 +319,9 @@ function normalize(text: string): string {
 
 /**
  * Detects photographic/photorealistic language in prompts
+ * Uses contextual patterns to avoid false positives from subject names
  */
-const photorealismPattern = /\b(photo|photoreal|photorealistic|photograph|photography|dslr|bokeh|shutter|f\/\d+|depth of field|dof|hyper-?real|ultra-?real|cinematic lens|realistic lighting|photorealism)\b/i;
+const photorealismPattern = /\b(photoreal|photorealistic|photograph(s)?|photo of|photo:|photography|dslr|bokeh|shutter|f\/\d+|depth of field|dof|hyper-?real|ultra-?real|cinematic lens|realistic lighting|photorealism)\b/i;
 
 function containsPhotographicLanguage(text: string): boolean {
   return photorealismPattern.test(text || '');
@@ -594,14 +595,17 @@ async function callPromptWithHeaderEnforcement(
       }
 
       // Check for photographic language and force rewrite
-      if (containsPhotographicLanguage(text)) {
-        console.warn(`[PromptGen] Photographic language detected for "${subject}" — forcing rewrite (attempt ${attempt})`);
+      // IMPORTANT: Strip PRIMARY SUBJECT header before checking to avoid false positives
+      // when the subject name itself contains "photo" (e.g., "Driftwood photo display")
+      const bodyOnly = (text || '').replace(/^PRIMARY SUBJECT:\s*.*?\.\s*/i, '').trim();
+      
+      if (containsPhotographicLanguage(bodyOnly)) {
+        console.warn(`[PromptGen] Photographic language detected for "${subject}". Body: "${bodyOnly.slice(0, 120)}"... forcing rewrite (attempt ${attempt})`);
         metrics.rewrites++;
         if (attempt < maxAttempts) continue; // trigger retry so the model rewrites
         
-        // On final attempt, force an illustrated rewrite
-        const bodyText = text.replace(/^PRIMARY SUBJECT:.*?\./i, '').trim();
-        const forcedIllustration = `PRIMARY SUBJECT: ${subject}. ${bodyText} (REWRITE: make this a HAND-DRAWN illustration style, not a photograph. Use "ink and watercolor", "hand-drawn", "flat vector", or "pastel drawing" and remove any photographic language.)`;
+        // On final attempt, force an illustrated rewrite (operate on bodyOnly to avoid double header)
+        const forcedIllustration = `PRIMARY SUBJECT: ${subject}. ${bodyOnly} (REWRITE: make this a HAND-DRAWN illustration style, not a photograph. Use "ink and watercolor", "hand-drawn", "flat vector", or "pastel drawing" and remove any photographic language.)`;
         const matched = await subjectMatchesPrompt(subject, forcedIllustration, apiKey, apiUrl, useOpenRouter);
         return { text: forcedIllustration, corrected: true, attempt, matched };
       }
