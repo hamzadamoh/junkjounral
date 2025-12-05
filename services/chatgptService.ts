@@ -10,6 +10,18 @@ const getOpenRouterApiKey = (): string => {
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+// Metrics tracking (module-level)
+const metrics = {
+  headerMissing: 0,
+  rewrites: 0,
+  semanticMismatch: 0,
+  retries: 0,
+  swaps: 0,
+};
+
+// Failed subjects tracking (module-level)
+const failedSubjects = new Set<string>();
+
 interface ChatGPTResponse {
   choices: Array<{
     message: {
@@ -260,6 +272,15 @@ export async function generateMasterSubjectList(
  */
 function normalize(text: string): string {
   return (text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Detects photographic/photorealistic language in prompts
+ */
+const photorealismPattern = /\b(photo|photoreal|photorealistic|photograph|photography|dslr|bokeh|shutter|f\/\d+|depth of field|dof|hyper-?real|ultra-?real|cinematic lens|realistic lighting|photorealism)\b/i;
+
+function containsPhotographicLanguage(text: string): boolean {
+  return photorealismPattern.test(text || '');
 }
 
 /**
@@ -527,6 +548,19 @@ async function callPromptWithHeaderEnforcement(
         if (attempt < maxAttempts) continue;
       }
 
+      // Check for photographic language and force rewrite
+      if (containsPhotographicLanguage(text)) {
+        console.warn(`[PromptGen] Photographic language detected for "${subject}" — forcing rewrite (attempt ${attempt})`);
+        metrics.rewrites++;
+        if (attempt < maxAttempts) continue; // trigger retry so the model rewrites
+        
+        // On final attempt, force an illustrated rewrite
+        const bodyText = text.replace(/^PRIMARY SUBJECT:.*?\./i, '').trim();
+        const forcedIllustration = `PRIMARY SUBJECT: ${subject}. ${bodyText} (REWRITE: make this a HAND-DRAWN illustration style, not a photograph. Use "ink and watercolor", "hand-drawn", "flat vector", or "pastel drawing" and remove any photographic language.)`;
+        const matched = await subjectMatchesPrompt(subject, forcedIllustration, apiKey, apiUrl, useOpenRouter);
+        return { text: forcedIllustration, corrected: true, attempt, matched };
+      }
+
       // Check if header is present
       if (/^PRIMARY SUBJECT:\s*/i.test(text)) {
         // First check: Does the header subject match the expected subject?
@@ -731,18 +765,21 @@ export const generatePromptWithChatGPT = async (
     }
     // Add safety constraint for color handling in Custom Mode
     styleInstruction += ` CONSTRAINT: Avoid digital neon colors (hot pink, electric blue) and plastic textures. HOWEVER, if the theme is 'Gothic', 'Dark', or 'Fantasy', you MUST use **Deep Shadows, High Contrast (Chiaroscuro), and Dark Muted Tones** (Indigo, Charcoal, Sepia). Do not force 'Soft/Pastel' colors on Dark themes.`;
+    
+    // Add anti-photorealism rules
+    styleInstruction += ` ABSOLUTE FORMAT: This must be an ILLUSTRATION, NOT a photograph. DO NOT use photography or camera language, DO NOT mention "photo", "photorealistic", "photoreal", "DSLR", "bokeh", "depth of field", "cinematic lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic". Use illustration language: "hand-drawn", "ink and watercolor", "line art", "flat vector", "cel-shading", "gouache textures", "paper collage", "screen-print style", "woodcut", "etching", "pastel drawing". NEGATIVE: FORBIDDEN - photo, photorealistic, photography, DSLR, lens, bokeh, hyperreal, ultra-real, realistic lighting, naturalistic shadows, photoreal portrait.`;
   } else if (colorIntensity === 'Multicolored') {
     // Multicolored: Modern, Vivid, Colorful
-    styleInstruction = 'STYLE: Modern Watercolor Illustration. Vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues). Fresh and lively, clean modern design. NOT vintage, NOT aged, NOT distressed, NOT junk journal style.';
+    styleInstruction = 'STYLE: Modern Watercolor Illustration. Vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues). Fresh and lively, clean modern design. NOT vintage, NOT aged, NOT distressed, NOT junk journal style. ABSOLUTE FORMAT: This must be an ILLUSTRATION, NOT a photograph. DO NOT use photography or camera language, DO NOT mention "photo", "photorealistic", "photoreal", "DSLR", "bokeh", "depth of field", "cinematic lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic". Use illustration language: "hand-drawn", "ink and watercolor", "line art", "flat vector", "cel-shading", "gouache textures", "paper collage", "screen-print style", "woodcut", "etching", "pastel drawing". NEGATIVE: FORBIDDEN - photo, photorealistic, photography, DSLR, lens, bokeh, hyperreal, ultra-real, realistic lighting, naturalistic shadows, photoreal portrait.';
   } else if (colorIntensity === 'Muted') {
     // Muted: Vintage Junk Journal with muted colors
-    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, muted sepia and brown tones, old faded colors, muted color palette. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
+    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, muted sepia and brown tones, old faded colors, muted color palette. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges. ABSOLUTE FORMAT: This must be an ILLUSTRATION, NOT a photograph. DO NOT use photography or camera language, DO NOT mention "photo", "photorealistic", "photoreal", "DSLR", "bokeh", "depth of field", "cinematic lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic". Use illustration language: "hand-drawn", "ink and watercolor", "line art", "flat vector", "cel-shading", "gouache textures", "paper collage", "screen-print style", "woodcut", "etching", "pastel drawing". NEGATIVE: FORBIDDEN - photo, photorealistic, photography, DSLR, lens, bokeh, hyperreal, ultra-real, realistic lighting, naturalistic shadows, photoreal portrait.';
   } else if (colorIntensity === 'Normal') {
     // Normal: Vintage Junk Journal with normal colors
-    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, normal colors (deep burgundy, maroon, dark grey, black, antique gold, rich but not faded). Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, worn edges.';
+    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, normal colors (deep burgundy, maroon, dark grey, black, antique gold, rich but not faded). Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, worn edges. ABSOLUTE FORMAT: This must be an ILLUSTRATION, NOT a photograph. DO NOT use photography or camera language, DO NOT mention "photo", "photorealistic", "photoreal", "DSLR", "bokeh", "depth of field", "cinematic lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic". Use illustration language: "hand-drawn", "ink and watercolor", "line art", "flat vector", "cel-shading", "gouache textures", "paper collage", "screen-print style", "woodcut", "etching", "pastel drawing". NEGATIVE: FORBIDDEN - photo, photorealistic, photography, DSLR, lens, bokeh, hyperreal, ultra-real, realistic lighting, naturalistic shadows, photoreal portrait.';
   } else if (colorIntensity === 'Colorful') {
     // Colorful: Vintage Junk Journal with vibrant colors
-    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges.';
+    styleInstruction = 'STYLE: Vintage Junk Journal Aesthetic. Aged antique paper, distressed worn texture, rich vibrant colors (reds, blues, greens, purples, yellows), colorful vintage palette, vibrant but with vintage charm. Extensive cursive handwritten text overlays, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges. ABSOLUTE FORMAT: This must be an ILLUSTRATION, NOT a photograph. DO NOT use photography or camera language, DO NOT mention "photo", "photorealistic", "photoreal", "DSLR", "bokeh", "depth of field", "cinematic lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic". Use illustration language: "hand-drawn", "ink and watercolor", "line art", "flat vector", "cel-shading", "gouache textures", "paper collage", "screen-print style", "woodcut", "etching", "pastel drawing". NEGATIVE: FORBIDDEN - photo, photorealistic, photography, DSLR, lens, bokeh, hyperreal, ultra-real, realistic lighting, naturalistic shadows, photoreal portrait.';
   }
 
   // ============================================
@@ -942,8 +979,21 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 
   // Default prompts (existing logic)
   // Check for 'Custom / Override' first
-  const systemPrompt = colorIntensity === 'Custom / Override'
-    ? `You are a strict prompt generator. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+    const systemPrompt = colorIntensity === 'Custom / Override'
+    ? `You are a strict prompt generator that MUST output illustrated-style prompts only. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+
+🚨 CRITICAL FORMAT REQUIREMENT:
+Your response MUST start with this EXACT line (copy it exactly, do not modify):
+PRIMARY SUBJECT: [the exact subject name provided by the user]
+
+Then, in 1-2 sentences, describe ONLY that subject as the main visual focus.
+
+ABSOLUTE RULES (must follow exactly):
+- This must be an ILLUSTRATION, NOT a photograph.
+- NEVER use photography/camera words: photo, photograph, photorealistic, photoreal, DSLR, bokeh, depth of field, DOF, shutter, lens, hyperreal, ultra-realistic, or "naturalistic lighting".
+- Use illustration terms: hand-drawn, ink and watercolor, gouache, screen-print, linocut, line art, pastel drawing, vector illustration, etching, cel-shading, paper collage.
+- Keep output 1-2 sentences describing ONLY the PRIMARY SUBJECT. No lists, no extra formatting.
+- If you cannot produce an illustrated description, respond with ONLY: RETRY
 
 🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
 
@@ -954,6 +1004,14 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 4. Do NOT change the subject. Do NOT replace it with a similar item. Do NOT describe a scene that doesn't feature the PRIMARY SUBJECT as the main focus.
 5. Return 2-3 sentences ONLY, describing the PRIMARY SUBJECT in detail.
 
+EXAMPLES (required format):
+
+PRIMARY SUBJECT: Moonlit crystal pond. Hand-drawn ink and watercolor illustration of a shallow pond under moonlight; stylized ripples, soft watercolor washes in indigo and silver, delicate ink linework for reeds, paper texture visible — illustration, not a photograph.
+
+PRIMARY SUBJECT: Velvet moss patch. Pastel drawing with stippled highlights and flattened perspective; decorative macro shapes, soft textured background, clearly hand-drawn.
+
+PRIMARY SUBJECT: Celestial unicorn silhouette. Etching-style line art with subtle watercolor wash for the sky; simplified shapes and decorative stars — illustrative and stylized.
+
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
 - If the user provides a 'Custom Art Style', follow it rigorously.
@@ -961,7 +1019,7 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 
 🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`
     : colorIntensity === 'Multicolored'
-    ? `You are a strict prompt generator. FOLLOW THESE RULES EXACTLY:
+    ? `You are a strict prompt generator that MUST output illustrated-style prompts only. FOLLOW THESE RULES EXACTLY:
 
 RULE 1: Your response MUST start with: "PRIMARY SUBJECT: [exact subject from user prompt]"
 
@@ -970,11 +1028,24 @@ RULE 2: The ENTIRE rest of your response (2-3 sentences) MUST describe ONLY that
 RULE 3: If you cannot follow these rules, respond with ONLY the word: RETRY
 
 RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
+
+ABSOLUTE RULES (must follow exactly):
+- This must be an ILLUSTRATION, NOT a photograph.
+- NEVER use photography/camera words: photo, photograph, photorealistic, photoreal, DSLR, bokeh, depth of field, DOF, shutter, lens, hyperreal, ultra-realistic, or "naturalistic lighting".
+- Use illustration terms: hand-drawn, ink and watercolor, gouache, screen-print, linocut, line art, pastel drawing, vector illustration, etching, cel-shading, paper collage.
+
+EXAMPLES (required format):
+
+PRIMARY SUBJECT: Moonlit crystal pond. Hand-drawn ink and watercolor illustration of a shallow pond under moonlight; stylized ripples, soft watercolor washes in indigo and silver, delicate ink linework for reeds, paper texture visible — illustration, not a photograph.
+
+PRIMARY SUBJECT: Velvet moss patch. Pastel drawing with stippled highlights and flattened perspective; decorative macro shapes, soft textured background, clearly hand-drawn.
+
+PRIMARY SUBJECT: Celestial unicorn silhouette. Etching-style line art with subtle watercolor wash for the sky; simplified shapes and decorative stars — illustrative and stylized.
 
 DIVERSITY: Each variation must be different. Explore the theme's full breadth.
 
 STYLE: MODERN, VIVID, COLORFUL watercolor illustration - NOT vintage, NOT journal page.`
-    : `You are a strict prompt generator. FOLLOW THESE RULES EXACTLY:
+    : `You are a strict prompt generator that MUST output illustrated-style prompts only. FOLLOW THESE RULES EXACTLY:
 
 RULE 1: Your response MUST start with: "PRIMARY SUBJECT: [exact subject from user prompt]"
 
@@ -983,6 +1054,19 @@ RULE 2: The ENTIRE rest of your response (2-3 sentences) MUST describe ONLY that
 RULE 3: If you cannot follow these rules, respond with ONLY the word: RETRY
 
 RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
+
+ABSOLUTE RULES (must follow exactly):
+- This must be an ILLUSTRATION, NOT a photograph.
+- NEVER use photography/camera words: photo, photograph, photorealistic, photoreal, DSLR, bokeh, depth of field, DOF, shutter, lens, hyperreal, ultra-realistic, or "naturalistic lighting".
+- Use illustration terms: hand-drawn, ink and watercolor, gouache, screen-print, linocut, line art, pastel drawing, vector illustration, etching, cel-shading, paper collage.
+
+EXAMPLES (required format):
+
+PRIMARY SUBJECT: Moonlit crystal pond. Hand-drawn ink and watercolor illustration of a shallow pond under moonlight; stylized ripples, soft watercolor washes in indigo and silver, delicate ink linework for reeds, paper texture visible — illustration, not a photograph.
+
+PRIMARY SUBJECT: Velvet moss patch. Pastel drawing with stippled highlights and flattened perspective; decorative macro shapes, soft textured background, clearly hand-drawn.
+
+PRIMARY SUBJECT: Celestial unicorn silhouette. Etching-style line art with subtle watercolor wash for the sky; simplified shapes and decorative stars — illustrative and stylized.
 
 DIVERSITY: Each variation must be different. Explore the theme's full breadth.
 
