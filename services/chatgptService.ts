@@ -693,7 +693,12 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
 
 🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
 
-🚨 CRITICAL: You MUST begin your response with "PRIMARY SUBJECT: <subject>" exactly as specified in the user prompt. Do NOT change the subject. Do NOT repeat that PRIMARY SUBJECT in other variations. Return 2-3 sentences only.
+🚨 CRITICAL RULES:
+1. You MUST begin your response with "PRIMARY SUBJECT: <subject>" exactly as specified in the user prompt.
+2. The ENTIRE prompt must describe and focus on THAT SPECIFIC PRIMARY SUBJECT. Do NOT describe a different object or scene.
+3. If the PRIMARY SUBJECT is "Cursed tarot deck", your prompt MUST describe a cursed tarot deck, NOT a pattern, NOT a spellbook, NOT anything else.
+4. Do NOT change the subject. Do NOT replace it with a similar item. Do NOT describe a scene that doesn't feature the PRIMARY SUBJECT as the main focus.
+5. Return 2-3 sentences ONLY, describing the PRIMARY SUBJECT in detail.
 
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
 - Do NOT default to 'modern' or 'flat' unless explicitly asked.
