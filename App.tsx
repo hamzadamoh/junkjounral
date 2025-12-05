@@ -365,11 +365,14 @@ const App: React.FC = () => {
         const useOpenRouter = settings.promptService === 'openrouter';
         
         if (apiKey) {
-          subjectsToUse = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
+          const rawMaster = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
+          // Clean the master list to replace poetic/abstract subjects with concrete noun phrases
+          subjectsToUse = cleanMasterList(rawMaster, total);
           setMasterSubjectList(subjectsToUse);
           setCurrentTheme(themeName);
-          addLog(`[Master Subject List] Generated ${subjectsToUse.length} unique subjects for theme "${themeName}"`, 'success');
-          console.log('[Master Subject List]', subjectsToUse);
+          addLog(`[Master Subject List] Generated ${rawMaster.length} subjects, cleaned to ${subjectsToUse.length} concrete subjects for theme "${themeName}"`, 'success');
+          console.log('[Master Subject List] Raw:', rawMaster);
+          console.log('[Master Subject List] Cleaned:', subjectsToUse);
         } else {
           addLog(`[Master Subject List] API key not configured, using fallback subjects`, 'error');
         }
