@@ -774,8 +774,6 @@ RULE 4: Output plain text only. No JSON, no lists, no extra formatting.
 DIVERSITY: Each variation must be different. Explore the theme's full breadth.
 
 STYLE: MODERN, VIVID, COLORFUL watercolor illustration - NOT vintage, NOT journal page.`
-
-🚨 CRITICAL RULES - YOU MUST FOLLOW THESE:
 1. NEVER use: "aged", "antique", "vintage", "distressed", "old", "worn", "junk journal", "journal page"
 2. NEVER use: "handwritten", "cursive", "letters", "postage stamps", "ephemera", "sepia", "muted", "faded"
 3. ALWAYS start prompts with: "A vivid, modern watercolor illustration..." or "A colorful watercolor painting..."
