@@ -353,6 +353,16 @@ const App: React.FC = () => {
     const usedSubjects = new Set<string>();
     let subjectsToUse = masterSubjectList;
     
+    // Metrics tracking (defined here so it's accessible to all code paths)
+    const metrics = {
+      headerMissing: 0,
+      rewrites: 0,
+      semanticMismatches: 0,
+      nullReturns: 0,
+      subjectSwaps: 0,
+      finalAccepts: 0
+    };
+    
     // Check if we need to regenerate the list
     if (subjectsToUse.length === 0 || themeName !== currentTheme) {
       try {
