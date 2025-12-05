@@ -305,7 +305,14 @@ export function cleanMasterList(masterArray: string[], desiredCount: number = 36
     "enchanted nightingale song": "Nightingale perched on branch",
     "velvet moss carpet": "Velvet moss patch",
     "luminescent flower petals": "Luminescent flower petals",
-    "ethereal silver mist": "Low-lying silver mist"
+    "ethereal silver mist": "Low-lying silver mist",
+    "enchanted forest clearing": "Ancient stone clearing",
+    "enchanted artifacts": "Crystal orb on pedestal",
+    "enchanted forest floor": "Moss-covered stone path",
+    "collage of enchanted artifacts": "Single crystal artifact",
+    "framed vignette of a celestial fae court": "Celestial fae figure",
+    "playful sprite laughter": "Sprite figure in flight",
+    "dreamlike cloud wisps": "Wispy cloud formation"
   };
 
   // Simple ambiguous pattern to drop overly poetic entries not caught by replacements
@@ -356,12 +363,67 @@ export function cleanMasterList(masterArray: string[], desiredCount: number = 36
 /**
  * Validates if the prompt text actually describes the required subject
  */
-function subjectMatchesPrompt(subject: string, promptText: string): boolean {
+async function subjectMatchesPrompt(subject: string, promptText: string, apiKey: string, apiUrl: string, useOpenRouter: boolean): Promise<boolean> {
+  // First try simple token-based matching (fast)
   const subjTokens = normalize(subject).split(' ').filter(t => t.length > 2);
   const body = normalize(promptText.replace(/^primary subject:.*?\./i, ''));
   const hits = subjTokens.filter(t => body.includes(t));
-  // Require at least one token hit, or at least half of tokens for longer subjects
-  return hits.length >= Math.max(1, Math.floor(subjTokens.length / 2));
+  const tokenOk = hits.length >= Math.max(1, Math.floor(subjTokens.length / 2));
+
+  if (tokenOk) return true;
+
+  // Fallback: explicit yes/no check using LLM classifier
+  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  const sys = 'You are a strict verifier. Answer ONLY YES or NO.';
+  const usr = `Does the following prompt describe the subject "${subject}" as the MAIN focus? Prompt: """${promptText}""" Return only YES or NO.`;
+  
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
+    
+    if (useOpenRouter) {
+      headers['HTTP-Referer'] = window.location.origin;
+      headers['X-Title'] = 'Junk Journal Generator';
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout for classifier
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: usr }
+        ],
+        temperature: 0, // Deterministic
+        max_tokens: 3,
+        stream: false
+      })
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Classifier API error: ${response.status}`);
+    }
+
+    const data: ChatGPTResponse = await response.json();
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error('No response from classifier API');
+    }
+
+    const text = (data.choices[0].message.content || '').trim();
+    return /^yes/i.test(text);
+  } catch (error) {
+    console.error(`[PromptGen] Error in semantic classifier for "${subject}":`, error);
+    return false; // Assume no match on error
+  }
 }
 
 /**
@@ -489,9 +551,8 @@ async function callPromptWithHeaderEnforcement(
         }
         
         // Header subject matches - now check semantic match
-        const result = ensurePrimarySubjectHeader(subject, text);
-        const semanticMatched = await subjectMatchesPrompt(subject, result.text, apiKey, apiUrl, useOpenRouter);
-        if (semanticMatched) {
+        const result = await ensurePrimarySubjectHeader(subject, text, apiKey, apiUrl, useOpenRouter);
+        if (result.matched) {
           return { ...result, attempt, matched: true };
         } else {
           console.warn(`[PromptGen] Semantic mismatch for "${subject}" (attempt ${attempt}/${maxAttempts}). Prompt doesn't describe the subject.`);
@@ -1120,10 +1181,52 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
     4 // maxAttempts
   );
 
-  // If generation failed (returned null), return null so caller can swap subjects
-  if (!result.text) {
-    console.warn(`[PromptGen] Failed to generate valid prompt for "${primarySubject}" after ${result.attempt} attempts`);
-    return null; // Caller should swap to next subject from master list
+  // If generation failed or semantic mismatch persists, swap to next subject
+  if (!result.text || !result.matched) {
+    console.warn(`[PromptGen] Subject "${primarySubject}" failed validation after ${result.attempt} attempts. Marking as failed and swapping subject.`);
+    
+    // Mark subject as failed so we won't retry it in this batch
+    if (usedSubjects) {
+      usedSubjects.add(`${primarySubject.toLowerCase()}##FAILED`);
+    }
+    
+    // Pick next available subject from master list
+    const available = (masterSubjectList || []).filter(s => {
+      const lower = s.toLowerCase();
+      return !usedSubjects?.has(lower) && !usedSubjects?.has(`${lower}##FAILED`);
+    });
+    
+    if (available.length === 0) {
+      console.error('[PromptGen] No available subjects to swap to.');
+      return null;
+    }
+    
+    const nextSubject = available[hash32(variationNumber + 13, available.length)];
+    console.log(`[PromptGen] Swapping "${primarySubject}" -> "${nextSubject}"`);
+    
+    // Recursively call with next subject (limit recursion depth to prevent infinite loops)
+    const maxRecursion = 3;
+    const recursionDepth = (arguments as any).__recursionDepth || 0;
+    if (recursionDepth >= maxRecursion) {
+      console.error(`[PromptGen] Max recursion depth reached for subject swapping. Returning null.`);
+      return null;
+    }
+    
+    // Create new arguments with next subject
+    const newArgs = {
+      theme, pageStyle, textureIntensity, elements, includeFrames, includeBorders,
+      variationNumber, customThemePrompt, colorIntensity, customArtStyle, promptService,
+      masterSubjectList, usedSubjects, primarySubjectOverride: nextSubject
+    };
+    (newArgs as any).__recursionDepth = recursionDepth + 1;
+    
+    return await generatePromptWithChatGPT(
+      newArgs.theme, newArgs.pageStyle, newArgs.textureIntensity, newArgs.elements,
+      newArgs.includeFrames, newArgs.includeBorders, newArgs.variationNumber,
+      newArgs.customThemePrompt, newArgs.colorIntensity, newArgs.customArtStyle,
+      newArgs.promptService, newArgs.masterSubjectList, newArgs.usedSubjects,
+      newArgs.primarySubjectOverride
+    );
   }
 
   // Log result for audit
