@@ -346,7 +346,9 @@ export const generatePromptWithChatGPT = async (
   customThemePrompt?: string,
   colorIntensity: 'Muted' | 'Normal' | 'Colorful' | 'Multicolored' = 'Muted',
   customArtStyle?: string,
-  promptService: 'openai' | 'openrouter' = 'openai'
+  promptService: 'openai' | 'openrouter' = 'openai',
+  masterSubjectList?: string[],
+  usedSubjects?: Set<string>
 ): Promise<string> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
