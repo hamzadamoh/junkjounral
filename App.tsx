@@ -1197,7 +1197,7 @@ const App: React.FC = () => {
                   className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
                     isAnalyzingImage
                       ? 'border-slate-600 bg-slate-800 cursor-not-allowed'
-                      : uploadedImage
+                      : uploadedImages.length > 0
                       ? 'border-gothic-gold bg-gothic-gold/10'
                       : 'border-slate-600 bg-slate-900 hover:border-gothic-gold hover:bg-slate-800'
                   }`}
