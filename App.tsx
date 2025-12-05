@@ -62,13 +62,120 @@ const App: React.FC = () => {
   const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string }>>([]);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any }>>([]);
+  const [analyzedImages, setAnalyzedImages] = useState<Array<any>>([]); // Store full analysis objects
+  const [combinedAnalysis, setCombinedAnalysis] = useState<{ theme: string; style: string; colors: string; vibe: string; techniques: string[]; confidence: number } | null>(null);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const [masterSubjectList, setMasterSubjectList] = useState<string[]>([]);
   const [currentTheme, setCurrentTheme] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Combined Analysis Function ---
+  /**
+   * Combines multiple image analyses into a single unified analysis
+   */
+  const combineImageAnalyses = useCallback((analyses: any[]): { theme: string; style: string; colors: string; vibe: string; techniques: string[]; confidence: number } | null => {
+    if (analyses.length === 0) return null;
+
+    // Extract clusters from all analyses
+    const allClusters = analyses
+      .filter(a => a && a.clusters && Array.isArray(a.clusters))
+      .flatMap(a => a.clusters);
+
+    if (allClusters.length === 0) return null;
+
+    // 1. Combine Themes: Find most common theme or merge similar ones
+    const themeCounts = new Map<string, number>();
+    allClusters.forEach(cluster => {
+      const theme = cluster.theme?.trim() || '';
+      if (theme) {
+        themeCounts.set(theme, (themeCounts.get(theme) || 0) + 1);
+      }
+    });
+    const dominantTheme = Array.from(themeCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || allClusters[0].theme;
+
+    // 2. Combine Techniques: Union of all techniques
+    const techniquesSet = new Set<string>();
+    allClusters.forEach(cluster => {
+      if (cluster.technique) {
+        techniquesSet.add(cluster.technique);
+      }
+    });
+    const techniques = Array.from(techniquesSet);
+
+    // 3. Combine Styles: Merge style descriptions
+    const styleKeywords = new Set<string>();
+    allClusters.forEach(cluster => {
+      if (cluster.style) {
+        // Extract keywords from style descriptions
+        const words = cluster.style.toLowerCase().split(/\s+/);
+        words.forEach(word => {
+          if (word.length > 3 && !['the', 'and', 'with', 'from', 'this'].includes(word)) {
+            styleKeywords.add(word);
+          }
+        });
+      }
+    });
+    const combinedStyle = allClusters[0].style || '';
+    const styleSuffix = techniques.length > 0 ? ` Techniques: ${techniques.join(', ')}.` : '';
+
+    // 4. Combine Colors: Frequency-weighted palette
+    const colorFrequency = new Map<string, { name: string; hex: string; count: number }>();
+    allClusters.forEach(cluster => {
+      if (cluster.palette && Array.isArray(cluster.palette)) {
+        cluster.palette.forEach((color: any) => {
+          const key = color.hex?.toLowerCase() || color.name?.toLowerCase();
+          if (key) {
+            const existing = colorFrequency.get(key);
+            if (existing) {
+              existing.count++;
+            } else {
+              colorFrequency.set(key, { name: color.name || '', hex: color.hex || '', count: 1 });
+            }
+          }
+        });
+      }
+    });
+    // Sort by frequency and take top 5-7 colors
+    const topColors = Array.from(colorFrequency.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7)
+      .map(c => `${c.name} (${c.hex})`)
+      .join(', ');
+
+    // 5. Combine Vibe: Most frequent vibe descriptors
+    const vibeWords = new Map<string, number>();
+    allClusters.forEach(cluster => {
+      if (cluster.vibe) {
+        const vibes = cluster.vibe.split(',').map(v => v.trim().toLowerCase());
+        vibes.forEach(vibe => {
+          if (vibe) {
+            vibeWords.set(vibe, (vibeWords.get(vibe) || 0) + 1);
+          }
+        });
+      }
+    });
+    const topVibes = Array.from(vibeWords.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(v => v[0])
+      .join(', ');
+
+    // 6. Average confidence
+    const avgConfidence = analyses.reduce((sum, a) => sum + (a.confidence || 0.8), 0) / analyses.length;
+
+    return {
+      theme: dominantTheme,
+      style: `${combinedStyle}${styleSuffix}`,
+      colors: topColors || allClusters[0].palette?.map((c: any) => `${c.name} (${c.hex})`).join(', ') || '',
+      vibe: topVibes || allClusters[0].vibe || '',
+      techniques: techniques,
+      confidence: avgConfidence
+    };
+  }, []);
 
   // --- Logging Function ---
   const addLog = useCallback((message: string, type: 'log' | 'error' | 'success' = 'log') => {
@@ -178,52 +285,55 @@ const App: React.FC = () => {
       let colors = '';
       let vibe = '';
       if (analysis.status === 'fulfilled') {
-        theme = analysis.value.theme;
-        style = analysis.value.style;
+        // Store full analysis object
+        setAnalyzedImages(prev => [...prev, analysis.value]);
+        
+        theme = analysis.value.theme || '';
+        style = analysis.value.style || '';
         colors = analysis.value.colors || '';
         vibe = analysis.value.vibe || '';
         
         // Update the image in the list with analysis results
         setUploadedImages(prev => prev.map(img => 
           img.id === id 
-            ? { ...img, theme, style, colors, vibe, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined }
+            ? { ...img, theme, style, colors, vibe, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined, fullAnalysis: analysis.value }
             : img
         ));
 
-        // If this is the first image, auto-fill the fields
-        if (uploadedImages.length === 0) {
-          setCustomThemePrompt(theme);
-          // Build style description with technique, vibe, colors, and textures
-          let styleDescription = style;
+        // Compute combined analysis from all analyzed images
+        setAnalyzedImages(prev => {
+          const updatedAnalyses = prev.length > 0 ? [...prev, analysis.value] : [analysis.value];
+          const combined = combineImageAnalyses(updatedAnalyses);
           
-          // Add technique if available from structured response
-          if (analysis.status === 'fulfilled' && analysis.value.clusters && analysis.value.clusters[0]) {
-            const cluster = analysis.value.clusters[0];
-            if (cluster.technique && !styleDescription.includes(cluster.technique)) {
-              styleDescription = `${styleDescription} Technique: ${cluster.technique}.`;
+          if (combined) {
+            setCombinedAnalysis(combined);
+            
+            // Auto-fill/update fields with combined analysis
+            setCustomThemePrompt(combined.theme);
+            
+            // Build style description from combined analysis
+            let styleDescription = combined.style;
+            if (combined.vibe) {
+              styleDescription += ` Vibe/Atmosphere: ${combined.vibe}.`;
             }
-            if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
-              styleDescription += ` Textures: ${cluster.dominant_textures.join(', ')}.`;
+            if (combined.colors) {
+              styleDescription += ` Color palette: ${combined.colors}.`;
             }
+            
+            setSettings(prevSettings => ({
+              ...prevSettings,
+              customArtStyle: styleDescription,
+              colorIntensity: prev.length === 0 ? 'Custom / Override' : prevSettings.colorIntensity, // Switch to Custom / Override mode only on first image
+              styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prevSettings.styleRefUrl
+            }));
           }
           
-          if (vibe) {
-            styleDescription += ` Vibe/Atmosphere: ${vibe}.`;
-          }
-          if (colors) {
-            styleDescription += ` Color palette: ${colors}.`;
-          }
-          setSettings(prev => ({
-            ...prev,
-            customArtStyle: styleDescription,
-            colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
-            styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl
-          }));
-        }
+          return updatedAnalyses;
+        });
         
         const colorInfo = colors ? `, Colors="${colors}"` : '';
         const vibeInfo = vibe ? `, Vibe="${vibe}"` : '';
-        addLog(`✅ Image ${uploadedImages.length + 1} analyzed: Theme="${theme}", Style="${style}"${colorInfo}${vibeInfo}`, 'success');
+        addLog(`✅ Image analyzed: Theme="${theme}", Style="${style}"${colorInfo}${vibeInfo}`, 'success');
       } else {
         console.error('Image analysis error:', analysis.reason);
         addLog(`❌ Failed to analyze image ${uploadedImages.length + 1}: ${analysis.reason?.message || 'Unknown error'}`, 'error');
@@ -250,7 +360,50 @@ const App: React.FC = () => {
       setIsAnalyzingImage(false);
       setIsUploadingStyleRef(false);
     }
-  }, [addLog, uploadedImages.length]);
+  }, [addLog, uploadedImages.length, combineImageAnalyses]);
+
+  // Handle removing an uploaded image
+  const handleRemoveImage = useCallback((imageId: string) => {
+    // Find the image to remove and get its fullAnalysis
+    const imageToRemove = uploadedImages.find(img => img.id === imageId);
+    
+    // Remove from uploadedImages
+    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+    
+    // Remove corresponding analysis from analyzedImages and recompute combined analysis
+    if (imageToRemove?.fullAnalysis) {
+      setAnalyzedImages(prev => {
+        const updatedAnalyses = prev.filter(analysis => analysis !== imageToRemove.fullAnalysis);
+        
+        // Recompute combined analysis
+        const combined = combineImageAnalyses(updatedAnalyses);
+        setCombinedAnalysis(combined);
+        
+        // Update settings if combined analysis changed
+        if (combined) {
+          setCustomThemePrompt(combined.theme);
+          let styleDescription = combined.style;
+          if (combined.vibe) {
+            styleDescription += ` Vibe/Atmosphere: ${combined.vibe}.`;
+          }
+          if (combined.colors) {
+            styleDescription += ` Color palette: ${combined.colors}.`;
+          }
+          setSettings(prevSettings => ({
+            ...prevSettings,
+            customArtStyle: styleDescription
+          }));
+        } else {
+          // No images left, clear combined analysis
+          setCombinedAnalysis(null);
+        }
+        
+        return updatedAnalyses;
+      });
+    }
+    
+    addLog(`🗑️ Image removed. Combined analysis updated.`, 'log');
+  }, [addLog, combineImageAnalyses, uploadedImages]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -417,10 +570,12 @@ const App: React.FC = () => {
     // STEP 1: Generate prompts
     addLog('Generating prompts...');
     
-    // Determine the theme name to use - if custom theme, use the custom prompt directly
-    const themeName = isCustomTheme && customThemePrompt.trim() 
-      ? customThemePrompt.trim() 
-      : selectedTheme?.name || 'Custom Theme';
+    // Determine the theme name to use - prioritize combined analysis from uploaded images
+    const themeName = combinedAnalysis?.theme 
+      ? combinedAnalysis.theme
+      : (isCustomTheme && customThemePrompt.trim() 
+        ? customThemePrompt.trim() 
+        : selectedTheme?.name || 'Custom Theme');
     
     // Note: customThemePrompt and customArtStyle fields have been removed from UI
     // They are kept in settings for backward compatibility but are no longer used
@@ -457,12 +612,14 @@ const App: React.FC = () => {
         const useOpenRouter = settings.promptService === 'openrouter';
         
         if (apiKey) {
-          const rawMaster = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
+          // Use combined analysis theme if available, otherwise use themeName
+          const themeForSubjectList = combinedAnalysis?.theme || themeName;
+          const rawMaster = await generateMasterSubjectList(themeForSubjectList, total, apiKey, apiUrl, useOpenRouter);
           // Clean the master list to replace poetic/abstract subjects with concrete noun phrases
           subjectsToUse = cleanMasterList(rawMaster, total);
           setMasterSubjectList(subjectsToUse);
-          setCurrentTheme(themeName);
-          addLog(`[Master Subject List] Generated ${rawMaster.length} subjects, cleaned to ${subjectsToUse.length} concrete subjects for theme "${themeName}"`, 'success');
+          setCurrentTheme(themeForSubjectList);
+          addLog(`[Master Subject List] Generated ${rawMaster.length} subjects, cleaned to ${subjectsToUse.length} concrete subjects for theme "${themeForSubjectList}"`, 'success');
           console.log('[Master Subject List] Raw:', rawMaster);
           console.log('[Master Subject List] Cleaned:', subjectsToUse);
         } else {
@@ -569,18 +726,35 @@ const App: React.FC = () => {
       // If we have uploaded images, use their theme/style for prompt generation
       // Cycle through uploaded images if we have fewer images than total prompts needed
       const promptPromises = Array.from({ length: total }, (_, i) => {
-        // Use uploaded image's theme/style if available
+        // Use COMBINED analysis from ALL uploaded images (not individual images)
         let imageTheme = themeName;
         let imageStyle = settings.customArtStyle || '';
         
-        if (uploadedImages.length > 0) {
-          const imageIndex = i % uploadedImages.length;
-          const uploadedImage = uploadedImages[imageIndex];
+        if (combinedAnalysis) {
+          // Use combined analysis for ALL prompts (consistent across all variations)
+          imageTheme = combinedAnalysis.theme;
+          
+          // Build style description from combined analysis
+          let styleDescription = combinedAnalysis.style;
+          if (combinedAnalysis.vibe) {
+            styleDescription += ` Vibe/Atmosphere: ${combinedAnalysis.vibe}.`;
+          }
+          if (combinedAnalysis.colors) {
+            styleDescription += ` Color palette: ${combinedAnalysis.colors}.`;
+          }
+          imageStyle = styleDescription;
+          
+          if (i === 0) {
+            // Log once for the first prompt
+            addLog(`[Prompt Generation] Using COMBINED analysis from ${analyzedImages.length} image(s): Theme="${combinedAnalysis.theme}", Techniques=[${combinedAnalysis.techniques.join(', ')}], Confidence=${(combinedAnalysis.confidence * 100).toFixed(0)}%`, 'success');
+          }
+        } else if (uploadedImages.length > 0) {
+          // Fallback: if no combined analysis yet, use first image (shouldn't happen in normal flow)
+          const uploadedImage = uploadedImages[0];
           if (uploadedImage.theme) {
             imageTheme = uploadedImage.theme;
           }
           if (uploadedImage.style) {
-            // Build style description with vibe and colors
             let styleDescription = uploadedImage.style;
             if (uploadedImage.vibe) {
               styleDescription += ` Vibe/Atmosphere: ${uploadedImage.vibe}.`;
@@ -590,11 +764,9 @@ const App: React.FC = () => {
             }
             imageStyle = styleDescription;
           }
-          const extraInfo = [];
-          if (uploadedImage.vibe) extraInfo.push('vibe');
-          if (uploadedImage.colors) extraInfo.push('colors');
-          const extraInfoStr = extraInfo.length > 0 ? `, ${extraInfo.join(' and ')}` : '';
-          addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1} theme/style${extraInfoStr}`, 'log');
+          if (i === 0) {
+            addLog(`[Prompt Generation] Using single image analysis (fallback)`, 'log');
+          }
         }
         
         return generatePromptWithChatGPT(
@@ -1312,8 +1484,57 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </label>
-                <p className="text-xs text-slate-500">
-                  Upload an image to automatically analyze and fill the Theme and Custom Art Style fields. Uses GPT-4o-mini vision.
+                
+                {/* Combined Analysis Display */}
+                {combinedAnalysis && analyzedImages.length > 0 && (
+                  <div className="mt-4 p-3 bg-gothic-gold/10 border border-gothic-gold/30 rounded-lg">
+                    <div className="text-xs font-semibold text-gothic-gold mb-2 flex items-center gap-2">
+                      <Sparkles size={14} />
+                      Combined Analysis ({analyzedImages.length} image{analyzedImages.length > 1 ? 's' : ''})
+                      <span className="text-slate-400 font-normal">
+                        (Confidence: {(combinedAnalysis.confidence * 100).toFixed(0)}%)
+                      </span>
+                    </div>
+                    <div className="space-y-1.5 text-xs">
+                      <div>
+                        <span className="text-gothic-gold font-medium">Global Theme:</span>
+                        <span className="text-slate-300 ml-2">{combinedAnalysis.theme}</span>
+                      </div>
+                      <div>
+                        <span className="text-gothic-gold font-medium">Global Style:</span>
+                        <span className="text-slate-300 ml-2" title={combinedAnalysis.style}>
+                          {combinedAnalysis.style.substring(0, 60)}{combinedAnalysis.style.length > 60 ? '...' : ''}
+                        </span>
+                      </div>
+                      {combinedAnalysis.techniques.length > 0 && (
+                        <div>
+                          <span className="text-gothic-gold font-medium">Techniques:</span>
+                          <span className="text-slate-300 ml-2">{combinedAnalysis.techniques.join(', ')}</span>
+                        </div>
+                      )}
+                      {combinedAnalysis.vibe && (
+                        <div>
+                          <span className="text-gothic-gold font-medium">Global Vibe:</span>
+                          <span className="text-slate-300 ml-2">{combinedAnalysis.vibe}</span>
+                        </div>
+                      )}
+                      {combinedAnalysis.colors && (
+                        <div>
+                          <span className="text-gothic-gold font-medium">Global Colors:</span>
+                          <span className="text-slate-300 ml-2" title={combinedAnalysis.colors}>
+                            {combinedAnalysis.colors.substring(0, 70)}{combinedAnalysis.colors.length > 70 ? '...' : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-400 italic">
+                      All generated prompts will use this combined analysis for consistency.
+                    </div>
+                  </div>
+                )}
+                
+                <p className="text-xs text-slate-500 mt-2">
+                  Upload multiple images to create a combined analysis. Uses GPT-4o-mini vision.
                 </p>
                 {settings.styleRefUrl && (
                   <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded text-xs text-green-400">
