@@ -62,7 +62,7 @@ const App: React.FC = () => {
   const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; styleRefUrl?: string }>>([]);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
@@ -156,11 +156,14 @@ const App: React.FC = () => {
   };
 
   // Handle image upload and analysis
-  // Process image (used by both file upload and paste)
-  const processImage = useCallback(async (base64Image: string) => {
-    setUploadedImage(base64Image);
+  // Process a single image (used by both file upload and paste)
+  const processImage = useCallback(async (base64Image: string, imageId?: string) => {
+    const id = imageId || crypto.randomUUID();
     setIsAnalyzingImage(true);
     setIsUploadingStyleRef(true);
+
+    // Add image to list immediately (before analysis)
+    setUploadedImages(prev => [...prev, { id, base64: base64Image }]);
 
     // Run GPT vision analysis and WordPress upload in parallel
     try {
@@ -170,30 +173,49 @@ const App: React.FC = () => {
       ]);
 
       // Handle GPT vision analysis result
+      let theme = '';
+      let style = '';
       if (analysis.status === 'fulfilled') {
-        // Auto-fill the fields
-        setCustomThemePrompt(analysis.value.theme);
-        setSettings(prev => ({
-          ...prev,
-          customArtStyle: analysis.value.style,
-          colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
-          styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl // Keep existing if upload failed
-        }));
-        addLog(`✅ Image analyzed: Theme="${analysis.value.theme}", Style="${analysis.value.style}"`, 'success');
+        theme = analysis.value.theme;
+        style = analysis.value.style;
+        
+        // Update the image in the list with analysis results
+        setUploadedImages(prev => prev.map(img => 
+          img.id === id 
+            ? { ...img, theme, style, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined }
+            : img
+        ));
+
+        // If this is the first image, auto-fill the fields
+        if (uploadedImages.length === 0) {
+          setCustomThemePrompt(theme);
+          setSettings(prev => ({
+            ...prev,
+            customArtStyle: style,
+            colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
+            styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl
+          }));
+        }
+        
+        addLog(`✅ Image ${uploadedImages.length + 1} analyzed: Theme="${theme}", Style="${style}"`, 'success');
       } else {
         console.error('Image analysis error:', analysis.reason);
-        addLog(`❌ Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`, 'error');
-        alert(`Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`);
+        addLog(`❌ Failed to analyze image ${uploadedImages.length + 1}: ${analysis.reason?.message || 'Unknown error'}`, 'error');
       }
 
       // Handle WordPress upload result
       if (wordPressUrl.status === 'fulfilled') {
-        setStyleRefUrl(wordPressUrl.value);
-        addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
+        setUploadedImages(prev => prev.map(img => 
+          img.id === id ? { ...img, styleRefUrl: wordPressUrl.value } : img
+        ));
+        // Use the first uploaded image's styleRefUrl for Midjourney
+        if (uploadedImages.length === 0) {
+          setStyleRefUrl(wordPressUrl.value);
+        }
+        addLog(`✅ Style Reference ${uploadedImages.length + 1} uploaded: ${wordPressUrl.value}`, 'success');
       } else {
         console.error('WordPress upload error:', wordPressUrl.reason);
-        addLog(`⚠️ Failed to upload style reference: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
-        // Don't show alert for WordPress upload failure - it's optional
+        addLog(`⚠️ Failed to upload style reference ${uploadedImages.length + 1}: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
       }
     } catch (error: any) {
       console.error('Unexpected error:', error);
@@ -202,37 +224,40 @@ const App: React.FC = () => {
       setIsAnalyzingImage(false);
       setIsUploadingStyleRef(false);
     }
-  }, [addLog]);
+  }, [addLog, uploadedImages.length]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file');
-      return;
+    // Process all selected files
+    const fileArray = Array.from(files);
+    
+    // Validate all files first
+    for (const file of fileArray) {
+      if (!file.type.startsWith('image/')) {
+        alert(`"${file.name}" is not an image file. Skipping...`);
+        continue;
+      }
+
+      if (file.size > 20 * 1024 * 1024) {
+        alert(`"${file.name}" is too large (max 20MB). Skipping...`);
+        continue;
+      }
+
+      // Convert to base64 and process
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Image = e.target?.result as string;
+        await processImage(base64Image);
+      };
+
+      reader.onerror = () => {
+        alert(`Failed to read "${file.name}"`);
+      };
+
+      reader.readAsDataURL(file);
     }
-
-    // Validate file size (max 20MB for OpenAI Vision API)
-    if (file.size > 20 * 1024 * 1024) {
-      alert('Image file size must be less than 20MB');
-      return;
-    }
-
-    // Convert to base64
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64Image = e.target?.result as string;
-      await processImage(base64Image);
-    };
-
-    reader.onerror = () => {
-      setIsAnalyzingImage(false);
-      alert('Failed to read image file');
-    };
-
-    reader.readAsDataURL(file);
   };
 
   // Handle paste event for images
@@ -244,19 +269,27 @@ const App: React.FC = () => {
       const items = event.clipboardData?.items;
       if (!items) return;
 
-      // Find image in clipboard
+      // Find all images in clipboard
+      const imageFiles: File[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.type.startsWith('image/')) {
-          event.preventDefault();
-          
           const file = item.getAsFile();
-          if (!file) continue;
+          if (file) {
+            imageFiles.push(file);
+          }
+        }
+      }
 
+      if (imageFiles.length > 0) {
+        event.preventDefault();
+        
+        // Process all pasted images
+        for (const file of imageFiles) {
           // Validate file size (max 20MB)
           if (file.size > 20 * 1024 * 1024) {
-            alert('Pasted image file size must be less than 20MB');
-            return;
+            alert(`Pasted image "${file.name}" is too large (max 20MB). Skipping...`);
+            continue;
           }
 
           // Convert to base64
@@ -264,16 +297,14 @@ const App: React.FC = () => {
           reader.onload = async (e) => {
             const base64Image = e.target?.result as string;
             await processImage(base64Image);
-            addLog('📋 Image pasted from clipboard', 'success');
+            addLog(`📋 Image "${file.name}" pasted from clipboard`, 'success');
           };
 
           reader.onerror = () => {
-            setIsAnalyzingImage(false);
-            alert('Failed to read pasted image');
+            alert(`Failed to read pasted image "${file.name}"`);
           };
 
           reader.readAsDataURL(file);
-          break;
         }
       }
     };
@@ -284,13 +315,38 @@ const App: React.FC = () => {
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, [step, isCustomTheme, processImage]);
+  }, [step, isCustomTheme, processImage, addLog]);
 
-  const handleRemoveImage = () => {
-    setUploadedImage(null);
-    setStyleRefUrl(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleRemoveImage = (imageId?: string) => {
+    if (imageId) {
+      // Remove specific image
+      setUploadedImages(prev => {
+        const filtered = prev.filter(img => img.id !== imageId);
+        // If this was the first image and we removed it, clear the auto-filled fields
+        if (filtered.length === 0) {
+          setCustomThemePrompt('');
+          setSettings(prev => ({
+            ...prev,
+            customArtStyle: '',
+            styleRefUrl: undefined
+          }));
+          setStyleRefUrl(null);
+        }
+        return filtered;
+      });
+    } else {
+      // Remove all images
+      setUploadedImages([]);
+      setCustomThemePrompt('');
+      setSettings(prev => ({
+        ...prev,
+        customArtStyle: '',
+        styleRefUrl: undefined
+      }));
+      setStyleRefUrl(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -484,9 +540,27 @@ const App: React.FC = () => {
       promptsToGenerate = total;
       console.log(`[Pollinations/Replicate] Generating ${promptsToGenerate} prompts (1 prompt per image)`);
       
-      const promptPromises = Array.from({ length: total }, (_, i) => 
-        generatePromptWithChatGPT(
-          themeName,
+      // If we have uploaded images, use their theme/style for prompt generation
+      // Cycle through uploaded images if we have fewer images than total prompts needed
+      const promptPromises = Array.from({ length: total }, (_, i) => {
+        // Use uploaded image's theme/style if available
+        let imageTheme = themeName;
+        let imageStyle = settings.customArtStyle || '';
+        
+        if (uploadedImages.length > 0) {
+          const imageIndex = i % uploadedImages.length;
+          const uploadedImage = uploadedImages[imageIndex];
+          if (uploadedImage.theme) {
+            imageTheme = uploadedImage.theme;
+          }
+          if (uploadedImage.style) {
+            imageStyle = uploadedImage.style;
+          }
+          addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1} theme/style`, 'log');
+        }
+        
+        return generatePromptWithChatGPT(
+          imageTheme,
           settings.pageStyle,
           settings.textureIntensity,
           settings.elements,
@@ -495,7 +569,7 @@ const App: React.FC = () => {
           i + 1,
           '', // customThemePrompt - no longer used
           settings.colorIntensity,
-          settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
+          imageStyle, // Use image-specific style if available
           settings.promptService || 'openai',
           subjectsToUse,
           usedSubjects
@@ -504,8 +578,8 @@ const App: React.FC = () => {
           console.warn(`Full error details:`, error);
           // Fallback to constructed prompt if ChatGPT fails
           return constructPrompt(selectedTheme, settings, i);
-        })
-      );
+        });
+      });
 
       generatedPrompts = await Promise.all(promptPromises);
     }
@@ -1112,6 +1186,7 @@ const App: React.FC = () => {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   onChange={handleImageUpload}
                   className="hidden"
                   id="image-upload"
@@ -1130,36 +1205,62 @@ const App: React.FC = () => {
                   {isAnalyzingImage ? (
                     <div className="flex flex-col items-center gap-2">
                       <RefreshCw className="animate-spin text-gothic-gold" size={24} />
-                      <span className="text-sm text-slate-400">Analyzing image...</span>
+                      <span className="text-sm text-slate-400">Analyzing images...</span>
                     </div>
-                  ) : uploadedImage ? (
-                    <div className="flex flex-col items-center gap-2 w-full p-2">
-                      <div className="relative w-20 h-20 rounded overflow-hidden border border-gothic-gold">
-                        <img
-                          src={uploadedImage}
-                          alt="Uploaded reference"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <span className="text-xs text-gothic-gold">Image uploaded - Click to change</span>
+                  ) : uploadedImages.length > 0 ? (
+                    <div className="w-full space-y-2 max-h-64 overflow-y-auto">
+                      {uploadedImages.map((img, idx) => (
+                        <div key={img.id} className="flex items-center gap-3 p-2 bg-slate-800/50 rounded border border-gothic-gold/30">
+                          <div className="relative w-16 h-16 rounded overflow-hidden border border-gothic-gold flex-shrink-0">
+                            <img
+                              src={img.base64}
+                              alt={`Reference ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-gothic-gold font-medium">Image {idx + 1}</div>
+                            {img.theme && (
+                              <div className="text-xs text-slate-400 truncate" title={img.theme}>
+                                Theme: {img.theme}
+                              </div>
+                            )}
+                            {img.style && (
+                              <div className="text-xs text-slate-500 truncate" title={img.style}>
+                                Style: {img.style.substring(0, 40)}...
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleRemoveImage(img.id);
+                            }}
+                            className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/20 flex-shrink-0"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
                       <button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          handleRemoveImage();
+                          fileInputRef.current?.click();
                         }}
-                        className="text-xs text-red-400 hover:text-red-300 mt-1"
+                        className="w-full text-xs text-gothic-gold hover:text-gothic-gold/80 py-2 border border-gothic-gold/30 rounded hover:bg-gothic-gold/10"
                       >
-                        Remove
+                        + Add More Images
                       </button>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-2">
                       <ImageIcon className="text-slate-400" size={24} />
                       <span className="text-sm text-slate-400">
-                        Click to upload, drag and drop, or paste (Ctrl+V)
+                        Click to upload multiple images, drag and drop, or paste (Ctrl+V)
                       </span>
-                      <span className="text-xs text-slate-500">PNG, JPG, WEBP up to 20MB</span>
+                      <span className="text-xs text-slate-500">PNG, JPG, WEBP up to 20MB each</span>
                     </div>
                   )}
                 </label>
