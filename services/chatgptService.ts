@@ -256,10 +256,30 @@ export async function generateMasterSubjectList(
 }
 
 /**
- * Ensures PRIMARY SUBJECT header is present and correct
+ * Normalizes text for semantic matching
  */
-function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string): string {
+function normalize(text: string): string {
+  return (text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Validates if the prompt text actually describes the required subject
+ */
+function subjectMatchesPrompt(subject: string, promptText: string): boolean {
+  const subjTokens = normalize(subject).split(' ').filter(t => t.length > 2);
+  const body = normalize(promptText.replace(/^primary subject:.*?\./i, ''));
+  const hits = subjTokens.filter(t => body.includes(t));
+  // Require at least one token hit, or at least half of tokens for longer subjects
+  return hits.length >= Math.max(1, Math.floor(subjTokens.length / 2));
+}
+
+/**
+ * Ensures PRIMARY SUBJECT header is present and correct
+ * Returns object with text, corrected flag, and matched flag
+ */
+function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string): { text: string; corrected: boolean; matched: boolean } {
   const trimmed = (gptText || '').trim();
+  let corrected = false;
   
   if (/^PRIMARY SUBJECT:\s*/i.test(trimmed)) {
     // Check if header matches required subject
@@ -268,14 +288,126 @@ function ensurePrimarySubjectHeader(requiredSubject: string, gptText: string): s
       // Replace header
       const rest = trimmed.split('\n').slice(1).join('\n').trim();
       console.warn(`[Primary Subject] Header mismatch. Expected: "${requiredSubject}", got: "${header}". Correcting...`);
-      return `PRIMARY SUBJECT: ${requiredSubject}. ${rest}`;
+      const fixed = `PRIMARY SUBJECT: ${requiredSubject}. ${rest}`;
+      const matched = subjectMatchesPrompt(requiredSubject, fixed);
+      return { text: fixed, corrected: true, matched };
     }
-    return trimmed;
+    const matched = subjectMatchesPrompt(requiredSubject, trimmed);
+    return { text: trimmed, corrected: false, matched };
   } else {
     // Prepend header
     console.warn(`[Primary Subject] Missing header in prompt. Adding: "${requiredSubject}"`);
-    return `PRIMARY SUBJECT: ${requiredSubject}. ${trimmed}`;
+    const fixed = `PRIMARY SUBJECT: ${requiredSubject}. ${trimmed}`;
+    const matched = subjectMatchesPrompt(requiredSubject, fixed);
+    return { text: fixed, corrected: true, matched };
   }
+}
+
+/**
+ * Calls ChatGPT with retry logic and header enforcement
+ */
+async function callPromptWithHeaderEnforcement(
+  subject: string,
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  apiUrl: string,
+  useOpenRouter: boolean,
+  maxAttempts: number = 3
+): Promise<{ text: string; corrected: boolean; attempt: number; matched: boolean }> {
+  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+      
+      if (useOpenRouter) {
+        headers['HTTP-Referer'] = window.location.origin;
+        headers['X-Title'] = 'Junk Journal Generator';
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.6,
+          max_tokens: useOpenRouter ? 4000 : 220,
+          stream: false
+        })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data: ChatGPTResponse = await response.json();
+      if (!data.choices || data.choices.length === 0) {
+        throw new Error('No response from API');
+      }
+
+      let rawText = data.choices[0].message.content;
+      
+      // Clean DeepSeek R1 reasoning tags if using OpenRouter
+      if (useOpenRouter) {
+        rawText = cleanDeepSeekOutput(rawText);
+      }
+      
+      const text = rawText.trim();
+
+      // Check for RETRY token
+      if (/^RETRY$/i.test(text)) {
+        console.warn(`[PromptGen] GPT returned RETRY for "${subject}" (attempt ${attempt}/${maxAttempts})`);
+        if (attempt < maxAttempts) continue;
+      }
+
+      // Check if header is present
+      if (/^PRIMARY SUBJECT:\s*/i.test(text)) {
+        const result = ensurePrimarySubjectHeader(subject, text);
+        if (result.matched) {
+          return { ...result, attempt };
+        } else {
+          console.warn(`[PromptGen] Semantic mismatch for "${subject}" (attempt ${attempt}/${maxAttempts}). Prompt doesn't describe the subject.`);
+          if (attempt < maxAttempts) continue;
+          return { ...result, attempt };
+        }
+      }
+
+      // Header missing - retry if not last attempt
+      if (attempt < maxAttempts) {
+        console.warn(`[PromptGen] Header missing for "${subject}" (attempt ${attempt}/${maxAttempts}). Retrying...`);
+        continue;
+      }
+
+      // Final fallback: force header
+      const forced = `PRIMARY SUBJECT: ${subject}. ${text.replace(/^(\s*PRIMARY SUBJECT:.*?\.)/i, '').trim()}`;
+      const matched = subjectMatchesPrompt(subject, forced);
+      return { text: forced, corrected: true, attempt, matched };
+    } catch (error: any) {
+      console.error(`[PromptGen] Error on attempt ${attempt}/${maxAttempts} for "${subject}":`, error);
+      if (attempt < maxAttempts) continue;
+      // Final fallback on error
+      const forced = `PRIMARY SUBJECT: ${subject}. [Error generating prompt, using fallback]`;
+      return { text: forced, corrected: true, attempt, matched: false };
+    }
+  }
+
+  // Should never reach here, but TypeScript needs it
+  const forced = `PRIMARY SUBJECT: ${subject}. [Max attempts reached]`;
+  return { text: forced, corrected: true, attempt: maxAttempts, matched: false };
 }
 
 /**

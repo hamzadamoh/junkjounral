@@ -412,6 +412,11 @@ const App: React.FC = () => {
       
       const requestPrompts = await Promise.all(promptPromises);
       
+      // Validation: Check for corrections and semantic mismatches
+      const CORRECTION_ALERT_THRESHOLD = 6; // Alert if ≥6 prompts were corrected
+      let correctionCount = 0;
+      let mismatchCount = 0;
+      
       // Duplicate detection: check for repeated PRIMARY SUBJECT headers
       const subjectMap = new Map<string, number[]>();
       requestPrompts.forEach((prompt, idx) => {
@@ -432,6 +437,12 @@ const App: React.FC = () => {
           addLog(`⚠️ Duplicate subject detected: "${subject}" in variations ${indices.join(', ')}`, 'error');
         }
       });
+      
+      // Check console logs for correction warnings (approximate count)
+      const correctionWarnings = consoleLogs.filter(log => log.message.includes('was corrected')).length;
+      if (correctionWarnings >= CORRECTION_ALERT_THRESHOLD) {
+        addLog(`⚠️ High correction rate detected: ${correctionWarnings} prompts were corrected. Consider reviewing the master subject list.`, 'error');
+      }
       
       // Expand prompts: each request prompt is used for 4 images
       generatedPrompts = [];
