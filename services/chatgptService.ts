@@ -743,6 +743,12 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
   if (colorIntensity === 'Custom / Override') {
     const systemPrompt = `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
 
+🚨 CRITICAL FORMAT REQUIREMENT:
+Your response MUST start with this EXACT line (copy it exactly, do not modify):
+PRIMARY SUBJECT: [the exact subject name provided by the user]
+
+Then, in 1-2 sentences, describe ONLY that subject as the main visual focus.
+
 🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
 
 - Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
@@ -752,7 +758,9 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
 
 🎨 COLOR LOGIC: Unless the user explicitly uses words like 'Vibrant', 'Neon', 'Bright', or 'Saturated', you MUST default to a **Soft, Natural, or Muted** color palette. Avoid oversaturation. Prioritize artistic, tasteful, and printable colors over intense digital hues.
 
-🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.`;
+🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.
+
+REMEMBER: Start EVERY response with "PRIMARY SUBJECT: [subject]." (with the period after the subject name).`;
 
     // Use composable variation instruction (time + composition + mood)
     const variationInstruction = getComposableVariationInstruction(variationNumber);
