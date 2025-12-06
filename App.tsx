@@ -870,6 +870,11 @@ const App: React.FC = () => {
           // Get image-specific style reference URL
           const imageStyleRefUrl = uploadedImages[imageIndex]?.styleRefUrl;
           
+          // TEMPORARY DEBUG: Uncomment to test with single reference URL
+          // const debugStyleRefUrl = "https://gold-stingray-884517.hostingersite.com/wp-content/uploads/2025/12/style-ref-1764982392518.png"; // Replace with your test URL
+          // const imageStyleRefUrl = debugStyleRefUrl;
+          // console.log(`[DEBUG] Forcing same style reference for all requests: ${debugStyleRefUrl}`);
+          
           // Create modified settings with image-specific styleRefUrl
           const imageSpecificSettings = {
             ...settings,
@@ -880,6 +885,8 @@ const App: React.FC = () => {
           console.log(`[Midjourney Request ${requestIdx + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`);
           if (imageStyleRefUrl) {
             console.log(`[Midjourney Request ${requestIdx + 1}] Style reference URL: ${imageStyleRefUrl}`);
+          } else {
+            console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ No style reference URL found for image ${imageIndex + 1}`);
           }
           
           // Midjourney/Legnext returns an array of images (typically 4)
@@ -925,9 +932,9 @@ const App: React.FC = () => {
 
           addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ✅ COMPLETED - Generated ${base64Urls.length} images (Images ${imageRange})`, 'success');
           return { success: true, index: requestIdx };
-        } catch (err: any) {
+      } catch (err: any) {
           addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ❌ ERROR (Images ${imageRange}): ${err.message || err}`, 'error');
-          setErrorMsg(err.message || "Failed to generate some pages.");
+        setErrorMsg(err.message || "Failed to generate some pages.");
           const startIdx = requestIdx * 4;
           const endIdx = Math.min(startIdx + 4, total);
           setGeneratedImages(prev => prev.map((img, idx) => 

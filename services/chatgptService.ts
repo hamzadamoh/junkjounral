@@ -1006,29 +1006,30 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
     return controlText;
   };
 
-  // CRITICAL: If colorIntensity is 'Custom / Override', use minimal prompt for Midjourney style reference mode
+  // CRITICAL: If colorIntensity is 'Custom / Override', use ULTRA-MINIMAL prompt for Midjourney style reference mode
   if (colorIntensity === 'Custom / Override') {
-    const systemPrompt = `You are a minimal prompt writer for Midjourney style reference mode.
+    const systemPrompt = `You generate MINIMAL subject-only prompts for Midjourney.
 
-CRITICAL RULES:
-1. Start with: "PRIMARY SUBJECT: [exact subject from user]"
-2. Write ONLY 1 short sentence (10-15 words) describing the subject
-3. Focus ONLY on: subject position, pose, basic composition
-4. NO elaborate descriptions, NO flowery language, NO style/mood/color details
-5. The style reference images control all visual style - you only describe WHAT is shown
+RULES:
+1. Start with "PRIMARY SUBJECT: [exact subject]"
+2. ONE sentence: ONLY what the subject is and its basic pose/position (8-12 words max)
+3. FORBIDDEN WORDS - NEVER USE: style, technique, illustration, painting, digital, watercolor, realistic, photorealistic, collage, vintage, impressionist, artistic, art, artwork, drawing, sketch, render, aesthetic, mood, atmosphere, vibe, colors, palette, lighting, shadows, texture, background
+4. ONLY describe: subject + pose + composition type
 
-GOOD EXAMPLES:
-PRIMARY SUBJECT: Deer in meadow. Young deer standing among wildflowers, centered portrait composition.
+EXAMPLES:
+PRIMARY SUBJECT: Owl on branch. Owl perched on oak branch, centered view.
 
-PRIMARY SUBJECT: Fox under moon. Fox sitting upright gazing at moon, surrounded by flowers.
+PRIMARY SUBJECT: Deer in meadow. Young deer standing among flowers, portrait orientation.
 
-PRIMARY SUBJECT: Cherry blossom tree. Blooming tree within ornate circular frame, symmetrical composition.
+PRIMARY SUBJECT: Swan on water. Swan gliding across pond, symmetrical composition.
 
-BAD EXAMPLES (TOO ELABORATE):
-❌ "The majestic deer stands gracefully in a vibrant meadow, its soft coat glowing..."
-❌ "An enchanting fox gazes wistfully at the luminous moon while delicate blossoms..."
+FORBIDDEN EXAMPLES:
+❌ "Painterly illustration of..." 
+❌ "Whimsical digital art showing..."
+❌ "Photorealistic macro of..."
+❌ "Vintage collage featuring..."
 
-Remember: Style reference handles colors, textures, lighting, mood. You ONLY describe the subject and composition.`;
+Output ONLY: "PRIMARY SUBJECT: [subject]. [8-12 word sentence with zero style words]"`;
 
     const userPrompt = `Generate a minimal subject description for variation ${variationNumber}.
 

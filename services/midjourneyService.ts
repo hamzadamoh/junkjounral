@@ -584,25 +584,10 @@ export const generateJournalPage = async (
       }
     }
 
-    // Add Style Reference (--sref) with 60/20/20 strategy
-    // 60% use --sw 30 --sv 2 (moderate), 20% use --sw 55 --sv 3 (higher), 20% omit --sref
+    // MAXIMUM style reference influence - force Midjourney to follow reference style
     if (settings.styleRefUrl && settings.styleRefUrl.trim()) {
-      // Use variationIndex to determine strategy (0-based, default to 0)
-      const idx = variationIndex ?? 0;
-      const strategy = idx % 10;
-      
-      if (strategy < 6) {
-        // 60%: Moderate influence
-        prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 30 --sv 2 --c 5`;
-        console.log(`[Midjourney] Added style reference (Moderate: --sw 30 --sv 2) for variation ${idx + 1}: ${settings.styleRefUrl}`);
-      } else if (strategy < 8) {
-        // 20%: Higher influence
-        prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 55 --sv 3 --c 5`;
-        console.log(`[Midjourney] Added style reference (Higher: --sw 55 --sv 3) for variation ${idx + 1}: ${settings.styleRefUrl}`);
-      } else {
-        // 20%: Omit --sref entirely
-        console.log(`[Midjourney] Omitting style reference for variation ${idx + 1} (20% strategy)`);
-      }
+      prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 1000`;
+      console.log(`[Midjourney] Added MAXIMUM style reference (--sw 1000) for variation ${variationIndex ?? 0}: ${settings.styleRefUrl}`);
     }
 
     // Add aspect ratio last (after style reference if present)
@@ -613,6 +598,15 @@ export const generateJournalPage = async (
     // Clean the prompt before sending to remove newlines and problematic characters
     // This prevents Midjourney from interpreting newlines as parameter separators
     prompt = cleanPromptForMidjourney(prompt);
+
+    // Log the EXACT prompt being sent to Midjourney for debugging
+    console.log(`[Midjourney] FULL PROMPT BEING SENT: "${prompt}"`);
+    console.log(`[Midjourney] Full request body:`, JSON.stringify({
+      prompt: prompt,
+      aspect_ratio: aspectRatio,
+      process_mode: processMode,
+      skip_prompt_check: true
+    }, null, 2));
 
     // Send task to Go API
     const taskId = await sendTaskToGoApi(prompt, aspectRatio, processMode);
