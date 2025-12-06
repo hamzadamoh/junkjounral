@@ -535,7 +535,8 @@ const App: React.FC = () => {
           imageStyle, // Use image-specific style (exact copy from analysis)
           settings.promptService || 'openai',
           imageSubjectList, // Use image-specific subject list
-          usedSubjects
+          usedSubjects,
+          settings.primarySubject?.trim() || undefined // User-specified primary subject (if provided)
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -695,7 +696,7 @@ const App: React.FC = () => {
           settings.promptService || 'openai',
           imageSubjectList, // Use image-specific subject list
           usedSubjects,
-          undefined,
+          settings.primarySubject?.trim() || undefined, // User-specified primary subject (if provided)
           0
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
@@ -1678,6 +1679,20 @@ const App: React.FC = () => {
                     : 'Custom style - no automatic junk journal or modern constraints, follows your theme exactly'}
                 </p>
           </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Primary Subject (Optional)</label>
+                <input
+                  type="text"
+                  value={settings.primarySubject || ''}
+                  onChange={(e) => handleSettingChange('primarySubject', e.target.value)}
+                  placeholder="e.g., Gothic castle, Burning heart, Butterfly..."
+                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 placeholder-slate-500 focus:outline-none focus:border-gothic-gold transition-colors"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Leave blank to auto-generate varied subjects from theme. Or specify one subject to use for all variations.
+                </p>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Aspect Ratio</label>
