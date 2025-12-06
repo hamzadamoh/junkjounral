@@ -578,21 +578,26 @@ const pollTaskUntilComplete = async (
               console.log(`[Ttapi] ✅ Found ${variationUrls.length} individual image URLs in variations/upsamples`);
               imageUrls = variationUrls;
             } else {
-              // If no individual URLs found, return the grid image 4 times
-              // (The app expects 4 images per request, so we'll duplicate the grid)
-              console.log(`[Ttapi] ⚠️ No individual image URLs found. Returning grid image 4 times.`);
-              console.log(`[Ttapi] 💡 Note: Ttapi may only return a grid image. Consider using components/variations API to get individual images.`);
-              imageUrls = [singleUrl, singleUrl, singleUrl, singleUrl];
+              // If no individual URLs found, we'll split the grid image into 4 tiles
+              console.log(`[Ttapi] ⚠️ No individual image URLs found. Will split grid image into 4 tiles.`);
+              // Keep singleUrl - we'll split it later in convertUrlsToBase64
+              imageUrls = [singleUrl]; // Mark as grid to split
             }
           } else {
-            // No data object, just duplicate the single URL
-            console.log(`[Ttapi] ⚠️ No data object found. Returning grid image 4 times.`);
-            imageUrls = [singleUrl, singleUrl, singleUrl, singleUrl];
+            // No data object, mark as grid to split
+            console.log(`[Ttapi] ⚠️ No data object found. Will split grid image into 4 tiles.`);
+            imageUrls = [singleUrl]; // Mark as grid to split
           }
         }
         
         if (imageUrls.length > 0) {
-          console.log(`[Ttapi] ✅ Task ${jobId} completed! Returning ${imageUrls.length} images`);
+          // If we have exactly 1 image and it's marked as a grid, return it as-is
+          // (We'll split it in convertUrlsToBase64)
+          if (imageUrls.length === 1) {
+            console.log(`[Ttapi] ✅ Task ${jobId} completed! Found grid image (will split into 4 tiles)`);
+          } else {
+            console.log(`[Ttapi] ✅ Task ${jobId} completed! Returning ${imageUrls.length} images`);
+          }
           return imageUrls;
         } else {
           // Log detailed structure for debugging
@@ -689,14 +694,81 @@ const pollTaskUntilComplete = async (
 };
 
 /**
- * Converts image URLs to base64 data URLs
+ * Splits a grid image into 4 individual images (2x2 grid)
+ * Returns an array of 4 base64 data URLs
  */
-const convertUrlsToBase64 = async (urls: string[]): Promise<string[]> => {
-  const base64Promises = urls.map(async (url) => {
-    try {
-      // Use Vercel proxy to bypass CORS if needed
-      const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(url)}`;
-      const response = await fetch(proxyUrl);
+const splitGridImage = async (gridImageUrl: string): Promise<string[]> => {
+  try {
+    console.log(`[Ttapi] 🖼️ Splitting grid image into 4 individual images...`);
+    
+    // Use Vercel proxy to fetch the grid image
+    const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(gridImageUrl)}`;
+    const response = await fetch(proxyUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch grid image: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const imageBitmap = await createImageBitmap(blob);
+    
+    const width = imageBitmap.width;
+    const height = imageBitmap.height;
+    const tileWidth = width / 2;
+    const tileHeight = height / 2;
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = tileWidth;
+    canvas.height = tileHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      throw new Error('Failed to get canvas context');
+    }
+    
+    const tiles: string[] = [];
+    
+    // Split into 4 tiles (2x2 grid)
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 2; col++) {
+        const sx = col * tileWidth;
+        const sy = row * tileHeight;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, tileWidth, tileHeight);
+        
+        // Draw the tile
+        ctx.drawImage(
+          imageBitmap,
+          sx, sy, tileWidth, tileHeight,  // Source rectangle
+          0, 0, tileWidth, tileHeight      // Destination rectangle
+        );
+        
+        // Convert to base64
+        const base64 = canvas.toDataURL('image/png');
+        tiles.push(base64);
+      }
+    }
+    
+    imageBitmap.close();
+    console.log(`[Ttapi] ✅ Successfully split grid into ${tiles.length} individual images`);
+    return tiles;
+  } catch (error: any) {
+    console.error(`[Ttapi] ❌ Error splitting grid image:`, error);
+    // Fallback: return the grid image 4 times
+    console.log(`[Ttapi] ⚠️ Falling back to duplicating grid image`);
+    const base64 = await convertUrlToBase64(gridImageUrl);
+    return [base64, base64, base64, base64];
+  }
+};
+
+/**
+ * Converts a single image URL to base64 data URL
+ */
+const convertUrlToBase64 = async (url: string): Promise<string> => {
+  try {
+    const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch image: ${response.statusText}`);
@@ -845,11 +917,18 @@ export const generateJournalPage = async (
     }
 
     // Convert URLs to base64
-    console.log(`[Ttapi] Converting ${imageUrls.length} image(s) to base64...`);
-    const base64Images = await convertUrlsToBase64(imageUrls);
-    
-    console.log(`[Ttapi] ✅ Successfully generated ${base64Images.length} image(s)`);
-    return base64Images;
+    // If we have exactly 1 image, it's likely a grid - split it into 4 tiles
+    if (imageUrls.length === 1) {
+      console.log(`[Ttapi] Detected grid image - splitting into 4 individual tiles...`);
+      const base64Images = await splitGridImage(imageUrls[0]);
+      console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
+      return base64Images;
+    } else {
+      console.log(`[Ttapi] Converting ${imageUrls.length} image(s) to base64...`);
+      const base64Images = await convertUrlsToBase64(imageUrls);
+      console.log(`[Ttapi] ✅ Successfully generated ${base64Images.length} image(s)`);
+      return base64Images;
+    }
   } catch (error: any) {
     console.error(`[Ttapi] ❌ Error generating journal page:`, error);
     throw new Error(`Ttapi Image Generation Error: ${error.message || 'Unknown error occurred'}`);
