@@ -398,8 +398,21 @@ const pollTaskUntilComplete = async (
         // Try to extract image URLs from various possible locations
         let imageUrls: string[] = [];
 
-        // Check output.image_urls (array)
-        if (status.output && typeof status.output === 'object' && !Array.isArray(status.output)) {
+        // PRIORITY 1: Check data.cdnImage and data.discordImage FIRST (Ttapi specific)
+        // Ttapi returns images in data.cdnImage or data.discordImage - check these FIRST
+        if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
+          // Ttapi specific fields: cdnImage (preferred) and discordImage (fallback)
+          if (status.data.cdnImage) {
+            imageUrls = [status.data.cdnImage];
+            console.log(`[Ttapi] ✅ Found image in data.cdnImage`);
+          } else if (status.data.discordImage) {
+            imageUrls = [status.data.discordImage];
+            console.log(`[Ttapi] ✅ Found image in data.discordImage`);
+          }
+        }
+
+        // PRIORITY 2: Check output.image_urls (array)
+        if (imageUrls.length === 0 && status.output && typeof status.output === 'object' && !Array.isArray(status.output)) {
           if (Array.isArray(status.output.image_urls)) {
             imageUrls = status.output.image_urls;
           } else if (status.output.image_url) {
@@ -415,7 +428,7 @@ const pollTaskUntilComplete = async (
           }
         }
 
-        // Check result field
+        // PRIORITY 3: Check result field
         if (imageUrls.length === 0 && status.result) {
           if (Array.isArray(status.result.images)) {
             imageUrls = status.result.images;
@@ -428,7 +441,7 @@ const pollTaskUntilComplete = async (
           }
         }
 
-        // Check top-level fields
+        // PRIORITY 4: Check top-level fields
         if (imageUrls.length === 0) {
           if (Array.isArray(status.images)) {
             imageUrls = status.images;
@@ -440,8 +453,8 @@ const pollTaskUntilComplete = async (
             imageUrls = status.urls;
           }
         }
-
-        // Check data field (Ttapi often returns images in data object)
+        
+        // If still no URLs found, check other data locations
         if (imageUrls.length === 0 && status.data) {
           // Check if data is an object
           if (typeof status.data === 'object' && !Array.isArray(status.data)) {
@@ -502,19 +515,25 @@ const pollTaskUntilComplete = async (
           console.error(`[Ttapi] Response keys:`, Object.keys(status));
           console.error(`[Ttapi] Full response:`, JSON.stringify(status, null, 2));
           
-          // Try to find any URL-like strings in the response
+          // Try to find any URL-like strings in the response (fallback)
           const responseStr = JSON.stringify(status);
           const urlMatches = responseStr.match(/https?:\/\/[^\s"']+/g);
           if (urlMatches && urlMatches.length > 0) {
             console.warn(`[Ttapi] ⚠️ Found potential image URLs in response:`, urlMatches);
-            // Filter out non-image URLs (like API endpoints)
-            const imageUrls = urlMatches.filter(url => 
-              /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(url) || 
-              url.includes('cdn') || 
-              url.includes('image')
-            );
+            // Filter out non-image URLs (like API endpoints, style reference URLs)
+            const imageUrls = urlMatches.filter(url => {
+              // Exclude style reference URLs (WordPress hosting URLs)
+              if (url.includes('hostingersite.com') || url.includes('wp-content')) {
+                return false;
+              }
+              // Include image URLs
+              return /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(url) || 
+                     url.includes('cdn.discordapp.com') || 
+                     url.includes('mjcdn.ttapi.io') ||
+                     url.includes('discordapp.com/attachments');
+            });
             if (imageUrls.length > 0) {
-              console.log(`[Ttapi] ✅ Extracted ${imageUrls.length} image URLs from response`);
+              console.log(`[Ttapi] ✅ Extracted ${imageUrls.length} image URLs from response (filtered)`);
               return imageUrls;
             }
           }
