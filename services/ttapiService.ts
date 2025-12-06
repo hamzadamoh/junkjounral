@@ -14,6 +14,13 @@ interface TtapiTaskResponse {
   task_id?: string;
   status?: string;
   message?: string;
+  data?: {
+    jobId?: string;
+    job_id?: string;
+    id?: string;
+    task_id?: string;
+    [key: string]: any;
+  };
   [key: string]: any; // Allow other fields
 }
 
@@ -257,11 +264,16 @@ const sendTaskToTtapi = async (
     console.log(`[Ttapi] Task creation response:`, JSON.stringify(json, null, 2));
 
     // Try multiple possible field names for the job ID
-    const jobId = json.jobId || json.job_id || json.id || json.task_id;
+    // Check data.jobId first (ttapi.io returns jobId inside data object)
+    const jobId = json.data?.jobId || json.data?.job_id || json.data?.id || json.data?.task_id ||
+                   json.jobId || json.job_id || json.id || json.task_id;
     
     if (!jobId) {
       console.error(`[Ttapi] ❌ No job ID found in response. Full response:`, JSON.stringify(json, null, 2));
       console.error(`[Ttapi] Response keys:`, Object.keys(json));
+      if (json.data) {
+        console.error(`[Ttapi] Data keys:`, Object.keys(json.data));
+      }
       throw new Error('Failed to create task: No job ID returned from ttapi.io API. Check console for full API response.');
     }
 
