@@ -419,6 +419,10 @@ const pollTaskUntilComplete = async (
           if (Array.isArray(status.data.images) && status.data.images.length > 0) {
             imageUrls = status.data.images;
             console.log(`[Ttapi] ✅ Found ${imageUrls.length} individual images in data.images (getUImages=true)`);
+          } else if (status.data.images === null || status.data.images === undefined) {
+            // getUImages was requested but images array is null/undefined
+            // This might happen in Hold Account Mode or if the feature isn't available
+            console.warn(`[Ttapi] ⚠️ getUImages=true was sent but data.images is null. This might not be supported in Hold Account Mode. Falling back to grid splitting.`);
           } else if (Array.isArray(status.data.image_urls) && status.data.image_urls.length > 0) {
             imageUrls = status.data.image_urls;
             console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.image_urls`);
