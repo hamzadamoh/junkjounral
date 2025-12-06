@@ -1,6 +1,11 @@
 import { Theme, GenerationSettings } from '../types';
 
-const TTAPI_BASE_URL = 'https://api.ttapi.io';
+// Get Ttapi domain from environment variable (defaults to PPU mode)
+// Hold Account Mode: https://hold.ttapi.io
+// PPU Mode: https://api.ttapi.io
+const getTtapiBaseUrl = (): string => {
+  return import.meta.env.VITE_TTAPI_DOMAIN || 'https://api.ttapi.io';
+};
 
 // Get API key from environment variable only
 const getTtapiApiKey = (): string => {
@@ -223,7 +228,8 @@ const sendTaskToTtapi = async (
     prompt: prompt
   };
 
-  const url = `${TTAPI_BASE_URL}/midjourney/v1/imagine`;
+  const baseUrl = getTtapiBaseUrl();
+  const url = `${baseUrl}/midjourney/v1/imagine`;
   console.log(`[Ttapi] Request URL: ${url}`);
   console.log(`[Ttapi] Request data:`, JSON.stringify(data, null, 2));
 
@@ -527,7 +533,8 @@ const pollTaskUntilComplete = async (
       if (attempts === 30 && (status.status === 'pending' || status.status === 'processing')) {
         console.warn(`[Ttapi] ⚠️ Task ${jobId} has been ${status.status} for ${elapsed} minutes.`);
         console.warn(`[Ttapi] This is normal for Midjourney - generation can take 5-15 minutes depending on server load.`);
-        console.warn(`[Ttapi] Check status manually: https://ttapi.io/dashboard or API: ${TTAPI_BASE_URL}/midjourney/v1/fetch?jobId=${jobId}`);
+        const baseUrl = getTtapiBaseUrl();
+        console.warn(`[Ttapi] Check status manually: https://ttapi.io/dashboard or API: ${baseUrl}/midjourney/v1/fetch?jobId=${jobId}`);
       }
 
       // Check for images even if status is not 'completed' (sometimes API returns images before status updates)

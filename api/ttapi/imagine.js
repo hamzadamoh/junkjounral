@@ -18,6 +18,11 @@ export default async function handler(req, res) {
       });
     }
 
+    // Get Ttapi domain from environment variable (defaults to PPU mode)
+    // Hold Account Mode: https://hold.ttapi.io
+    // PPU Mode: https://api.ttapi.io
+    const ttapiDomain = process.env.TTAPI_DOMAIN || process.env.VITE_TTAPI_DOMAIN || 'https://api.ttapi.io';
+
     // Get the prompt from the request body
     const { prompt } = req.body;
 
@@ -26,9 +31,10 @@ export default async function handler(req, res) {
     }
 
     console.log(`[Ttapi Proxy] Creating task with prompt: ${prompt.substring(0, 100)}...`);
+    console.log(`[Ttapi Proxy] Using domain: ${ttapiDomain}`);
 
     // Call ttapi.io API FROM THE SERVER (Securely)
-    const response = await fetch('https://api.ttapi.io/midjourney/v1/imagine', {
+    const response = await fetch(`${ttapiDomain}/midjourney/v1/imagine`, {
       method: 'POST',
       headers: {
         'TT-API-KEY': apiKey,

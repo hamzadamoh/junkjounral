@@ -18,6 +18,11 @@ export default async function handler(req, res) {
       });
     }
 
+    // Get Ttapi domain from environment variable (defaults to PPU mode)
+    // Hold Account Mode: https://hold.ttapi.io
+    // PPU Mode: https://api.ttapi.io
+    const ttapiDomain = process.env.TTAPI_DOMAIN || process.env.VITE_TTAPI_DOMAIN || 'https://api.ttapi.io';
+
     // Get the jobId from query parameter
     const { jobId } = req.query;
 
@@ -26,9 +31,10 @@ export default async function handler(req, res) {
     }
 
     console.log(`[Ttapi Proxy] Fetching status for job: ${jobId}`);
+    console.log(`[Ttapi Proxy] Using domain: ${ttapiDomain}`);
 
     // Call ttapi.io API FROM THE SERVER (Securely)
-    const response = await fetch(`https://api.ttapi.io/midjourney/v1/fetch?jobId=${jobId}`, {
+    const response = await fetch(`${ttapiDomain}/midjourney/v1/fetch?jobId=${jobId}`, {
       method: 'GET',
       headers: {
         'TT-API-KEY': apiKey,
