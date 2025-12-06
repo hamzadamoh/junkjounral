@@ -395,6 +395,20 @@ const pollTaskUntilComplete = async (
         // Log full response for debugging
         console.log(`[Ttapi] Task ${jobId} completed. Full response:`, JSON.stringify(status, null, 2));
         
+        // Check if response contains components/variations (Midjourney grid -> individual images)
+        // Ttapi might return a grid image and components to get individual variations
+        if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
+          if (status.data.components && Array.isArray(status.data.components)) {
+            console.log(`[Ttapi] 📋 Found components array:`, status.data.components);
+          }
+          if (status.data.variations && Array.isArray(status.data.variations)) {
+            console.log(`[Ttapi] 📋 Found variations array:`, status.data.variations);
+          }
+          if (status.data.buttons && Array.isArray(status.data.buttons)) {
+            console.log(`[Ttapi] 📋 Found buttons array:`, status.data.buttons);
+          }
+        }
+        
         // Try to extract image URLs from various possible locations
         let imageUrls: string[] = [];
 
@@ -532,8 +546,53 @@ const pollTaskUntilComplete = async (
           }
         }
 
+        // If we only found 1 image (likely a grid), check if we can get individual images
+        // Midjourney typically returns a grid image first, then you need to use variations/components
+        if (imageUrls.length === 1) {
+          const singleUrl = imageUrls[0];
+          console.log(`[Ttapi] ⚠️ Only found 1 image URL (likely a grid): ${singleUrl}`);
+          console.log(`[Ttapi] 📋 Checking if response contains individual image URLs or components...`);
+          
+          // Check if data contains individual image URLs (variations)
+          if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
+            // Check for variation URLs (variation1, variation2, variation3, variation4)
+            const variationUrls: string[] = [];
+            for (let i = 1; i <= 4; i++) {
+              const variationKey = `variation${i}`;
+              const variationUrl = status.data[variationKey];
+              if (variationUrl && typeof variationUrl === 'string' && variationUrl.startsWith('http')) {
+                variationUrls.push(variationUrl);
+              }
+            }
+            
+            // Check for upsample URLs (upsample1, upsample2, upsample3, upsample4)
+            for (let i = 1; i <= 4; i++) {
+              const upsampleKey = `upsample${i}`;
+              const upsampleUrl = status.data[upsampleKey];
+              if (upsampleUrl && typeof upsampleUrl === 'string' && upsampleUrl.startsWith('http')) {
+                variationUrls.push(upsampleUrl);
+              }
+            }
+            
+            if (variationUrls.length > 0) {
+              console.log(`[Ttapi] ✅ Found ${variationUrls.length} individual image URLs in variations/upsamples`);
+              imageUrls = variationUrls;
+            } else {
+              // If no individual URLs found, return the grid image 4 times
+              // (The app expects 4 images per request, so we'll duplicate the grid)
+              console.log(`[Ttapi] ⚠️ No individual image URLs found. Returning grid image 4 times.`);
+              console.log(`[Ttapi] 💡 Note: Ttapi may only return a grid image. Consider using components/variations API to get individual images.`);
+              imageUrls = [singleUrl, singleUrl, singleUrl, singleUrl];
+            }
+          } else {
+            // No data object, just duplicate the single URL
+            console.log(`[Ttapi] ⚠️ No data object found. Returning grid image 4 times.`);
+            imageUrls = [singleUrl, singleUrl, singleUrl, singleUrl];
+          }
+        }
+        
         if (imageUrls.length > 0) {
-          console.log(`[Ttapi] ✅ Task ${jobId} completed! Found ${imageUrls.length} images`);
+          console.log(`[Ttapi] ✅ Task ${jobId} completed! Returning ${imageUrls.length} images`);
           return imageUrls;
         } else {
           // Log detailed structure for debugging
