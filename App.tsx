@@ -27,7 +27,7 @@ import { generateJournalPage as generateWithPollinations } from './services/poll
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
-import { generatePromptWithChatGPT, analyzeReferenceImage, generateMasterSubjectList, cleanMasterList } from './services/chatgptService';
+import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 
 const App: React.FC = () => {
@@ -66,8 +66,6 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
-  const [masterSubjectList, setMasterSubjectList] = useState<string[]>([]);
-  const [currentTheme, setCurrentTheme] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Logging Function ---
@@ -112,11 +110,7 @@ const App: React.FC = () => {
     setIsCustomTheme(false);
     setCustomThemePrompt('');
     
-    // Clear master subject list when theme changes
-    if (newTheme !== currentTheme) {
-      setCurrentTheme(newTheme);
-      setMasterSubjectList([]); // Forces regeneration on next Generate click
-    }
+    // Theme changed - no action needed (image-specific subject lists are generated per image)
     
     setStep(2);
   };
@@ -141,11 +135,7 @@ const App: React.FC = () => {
       };
       setSelectedTheme(customTheme);
       
-      // Clear master subject list when theme changes
-      if (newTheme !== currentTheme) {
-        setCurrentTheme(newTheme);
-        setMasterSubjectList([]); // Forces regeneration on next Generate click
-      }
+      // Theme changed - no action needed (image-specific subject lists are generated per image)
       
       setStep(2);
     }
@@ -404,10 +394,10 @@ const App: React.FC = () => {
     let promptsToGenerate: number;
     let generatedPrompts: string[];
     
-    // Generate master subject list for the batch
-    // 🔥 If subject list is empty OR theme changed → regenerate it
+    // Generate image-specific subject lists for each uploaded image
+    // Each image gets its own nature-focused subject list
     const usedSubjects = new Set<string>();
-    let subjectsToUse = masterSubjectList;
+    const imageSubjectLists: Map<number, string[]> = new Map();
     
     // Metrics tracking (defined here so it's accessible to all code paths)
     const metrics = {
@@ -419,35 +409,47 @@ const App: React.FC = () => {
       finalAccepts: 0
     };
     
-    // Check if we need to regenerate the list
-    if (subjectsToUse.length === 0 || themeName !== currentTheme) {
-      try {
-        const apiKey = settings.promptService === 'openrouter' 
-          ? (import.meta.env.VITE_OPENROUTER_API_KEY || '')
-          : (import.meta.env.VITE_OPENAI_API_KEY || '');
-        const apiUrl = settings.promptService === 'openrouter'
-          ? 'https://openrouter.ai/api/v1/chat/completions'
-          : 'https://api.openai.com/v1/chat/completions';
-        const useOpenRouter = settings.promptService === 'openrouter';
-        
-        if (apiKey) {
-          const rawMaster = await generateMasterSubjectList(themeName, total, apiKey, apiUrl, useOpenRouter);
-          // Clean the master list to replace poetic/abstract subjects with concrete noun phrases
-          subjectsToUse = cleanMasterList(rawMaster, total);
-          setMasterSubjectList(subjectsToUse);
-          setCurrentTheme(themeName);
-          addLog(`[Master Subject List] Generated ${rawMaster.length} subjects, cleaned to ${subjectsToUse.length} concrete subjects for theme "${themeName}"`, 'success');
-          console.log('[Master Subject List] Raw:', rawMaster);
-          console.log('[Master Subject List] Cleaned:', subjectsToUse);
-        } else {
-          addLog(`[Master Subject List] API key not configured, using fallback subjects`, 'error');
+    // Generate subject lists for each uploaded image
+    if (uploadedImages.length > 0) {
+      const usesPerImage = Math.floor(total / uploadedImages.length);
+      const apiKey = settings.promptService === 'openrouter' 
+        ? (import.meta.env.VITE_OPENROUTER_API_KEY || '')
+        : (import.meta.env.VITE_OPENAI_API_KEY || '');
+      const apiUrl = settings.promptService === 'openrouter'
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
+      const useOpenRouter = settings.promptService === 'openrouter';
+      
+      if (apiKey) {
+        for (let imgIdx = 0; imgIdx < uploadedImages.length; imgIdx++) {
+          const image = uploadedImages[imgIdx];
+          const imageAnalysis = image.fullAnalysis ? {
+            theme: image.theme || image.fullAnalysis.clusters?.[0]?.theme,
+            style: image.style || image.fullAnalysis.clusters?.[0]?.style,
+            technique: image.fullAnalysis.clusters?.[0]?.technique,
+            primary_subject: image.fullAnalysis.clusters?.[0]?.primary_subject
+          } : null;
+          
+          try {
+            const subjectList = await generateImageSpecificSubjectList(
+              imageAnalysis,
+              usesPerImage,
+              apiKey,
+              apiUrl,
+              useOpenRouter
+            );
+            imageSubjectLists.set(imgIdx, subjectList);
+            addLog(`[Image ${imgIdx + 1}] Generated ${subjectList.length} nature-focused subjects`, 'success');
+          } catch (error: any) {
+            console.error(`[Image ${imgIdx + 1} Subject List] Generation failed:`, error);
+            addLog(`[Image ${imgIdx + 1} Subject List] Failed: ${error.message}`, 'error');
+            // Use fallback list
+            imageSubjectLists.set(imgIdx, []);
+          }
         }
-      } catch (error: any) {
-        console.error('[Master Subject List] Generation failed:', error);
-        addLog(`[Master Subject List] Failed: ${error.message}`, 'error');
+      } else {
+        addLog(`[Image Subject Lists] API key not configured, using fallback subjects`, 'error');
       }
-    } else {
-      addLog(`[Master Subject List] Reusing existing list (${subjectsToUse.length} subjects) for theme "${themeName}"`, 'success');
     }
     
     if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
@@ -456,9 +458,72 @@ const App: React.FC = () => {
       const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
       addLog(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
       
-      const promptPromises = Array.from({ length: promptsToGenerate }, (_, i) => 
-        generatePromptWithChatGPT(
-          themeName,
+      // Calculate which image to use for each request
+      const usesPerImage = uploadedImages.length > 0 ? Math.floor(total / uploadedImages.length) : 0;
+      const requestsPerImage = uploadedImages.length > 0 ? Math.floor(promptsToGenerate / uploadedImages.length) : 0;
+      
+      const promptPromises = Array.from({ length: promptsToGenerate }, async (_, i) => {
+        // Determine which image to use for this request
+        let imageIndex = 0;
+        let imageTheme = themeName;
+        let imageStyle = settings.customArtStyle || '';
+        let imageSubjectList: string[] = [];
+        
+        if (uploadedImages.length > 0 && requestsPerImage > 0) {
+          imageIndex = Math.floor(i / requestsPerImage) % uploadedImages.length;
+          const uploadedImage = uploadedImages[imageIndex];
+          
+          // Use image-specific theme
+          if (uploadedImage.theme) {
+            imageTheme = uploadedImage.theme;
+          }
+          
+          // Build style description EXACTLY from image analysis (no modifications)
+          if (uploadedImage.fullAnalysis?.clusters?.[0]) {
+            const cluster = uploadedImage.fullAnalysis.clusters[0];
+            imageStyle = cluster.style || '';
+            
+            // Add technique if available
+            if (cluster.technique) {
+              imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
+            }
+            
+            // Add textures if available
+            if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
+              imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
+            }
+            
+            // Add colors EXACTLY as extracted
+            if (cluster.palette && Array.isArray(cluster.palette)) {
+              const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
+              imageStyle = `${imageStyle} Color palette: ${colorList}.`;
+            }
+            
+            // Add vibe EXACTLY as extracted
+            if (cluster.vibe) {
+              imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
+            }
+          } else if (uploadedImage.style) {
+            // Fallback to stored style if full analysis not available
+            imageStyle = uploadedImage.style;
+            if (uploadedImage.vibe) {
+              imageStyle = `${imageStyle} Vibe/Atmosphere: ${uploadedImage.vibe}.`;
+            }
+            if (uploadedImage.colors) {
+              imageStyle = `${imageStyle} Color palette: ${uploadedImage.colors}.`;
+            }
+          }
+          
+          // Get image-specific subject list
+          imageSubjectList = imageSubjectLists.get(imageIndex) || [];
+          
+          if (i === 0 || (i % requestsPerImage === 0 && requestsPerImage > 0)) {
+            addLog(`[${serviceName} Request ${i + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}", Subjects: ${imageSubjectList.length})`, 'log');
+          }
+        }
+        
+        return generatePromptWithChatGPT(
+          imageTheme,
           settings.pageStyle,
           settings.textureIntensity,
           settings.elements,
@@ -466,18 +531,18 @@ const App: React.FC = () => {
           settings.includeBorders,
           i + 1,
           '', // customThemePrompt - no longer used
-          settings.colorIntensity,
-          settings.customArtStyle || '', // Pass customArtStyle for consistent style across batch
+          'Custom / Override', // Always use Custom / Override to respect image style exactly
+          imageStyle, // Use image-specific style (exact copy from analysis)
           settings.promptService || 'openai',
-          subjectsToUse,
+          imageSubjectList, // Use image-specific subject list
           usedSubjects
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
           // Fallback to constructed prompt if ChatGPT fails
           return constructPrompt(selectedTheme, settings, i);
-        })
-      );
+        });
+      });
       
       const requestPrompts = await Promise.all(promptPromises);
       
@@ -556,6 +621,8 @@ const App: React.FC = () => {
         let imageTheme = themeName;
         let imageStyle = settings.customArtStyle || '';
         
+        let imageSubjectList: string[] = [];
+        
         if (uploadedImages.length > 0) {
           // Calculate which image to use for this prompt
           // This ensures each image is used equally: imageIndex = Math.floor(i / usesPerImage) % uploadedImages.length
@@ -569,31 +636,48 @@ const App: React.FC = () => {
             imageTheme = uploadedImage.theme;
           }
           if (uploadedImage.style) {
-            // Build style description with vibe and colors from this specific image
-            let styleDescription = uploadedImage.style;
-            
-            // Add technique if available from structured response
+            // Build style description EXACTLY from image analysis (no modifications)
             if (uploadedImage.fullAnalysis?.clusters?.[0]) {
               const cluster = uploadedImage.fullAnalysis.clusters[0];
-              if (cluster.technique && !styleDescription.includes(cluster.technique)) {
-                styleDescription = `${styleDescription} Technique: ${cluster.technique}.`;
+              imageStyle = cluster.style || '';
+              
+              // Add technique if available
+              if (cluster.technique) {
+                imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
               }
+              
+              // Add textures if available
               if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
-                styleDescription += ` Textures: ${cluster.dominant_textures.join(', ')}.`;
+                imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
+              }
+              
+              // Add colors EXACTLY as extracted
+              if (cluster.palette && Array.isArray(cluster.palette)) {
+                const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
+                imageStyle = `${imageStyle} Color palette: ${colorList}.`;
+              }
+              
+              // Add vibe EXACTLY as extracted
+              if (cluster.vibe) {
+                imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
+              }
+            } else {
+              // Fallback to stored style if full analysis not available
+              imageStyle = uploadedImage.style;
+              if (uploadedImage.vibe) {
+                imageStyle = `${imageStyle} Vibe/Atmosphere: ${uploadedImage.vibe}.`;
+              }
+              if (uploadedImage.colors) {
+                imageStyle = `${imageStyle} Color palette: ${uploadedImage.colors}.`;
               }
             }
-            
-            if (uploadedImage.vibe) {
-              styleDescription += ` Vibe/Atmosphere: ${uploadedImage.vibe}.`;
-            }
-            if (uploadedImage.colors) {
-              styleDescription += ` Color palette: ${uploadedImage.colors}.`;
-            }
-            imageStyle = styleDescription;
           }
           
+          // Get image-specific subject list
+          imageSubjectList = imageSubjectLists.get(imageIndex) || [];
+          
           if (i === 0 || (i % usesPerImage === 0 && usesPerImage > 0)) {
-            addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`, 'log');
+            addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}", Subjects: ${imageSubjectList.length})`, 'log');
           }
         }
         
@@ -606,10 +690,10 @@ const App: React.FC = () => {
           settings.includeBorders,
           i + 1,
           '', // customThemePrompt - no longer used
-          settings.colorIntensity,
-          imageStyle, // Use image-specific style (already includes colors and vibe)
+          'Custom / Override', // Always use Custom / Override to respect image style exactly
+          imageStyle, // Use image-specific style (exact copy from analysis)
           settings.promptService || 'openai',
-          subjectsToUse,
+          imageSubjectList, // Use image-specific subject list
           usedSubjects,
           undefined,
           0
@@ -1341,13 +1425,8 @@ const App: React.FC = () => {
               <textarea
                 value={customThemePrompt}
                 onChange={(e) => {
-                  const newTheme = e.target.value;
-                  setCustomThemePrompt(newTheme);
-                  // Clear master subject list when theme changes
-                  if (newTheme !== currentTheme && newTheme.trim() !== '') {
-                    setCurrentTheme(newTheme.trim());
-                    setMasterSubjectList([]); // Forces regeneration on next Generate click
-                  }
+                  setCustomThemePrompt(e.target.value);
+                  // Theme changed - no action needed (image-specific subject lists are generated per image)
                 }}
                 placeholder="e.g., 'Vintage botanical journal with pressed flowers, dried herbs, and botanical illustrations', 'Steampunk adventure journal with gears, maps, and mechanical drawings', 'Dark romantic gothic journal with roses, lace, and vintage photographs'..."
                 rows={6}

@@ -238,28 +238,54 @@ function resetBatchIfNeeded(variationNumber: number): void {
 }
 
 // ============================================
-// MASTER SUBJECT LIST (Per Batch)
+// IMAGE-SPECIFIC NATURE-FOCUSED SUBJECT LIST
 // ============================================
-let masterSubjectList: string[] = [];
-let masterSubjectListGenerated = false;
 
 /**
- * Generates a master subject list for the batch (36 unique subjects)
- * Uses lower temperature for more deterministic results
+ * Generates an image-specific nature-focused subject list
+ * Based on the image's analysis, generates subjects in three categories:
+ * - Animal portraits (centered, elegant)
+ * - Botanical compositions
+ * - Atmospheric vignette nature scenes
+ * 
+ * Prohibits cartoon/absurd subjects (gnomes, raccoons, mushrooms, floating islands, etc.)
  */
-export async function generateMasterSubjectList(
-  theme: string,
+export async function generateImageSpecificSubjectList(
+  imageAnalysis: { theme?: string; style?: string; technique?: string; primary_subject?: string } | null,
   batchSize: number,
   apiKey: string,
   apiUrl: string,
   useOpenRouter: boolean
 ): Promise<string[]> {
-  if (masterSubjectListGenerated && masterSubjectList.length > 0) {
-    return masterSubjectList;
-  }
-
   const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
   const listSize = Math.max(batchSize, 36); // Generate at least 36 subjects
+
+  // Determine subject categories based on image analysis
+  const imageTheme = imageAnalysis?.theme || 'Nature';
+  const imageStyle = imageAnalysis?.style || '';
+  const primarySubject = imageAnalysis?.primary_subject || '';
+  
+  // Detect if image is animal-focused, botanical, or atmospheric
+  const isAnimal = /animal|creature|portrait|deer|fox|unicorn|peacock|bird|owl|wolf|bear|stag|horse/i.test(imageTheme + imageStyle + primarySubject);
+  const isBotanical = /botanical|floral|flower|plant|leaf|vine|garden|herb/i.test(imageTheme + imageStyle + primarySubject);
+  const isAtmospheric = /atmospheric|vignette|scene|landscape|forest|doorway|path|clearing/i.test(imageTheme + imageStyle + primarySubject);
+
+  // Build subject categories
+  let subjectCategories = '';
+  if (isAnimal) {
+    subjectCategories = 'Animal portraits (centered, elegant): deer, stag, fox, peacock, owl, swan, horse, wolf, bear, eagle, hawk, raven, butterfly, dragonfly';
+  }
+  if (isBotanical) {
+    subjectCategories += (subjectCategories ? ' | ' : '') + 'Botanical compositions: elegant flower arrangements, pressed botanical specimens, vine patterns, leaf clusters, herb gardens, rose bouquets, fern fronds, wildflower meadows';
+  }
+  if (isAtmospheric) {
+    subjectCategories += (subjectCategories ? ' | ' : '') + 'Atmospheric vignette nature scenes: forest doorways, moonlit clearings, misty paths, enchanted groves, twilight meadows, dawn-lit valleys, starlit forests, sun-dappled glades';
+  }
+  
+  // Default to all categories if none detected
+  if (!subjectCategories) {
+    subjectCategories = 'Animal portraits (centered, elegant) | Botanical compositions | Atmospheric vignette nature scenes';
+  }
 
   try {
     const headers: Record<string, string> = {
@@ -280,57 +306,99 @@ export async function generateMasterSubjectList(
         messages: [
           {
             role: 'system',
-            content: `You are a subject list generator. Produce exactly ${listSize} unique short subject phrases (2-3 words each) for theme "${theme}". No synonyms, no duplicates, no variations of the same object. Output ONLY a numbered list, one subject per line. Each subject must be distinct and specific (e.g., "ornate pastel teapot" not just "teapot").`
+            content: `You are a sophisticated nature-focused subject generator. Generate exactly ${listSize} unique, elegant, nature-focused subjects that match the style of the reference image.
+
+STYLE REQUIREMENTS:
+- Sophisticated magical realism illustrations
+- Elegant, centered compositions
+- Nature-focused: animals, botanical elements, atmospheric nature scenes
+- NO cartoon, whimsical, or absurd subjects
+
+FORBIDDEN SUBJECTS (DO NOT INCLUDE):
+- Gnomes, fairies, elves, goblins, trolls
+- Raccoons, squirrels, chipmunks (too cartoon-like)
+- Mushrooms (unless part of a sophisticated botanical composition)
+- Floating islands, flying castles, fantasy landscapes
+- Anthropomorphic animals (animals wearing clothes, standing upright)
+- Cute or cartoon-style animals
+- Fantasy creatures (dragons, unicorns are acceptable ONLY if they match the elegant, centered portrait style)
+
+ALLOWED SUBJECTS:
+- Elegant animal portraits: deer, stag, fox, peacock, owl, swan, horse, wolf, bear, eagle, hawk, raven, butterfly, dragonfly
+- Sophisticated botanical compositions: elegant flower arrangements, pressed botanical specimens, vine patterns, leaf clusters, herb gardens, rose bouquets, fern fronds
+- Atmospheric nature scenes: forest doorways, moonlit clearings, misty paths, enchanted groves, twilight meadows, dawn-lit valleys, starlit forests, sun-dappled glades
+
+OUTPUT FORMAT: Numbered list only, one subject per line. Each subject must be 2-4 words, specific, and visually distinct.`
           },
           {
             role: 'user',
-            content: `Generate ${listSize} unique subjects for "${theme}". Each must be 2-3 words, specific, and visually distinct. Output numbered list only.`
+            content: `Generate ${listSize} unique, sophisticated, nature-focused subjects based on this image analysis:
+Theme: "${imageTheme}"
+Style: "${imageStyle}"
+Primary Subject: "${primarySubject}"
+
+Subject Categories: ${subjectCategories}
+
+Generate subjects that match the elegant, centered, nature-focused style. Output ONLY a numbered list, one subject per line.`
           }
         ],
-        temperature: 0.6, // Lower temperature for more deterministic results
-        max_tokens: 1000,
+        temperature: 0.4, // Lower temperature for more deterministic, sophisticated results
+        max_tokens: 1200,
         stream: false
       })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to generate master subject list: ${response.status}`);
+      throw new Error(`Failed to generate image-specific subject list: ${response.status}`);
     }
 
     const data: ChatGPTResponse = await response.json();
     if (data.choices && data.choices.length > 0) {
-      const content = data.choices[0].message.content;
+      let content = data.choices[0].message.content;
+      
+      // Clean DeepSeek output if using OpenRouter
+      if (useOpenRouter) {
+        content = cleanDeepSeekOutput(content);
+      }
+      
       // Parse numbered list
       const subjects = content
         .split('\n')
         .map(line => line.replace(/^\d+[\.\)]\s*/, '').trim())
-        .filter(line => line.length > 0 && line.length < 50) // Filter valid subjects
+        .filter(line => {
+          const lower = line.toLowerCase();
+          // Filter out forbidden subjects
+          const forbidden = ['gnome', 'fairy', 'elf', 'goblin', 'troll', 'raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic'];
+          return line.length > 0 && line.length < 60 && !forbidden.some(f => lower.includes(f));
+        })
         .slice(0, listSize);
       
-      if (subjects.length >= batchSize) {
-        masterSubjectList = subjects;
-        masterSubjectListGenerated = true;
-        console.log(`[Master Subject List] Generated ${subjects.length} subjects for theme "${theme}"`);
+      if (subjects.length >= Math.min(batchSize, 20)) {
+        console.log(`[Image-Specific Subject List] Generated ${subjects.length} nature-focused subjects`);
         return subjects;
       }
     }
   } catch (error) {
-    console.error('[Master Subject List] Generation failed:', error);
+    console.error('[Image-Specific Subject List] Generation failed:', error);
   }
 
-  // Fallback: generate simple subjects based on theme
-  const fallbackSubjects: string[] = [];
-  const baseSubjects = ['teapot', 'teacup', 'shell', 'rose', 'vintage label', 'postage stamp', 'botanical sketch', 'handwritten note', 'lace trim', 'ribbon', 'crystal stopper', 'porcelain plate', 'sugar spoon', 'pastry tray', 'window seat', 'coastal path', 'sandcastle', 'seashell cluster', 'floral pattern', 'ornate frame', 'vintage ticket', 'old map', 'sheet music', 'pressed flower', 'wax seal', 'antique key', 'candle holder', 'old book', 'quill pen', 'crystal ball', 'geometric pattern', 'art nouveau border', 'gothic arch', 'stained glass', 'tapestry detail', 'illuminated letter'];
+  // Fallback: nature-focused subjects
+  const fallbackSubjects: string[] = [
+    // Animal portraits
+    'elegant deer portrait', 'majestic stag silhouette', 'graceful fox profile', 'peacock feather display', 'wise owl portrait', 'swan in moonlight', 'noble horse head', 'proud wolf howl', 'grizzly bear portrait', 'eagle in flight', 'hawk on branch', 'raven on tree',
+    // Botanical compositions
+    'elegant rose bouquet', 'pressed botanical specimen', 'vine pattern border', 'fern frond cluster', 'wildflower meadow', 'herb garden arrangement', 'leaf cluster composition', 'botanical illustration page',
+    // Atmospheric scenes
+    'forest doorway entrance', 'moonlit clearing', 'misty forest path', 'enchanted grove', 'twilight meadow', 'dawn-lit valley', 'starlit forest', 'sun-dappled glade', 'mystical woodland', 'ancient tree portal', 'secret garden path', 'hidden forest clearing'
+  ];
   
+  // Extend fallback list to match batchSize
+  const extendedFallback: string[] = [];
   for (let i = 0; i < listSize; i++) {
-    const base = baseSubjects[i % baseSubjects.length];
-    const modifier = ['ornate', 'delicate', 'vintage', 'antique', 'decorative', 'elaborate'][i % 6];
-    fallbackSubjects.push(`${modifier} ${base}`);
+    extendedFallback.push(fallbackSubjects[i % fallbackSubjects.length]);
   }
 
-  masterSubjectList = fallbackSubjects.slice(0, listSize);
-  masterSubjectListGenerated = true;
-  return masterSubjectList;
+  return extendedFallback.slice(0, listSize);
 }
 
 /**
@@ -936,9 +1004,9 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
     return controlText;
   };
 
-  // CRITICAL: If colorIntensity is 'Custom / Override', use neutral system prompt
+  // CRITICAL: If colorIntensity is 'Custom / Override', use image-specific system prompt
   if (colorIntensity === 'Custom / Override') {
-    const systemPrompt = `You are a versatile AI Art Director. Your goal is to generate image prompts based EXACTLY on the user's provided Theme and Style description.
+    const systemPrompt = `You are a sophisticated AI Art Director specializing in magical realism illustrations. Your goal is to generate image prompts that EXACTLY match the style, colors, vibe, textures, and lighting of the reference image.
 
 🚨 CRITICAL FORMAT REQUIREMENT:
 Your response MUST start with this EXACT line (copy it exactly, do not modify):
@@ -946,16 +1014,35 @@ PRIMARY SUBJECT: [the exact subject name provided by the user]
 
 Then, in 1-2 sentences, describe ONLY that subject as the main visual focus.
 
-🎯 PRIMARY GOAL: DIVERSITY. Your primary goal is DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme.
+🎯 STYLE REQUIREMENTS (MUST FOLLOW EXACTLY):
+- Copy the EXACT colors, vibe, style, textures, and lighting from the reference image analysis
+- Do NOT modify, average, or combine styles from multiple images
+- Do NOT add elements that weren't in the reference image
+- Produce sophisticated magical realism illustrations (elegant, centered, nature-focused)
+- NO cartoon, whimsical, or absurd subjects (no gnomes, raccoons, mushrooms, floating islands, etc.)
 
-- Do NOT default to 'vintage', 'grunge', or 'junk journal' unless explicitly asked.
-- Do NOT default to 'modern' or 'flat' unless explicitly asked.
-- If the user provides a 'Custom Art Style', follow it rigorously.
-- If no style is provided, generate a high-quality, artistic representation of the Theme.
+🎨 SUBJECT REQUIREMENTS:
+- Animal portraits: centered, elegant, sophisticated (deer, stag, fox, peacock, owl, swan, horse, wolf, bear, eagle, hawk, raven, butterfly, dragonfly)
+- Botanical compositions: elegant flower arrangements, pressed botanical specimens, vine patterns, leaf clusters
+- Atmospheric vignette nature scenes: forest doorways, moonlit clearings, misty paths, enchanted groves, twilight meadows
 
-🎨 COLOR LOGIC: Unless the user explicitly uses words like 'Vibrant', 'Neon', 'Bright', or 'Saturated', you MUST default to a **Soft, Natural, or Muted** color palette. Avoid oversaturation. Prioritize artistic, tasteful, and printable colors over intense digital hues.
+🚫 FORBIDDEN SUBJECTS:
+- Gnomes, fairies, elves, goblins, trolls
+- Raccoons, squirrels, chipmunks (too cartoon-like)
+- Mushrooms (unless part of sophisticated botanical composition)
+- Floating islands, flying castles, fantasy landscapes
+- Anthropomorphic animals (animals wearing clothes, standing upright)
+- Cute or cartoon-style animals
+- Fantasy creatures (dragons, unicorns are acceptable ONLY if they match elegant, centered portrait style)
 
-🎨 AESTHETIC DEFAULT: Your default aesthetic is 'High-End Illustration' (Soft, Textured, Natural). Avoid 'Digital Art' aesthetics (Neon, Shiny, Plastic) unless requested.
+🎨 COLOR & STYLE LOGIC:
+- Use the EXACT color palette from the reference image (do not modify or average)
+- Use the EXACT vibe/atmosphere from the reference image
+- Use the EXACT technique and textures from the reference image
+- Maintain the EXACT lighting style from the reference image
+- Do NOT add colors, textures, or elements that weren't in the reference
+
+🎯 PRIMARY GOAL: DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme while maintaining the EXACT style of the reference image.
 
 REMEMBER: Start EVERY response with "PRIMARY SUBJECT: [subject]." (with the period after the subject name).`;
 
