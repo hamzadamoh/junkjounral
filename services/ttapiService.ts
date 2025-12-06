@@ -398,111 +398,138 @@ const pollTaskUntilComplete = async (
         // Try to extract image URLs from various possible locations
         let imageUrls: string[] = [];
 
-        // PRIORITY 1: Check data.cdnImage and data.discordImage FIRST (Ttapi specific)
-        // Ttapi returns images in data.cdnImage or data.discordImage - check these FIRST
+        // PRIORITY 1: Check for arrays of images FIRST (Midjourney returns 4 images per request)
+        // Check data.image_urls array (most likely to contain all 4 images)
         if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
+          if (Array.isArray(status.data.image_urls) && status.data.image_urls.length > 0) {
+            imageUrls = status.data.image_urls;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.image_urls`);
+          } else if (Array.isArray(status.data.images) && status.data.images.length > 0) {
+            imageUrls = status.data.images;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.images`);
+          } else if (Array.isArray(status.data.urls) && status.data.urls.length > 0) {
+            imageUrls = status.data.urls;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.urls`);
+          }
+        }
+
+        // PRIORITY 2: Check output.image_urls array (GoAPI-style response)
+        if (imageUrls.length === 0 && status.output && typeof status.output === 'object' && !Array.isArray(status.output)) {
+          if (Array.isArray(status.output.image_urls) && status.output.image_urls.length > 0) {
+            imageUrls = status.output.image_urls;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in output.image_urls`);
+          } else if (Array.isArray(status.output.images) && status.output.images.length > 0) {
+            imageUrls = status.output.images;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in output.images`);
+          }
+        }
+
+        // PRIORITY 3: Check data.cdnImage and data.discordImage (Ttapi single image fallback)
+        // Only use these if no array was found (some Ttapi responses might only return 1 image)
+        if (imageUrls.length === 0 && status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
           // Ttapi specific fields: cdnImage (preferred) and discordImage (fallback)
           if (status.data.cdnImage) {
             imageUrls = [status.data.cdnImage];
-            console.log(`[Ttapi] ✅ Found image in data.cdnImage`);
+            console.log(`[Ttapi] ⚠️ Found only 1 image in data.cdnImage (expected 4 images)`);
           } else if (status.data.discordImage) {
             imageUrls = [status.data.discordImage];
-            console.log(`[Ttapi] ✅ Found image in data.discordImage`);
+            console.log(`[Ttapi] ⚠️ Found only 1 image in data.discordImage (expected 4 images)`);
           }
         }
 
-        // PRIORITY 2: Check output.image_urls (array)
-        if (imageUrls.length === 0 && status.output && typeof status.output === 'object' && !Array.isArray(status.output)) {
-          if (Array.isArray(status.output.image_urls)) {
-            imageUrls = status.output.image_urls;
-          } else if (status.output.image_url) {
-            imageUrls = [status.output.image_url];
-          } else if (Array.isArray(status.output.images)) {
-            imageUrls = status.output.images;
-          } else if (status.output.image) {
-            imageUrls = [status.output.image];
-          } else if (status.output.url) {
-            imageUrls = [status.output.url];
-          } else if (Array.isArray(status.output.urls)) {
-            imageUrls = status.output.urls;
-          }
-        }
-
-        // PRIORITY 3: Check result field
+        // PRIORITY 4: Check result field (arrays first)
         if (imageUrls.length === 0 && status.result) {
-          if (Array.isArray(status.result.images)) {
+          if (Array.isArray(status.result.images) && status.result.images.length > 0) {
             imageUrls = status.result.images;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in result.images`);
+          } else if (Array.isArray(status.result.urls) && status.result.urls.length > 0) {
+            imageUrls = status.result.urls;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in result.urls`);
           } else if (status.result.image) {
             imageUrls = [status.result.image];
+            console.log(`[Ttapi] ⚠️ Found only 1 image in result.image (expected 4 images)`);
           } else if (status.result.url) {
             imageUrls = [status.result.url];
-          } else if (Array.isArray(status.result.urls)) {
-            imageUrls = status.result.urls;
+            console.log(`[Ttapi] ⚠️ Found only 1 image in result.url (expected 4 images)`);
           }
         }
 
-        // PRIORITY 4: Check top-level fields
+        // PRIORITY 5: Check top-level fields (arrays first)
         if (imageUrls.length === 0) {
-          if (Array.isArray(status.images)) {
+          if (Array.isArray(status.images) && status.images.length > 0) {
             imageUrls = status.images;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in top-level images`);
+          } else if (Array.isArray(status.urls) && status.urls.length > 0) {
+            imageUrls = status.urls;
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in top-level urls`);
           } else if (status.image) {
             imageUrls = [status.image];
+            console.log(`[Ttapi] ⚠️ Found only 1 image in top-level image (expected 4 images)`);
           } else if (status.url) {
             imageUrls = [status.url];
-          } else if (Array.isArray(status.urls)) {
-            imageUrls = status.urls;
+            console.log(`[Ttapi] ⚠️ Found only 1 image in top-level url (expected 4 images)`);
           }
         }
         
-        // If still no URLs found, check other data locations
+        // PRIORITY 6: Check other data locations (single image fallbacks)
         if (imageUrls.length === 0 && status.data) {
           // Check if data is an object
           if (typeof status.data === 'object' && !Array.isArray(status.data)) {
-            if (Array.isArray(status.data.images)) {
-              imageUrls = status.data.images;
-            } else if (status.data.image) {
+            if (status.data.image) {
               imageUrls = [status.data.image];
+              console.log(`[Ttapi] ⚠️ Found only 1 image in data.image (expected 4 images)`);
             } else if (status.data.url) {
               imageUrls = [status.data.url];
-            } else if (Array.isArray(status.data.urls)) {
-              imageUrls = status.data.urls;
-            } else if (Array.isArray(status.data.image_urls)) {
-              imageUrls = status.data.image_urls;
+              console.log(`[Ttapi] ⚠️ Found only 1 image in data.url (expected 4 images)`);
             } else if (status.data.image_url) {
               imageUrls = [status.data.image_url];
+              console.log(`[Ttapi] ⚠️ Found only 1 image in data.image_url (expected 4 images)`);
             }
-            // Check nested output in data
+            // Check nested output in data (arrays first)
             if (imageUrls.length === 0 && status.data.output) {
               if (typeof status.data.output === 'object' && !Array.isArray(status.data.output)) {
-                if (Array.isArray(status.data.output.image_urls)) {
+                if (Array.isArray(status.data.output.image_urls) && status.data.output.image_urls.length > 0) {
                   imageUrls = status.data.output.image_urls;
+                  console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.output.image_urls`);
+                } else if (Array.isArray(status.data.output.images) && status.data.output.images.length > 0) {
+                  imageUrls = status.data.output.images;
+                  console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.output.images`);
                 } else if (status.data.output.image_url) {
                   imageUrls = [status.data.output.image_url];
-                } else if (Array.isArray(status.data.output.images)) {
-                  imageUrls = status.data.output.images;
+                  console.log(`[Ttapi] ⚠️ Found only 1 image in data.output.image_url (expected 4 images)`);
                 }
               } else if (Array.isArray(status.data.output)) {
-                imageUrls = status.data.output;
-              } else if (typeof status.data.output === 'string') {
+                imageUrls = status.data.output.filter((item: any) => typeof item === 'string' && item.startsWith('http'));
+                if (imageUrls.length > 0) {
+                  console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data.output array`);
+                }
+              } else if (typeof status.data.output === 'string' && status.data.output.startsWith('http')) {
                 imageUrls = [status.data.output];
+                console.log(`[Ttapi] ⚠️ Found only 1 image in data.output string (expected 4 images)`);
               }
             }
           } else if (Array.isArray(status.data)) {
             // Data is an array - might be image URLs directly
             imageUrls = status.data.filter((item: any) => typeof item === 'string' && item.startsWith('http'));
-          } else if (typeof status.data === 'string') {
-            // Data is a string - might be a single image URL
-            if (status.data.startsWith('http')) {
-              imageUrls = [status.data];
+            if (imageUrls.length > 0) {
+              console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in data array`);
             }
+          } else if (typeof status.data === 'string' && status.data.startsWith('http')) {
+            // Data is a string - might be a single image URL
+            imageUrls = [status.data];
+            console.log(`[Ttapi] ⚠️ Found only 1 image in data string (expected 4 images)`);
           }
         }
 
-        // If output is a string or array, try to use it directly
-        if (imageUrls.length === 0 && typeof status.output === 'string') {
+        // PRIORITY 7: If output is a string or array, try to use it directly
+        if (imageUrls.length === 0 && typeof status.output === 'string' && status.output.startsWith('http')) {
           imageUrls = [status.output];
+          console.log(`[Ttapi] ⚠️ Found only 1 image in output string (expected 4 images)`);
         } else if (imageUrls.length === 0 && Array.isArray(status.output)) {
-          imageUrls = status.output;
+          imageUrls = status.output.filter((item: any) => typeof item === 'string' && item.startsWith('http'));
+          if (imageUrls.length > 0) {
+            console.log(`[Ttapi] ✅ Found ${imageUrls.length} images in output array`);
+          }
         }
 
         if (imageUrls.length > 0) {
