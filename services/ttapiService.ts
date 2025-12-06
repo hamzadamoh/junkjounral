@@ -175,6 +175,32 @@ const getTexturePrompt = (intensity: 'Light' | 'Medium' | 'Heavy'): string => {
 };
 
 /**
+ * Cleans prompt for Midjourney by removing newlines and problematic characters
+ * Midjourney interprets newlines and certain characters as parameter separators
+ * Same implementation as GoAPI for consistency
+ */
+const cleanPromptForMidjourney = (prompt: string): string => {
+  if (!prompt) return '';
+  
+  // Remove PRIMARY SUBJECT header if present (Midjourney doesn't need it)
+  let cleaned = prompt.replace(/^PRIMARY SUBJECT:\s*/i, '').trim();
+  
+  // Replace all newlines with spaces
+  cleaned = cleaned.replace(/\n+/g, ' ');
+  
+  // Replace multiple spaces with single space
+  cleaned = cleaned.replace(/\s+/g, ' ');
+  
+  // Remove triple dashes (---) which Midjourney might interpret as parameters
+  cleaned = cleaned.replace(/---+/g, '');
+  
+  // Remove any trailing periods before parameters
+  cleaned = cleaned.replace(/\.\s*$/, '');
+  
+  return cleaned.trim();
+};
+
+/**
  * Sends a task to ttapi.io Midjourney
  */
 const sendTaskToTtapi = async (
@@ -669,7 +695,29 @@ export const generateJournalPage = async (
       }
     }
 
-    console.log(`[Ttapi] Generating journal page with prompt: ${prompt.substring(0, 100)}...`);
+    // MAXIMUM style reference influence - force Midjourney to follow reference style
+    // Same as GoAPI implementation
+    if (settings.styleRefUrl && settings.styleRefUrl.trim()) {
+      prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 1000`;
+      console.log(`[Ttapi] Added MAXIMUM style reference (--sw 1000) for variation ${variationIndex ?? 0}: ${settings.styleRefUrl}`);
+    }
+
+    // Add aspect ratio last (after style reference if present)
+    if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
+      prompt += ` --ar ${aspectRatio}`;
+    }
+
+    // Clean the prompt before sending to remove newlines and problematic characters
+    // This prevents Midjourney from interpreting newlines as parameter separators
+    prompt = cleanPromptForMidjourney(prompt);
+
+    // Log the EXACT prompt being sent to Midjourney for debugging
+    console.log(`[Ttapi] FULL PROMPT BEING SENT: "${prompt}"`);
+    console.log(`[Ttapi] Full request body:`, JSON.stringify({
+      prompt: prompt,
+      aspect_ratio: aspectRatio,
+      process_mode: processMode
+    }, null, 2));
 
     // Send task to ttapi.io
     const jobId = await sendTaskToTtapi(prompt);
