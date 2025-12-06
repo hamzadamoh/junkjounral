@@ -357,8 +357,12 @@ const pollTaskUntilComplete = async (
         console.log(`[Ttapi] Task message: ${status.message}`);
       }
 
-      // Check if task is completed
-      if (status.status === 'completed' || status.status === 'success') {
+      // Check if task is completed (handle both lowercase and uppercase)
+      const statusLower = status.status?.toLowerCase();
+      if (statusLower === 'completed' || statusLower === 'success' || status.status === 'SUCCESS') {
+        // Log full response for debugging
+        console.log(`[Ttapi] Task ${jobId} completed. Full response:`, JSON.stringify(status, null, 2));
+        
         // Try to extract image URLs from various possible locations
         let imageUrls: string[] = [];
 
@@ -405,16 +409,47 @@ const pollTaskUntilComplete = async (
           }
         }
 
-        // Check data field
+        // Check data field (Ttapi often returns images in data object)
         if (imageUrls.length === 0 && status.data) {
-          if (Array.isArray(status.data.images)) {
-            imageUrls = status.data.images;
-          } else if (status.data.image) {
-            imageUrls = [status.data.image];
-          } else if (status.data.url) {
-            imageUrls = [status.data.url];
-          } else if (Array.isArray(status.data.urls)) {
-            imageUrls = status.data.urls;
+          // Check if data is an object
+          if (typeof status.data === 'object' && !Array.isArray(status.data)) {
+            if (Array.isArray(status.data.images)) {
+              imageUrls = status.data.images;
+            } else if (status.data.image) {
+              imageUrls = [status.data.image];
+            } else if (status.data.url) {
+              imageUrls = [status.data.url];
+            } else if (Array.isArray(status.data.urls)) {
+              imageUrls = status.data.urls;
+            } else if (Array.isArray(status.data.image_urls)) {
+              imageUrls = status.data.image_urls;
+            } else if (status.data.image_url) {
+              imageUrls = [status.data.image_url];
+            }
+            // Check nested output in data
+            if (imageUrls.length === 0 && status.data.output) {
+              if (typeof status.data.output === 'object' && !Array.isArray(status.data.output)) {
+                if (Array.isArray(status.data.output.image_urls)) {
+                  imageUrls = status.data.output.image_urls;
+                } else if (status.data.output.image_url) {
+                  imageUrls = [status.data.output.image_url];
+                } else if (Array.isArray(status.data.output.images)) {
+                  imageUrls = status.data.output.images;
+                }
+              } else if (Array.isArray(status.data.output)) {
+                imageUrls = status.data.output;
+              } else if (typeof status.data.output === 'string') {
+                imageUrls = [status.data.output];
+              }
+            }
+          } else if (Array.isArray(status.data)) {
+            // Data is an array - might be image URLs directly
+            imageUrls = status.data.filter((item: any) => typeof item === 'string' && item.startsWith('http'));
+          } else if (typeof status.data === 'string') {
+            // Data is a string - might be a single image URL
+            if (status.data.startsWith('http')) {
+              imageUrls = [status.data];
+            }
           }
         }
 
@@ -429,8 +464,29 @@ const pollTaskUntilComplete = async (
           console.log(`[Ttapi] ✅ Task ${jobId} completed! Found ${imageUrls.length} images`);
           return imageUrls;
         } else {
-          console.error(`[Ttapi] ❌ Job completed but no image URLs found in response. Full response:`, JSON.stringify(status, null, 2));
+          // Log detailed structure for debugging
+          console.error(`[Ttapi] ❌ Job completed but no image URLs found in response.`);
+          console.error(`[Ttapi] Status:`, status.status);
           console.error(`[Ttapi] Response keys:`, Object.keys(status));
+          console.error(`[Ttapi] Full response:`, JSON.stringify(status, null, 2));
+          
+          // Try to find any URL-like strings in the response
+          const responseStr = JSON.stringify(status);
+          const urlMatches = responseStr.match(/https?:\/\/[^\s"']+/g);
+          if (urlMatches && urlMatches.length > 0) {
+            console.warn(`[Ttapi] ⚠️ Found potential image URLs in response:`, urlMatches);
+            // Filter out non-image URLs (like API endpoints)
+            const imageUrls = urlMatches.filter(url => 
+              /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(url) || 
+              url.includes('cdn') || 
+              url.includes('image')
+            );
+            if (imageUrls.length > 0) {
+              console.log(`[Ttapi] ✅ Extracted ${imageUrls.length} image URLs from response`);
+              return imageUrls;
+            }
+          }
+          
           throw new Error('Job completed but no image URLs found in response. Check console for full API response structure.');
         }
       }
