@@ -27,6 +27,7 @@ import { generateJournalPage as generateWithPollinations } from './services/poll
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
+import { generateJournalPage as generateWithDirect } from './services/directMidjourneyService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 
@@ -452,10 +453,10 @@ const App: React.FC = () => {
       }
     }
     
-    if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
+    if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
-      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
+      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : settings.imageService === 'direct' ? 'Direct' : 'Midjourney';
       addLog(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
       
       // Calculate which image to use for each request
@@ -725,6 +726,8 @@ const App: React.FC = () => {
       ? generateWithLegnext
       : settings.imageService === 'ttapi'
       ? generateWithTtapi
+      : settings.imageService === 'direct'
+      ? generateWithDirect
       : generateWithMidjourney;
     
     addLog(`[${settings.imageService}] Selected generate function: ${generateFunction.name || 'anonymous'}`);
@@ -849,10 +852,10 @@ const App: React.FC = () => {
       
       // Wait for all requests to complete in parallel
       await Promise.allSettled(imagePromises);
-    } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
-      // For Midjourney (GoAPI, Legnext, or Ttapi), generate in parallel
+    } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
+      // For Midjourney (GoAPI, Legnext, Ttapi, or Direct), generate in parallel
       // Note: Midjourney returns 4 images per request, so we need fewer requests
-      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : 'Midjourney';
+      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : settings.imageService === 'direct' ? 'Direct' : 'Midjourney';
       const requestsNeeded = Math.ceil(total / 4);
       addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
       
@@ -1092,10 +1095,12 @@ const App: React.FC = () => {
         ? generateWithLegnext
         : settings.imageService === 'ttapi'
         ? generateWithTtapi
+        : settings.imageService === 'direct'
+        ? generateWithDirect
         : generateWithMidjourney;
 
-      // For Midjourney/Legnext, we need to handle arrays
-      if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi') {
+      // For Midjourney/Legnext/Ttapi/Direct, we need to handle arrays
+      if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
         const base64Urls = await generateFunction(
           selectedTheme,
           settings,
@@ -1721,11 +1726,12 @@ const App: React.FC = () => {
                     { value: 'replicate', label: 'Replicate', desc: 'Multiple models, works via Vercel proxy' },
                     { value: 'midjourney', label: 'Midjourney (GoAPI)', desc: 'Premium quality via GoAPI, requires API key' },
                     { value: 'legnext', label: 'Midjourney (Legnext)', desc: 'Premium quality via Legnext.ai, requires API key' },
-                    { value: 'ttapi', label: 'Midjourney (Ttapi)', desc: 'Premium quality via ttapi.io, requires API key' }
+                    { value: 'ttapi', label: 'Midjourney (Ttapi)', desc: 'Premium quality via ttapi.io, requires API key' },
+                    { value: 'direct', label: 'Midjourney (Direct)', desc: 'Direct Discord connection, requires Discord token' }
                   ].map((service) => (
                     <button
                       key={service.value}
-                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate' | 'legnext' | 'ttapi')}
+                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate' | 'legnext' | 'ttapi' | 'direct')}
                       className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
                         settings.imageService === service.value 
                           ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
