@@ -624,7 +624,9 @@ async function callPromptWithHeaderEnforcement(
   apiKey: string,
   apiUrl: string,
   useOpenRouter: boolean,
-  maxAttempts: number = 4 // Allow extra retry for tricky subjects
+  maxAttempts: number = 4, // Allow extra retry for tricky subjects
+  temperature: number = 0.3, // Default temperature (can be overridden for Custom/Override mode)
+  maxTokens: number = 220 // Default max_tokens (can be overridden for Custom/Override mode)
 ): Promise<{ text: string; corrected: boolean; attempt: number; matched: boolean }> {
   const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
   
@@ -653,8 +655,8 @@ async function callPromptWithHeaderEnforcement(
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          temperature: 0.3, // Lower temperature for stricter compliance
-          max_tokens: useOpenRouter ? 4000 : 220,
+          temperature: temperature, // Use passed temperature (default 0.3, Custom/Override uses 0.1)
+          max_tokens: useOpenRouter ? (maxTokens === 100 ? 100 : 4000) : maxTokens, // Use passed max_tokens (default 220, Custom/Override uses 100)
           stream: false
         })
       });
@@ -1004,112 +1006,45 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
     return controlText;
   };
 
-  // CRITICAL: If colorIntensity is 'Custom / Override', use image-specific system prompt
+  // CRITICAL: If colorIntensity is 'Custom / Override', use minimal prompt for Midjourney style reference mode
   if (colorIntensity === 'Custom / Override') {
-    const systemPrompt = `You are a sophisticated AI Art Director specializing in magical realism illustrations. Your goal is to generate image prompts that EXACTLY match the style, colors, vibe, textures, and lighting of the reference image.
+    const systemPrompt = `You are a minimal prompt writer for Midjourney style reference mode.
 
-🚨 CRITICAL FORMAT REQUIREMENT:
-Your response MUST start with this EXACT line (copy it exactly, do not modify):
-PRIMARY SUBJECT: [the exact subject name provided by the user]
+CRITICAL RULES:
+1. Start with: "PRIMARY SUBJECT: [exact subject from user]"
+2. Write ONLY 1 short sentence (10-15 words) describing the subject
+3. Focus ONLY on: subject position, pose, basic composition
+4. NO elaborate descriptions, NO flowery language, NO style/mood/color details
+5. The style reference images control all visual style - you only describe WHAT is shown
 
-Then, in 1-2 sentences, describe ONLY that subject as the main visual focus.
+GOOD EXAMPLES:
+PRIMARY SUBJECT: Deer in meadow. Young deer standing among wildflowers, centered portrait composition.
 
-🎯 STYLE REQUIREMENTS (MUST FOLLOW EXACTLY):
-- Copy the EXACT colors, vibe, style, textures, and lighting from the reference image analysis
-- Do NOT modify, average, or combine styles from multiple images
-- Do NOT add elements that weren't in the reference image
-- Produce sophisticated magical realism illustrations (elegant, centered, nature-focused)
-- NO cartoon, whimsical, or absurd subjects (no gnomes, raccoons, mushrooms, floating islands, etc.)
+PRIMARY SUBJECT: Fox under moon. Fox sitting upright gazing at moon, surrounded by flowers.
 
-🎨 SUBJECT REQUIREMENTS:
-- Animal portraits: centered, elegant, sophisticated (deer, stag, fox, peacock, owl, swan, horse, wolf, bear, eagle, hawk, raven, butterfly, dragonfly)
-- Botanical compositions: elegant flower arrangements, pressed botanical specimens, vine patterns, leaf clusters
-- Atmospheric vignette nature scenes: forest doorways, moonlit clearings, misty paths, enchanted groves, twilight meadows
+PRIMARY SUBJECT: Cherry blossom tree. Blooming tree within ornate circular frame, symmetrical composition.
 
-🚫 FORBIDDEN SUBJECTS:
-- Gnomes, fairies, elves, goblins, trolls
-- Raccoons, squirrels, chipmunks (too cartoon-like)
-- Mushrooms (unless part of sophisticated botanical composition)
-- Floating islands, flying castles, fantasy landscapes
-- Anthropomorphic animals (animals wearing clothes, standing upright)
-- Cute or cartoon-style animals
-- Fantasy creatures (dragons, unicorns are acceptable ONLY if they match elegant, centered portrait style)
+BAD EXAMPLES (TOO ELABORATE):
+❌ "The majestic deer stands gracefully in a vibrant meadow, its soft coat glowing..."
+❌ "An enchanting fox gazes wistfully at the luminous moon while delicate blossoms..."
 
-🎨 COLOR & STYLE LOGIC:
-- Use the EXACT color palette from the reference image (do not modify or average)
-- Use the EXACT vibe/atmosphere from the reference image
-- Use the EXACT technique and textures from the reference image
-- Maintain the EXACT lighting style from the reference image
-- Do NOT add colors, textures, or elements that weren't in the reference
+Remember: Style reference handles colors, textures, lighting, mood. You ONLY describe the subject and composition.`;
 
-🎯 PRIMARY GOAL: DIVERSITY. Never output the same subject or composition twice in a row. Explore the entire breadth of the provided Theme while maintaining the EXACT style of the reference image.
+    const userPrompt = `Generate a minimal subject description for variation ${variationNumber}.
 
-REMEMBER: Start EVERY response with "PRIMARY SUBJECT: [subject]." (with the period after the subject name).`;
+REQUIRED SUBJECT: ${primarySubject}
 
-    // Use composable variation instruction (time + composition + mood)
-    const variationInstruction = getComposableVariationInstruction(variationNumber);
-    
-    const variationDirections = [
-      'Create a COMPLETELY DIFFERENT scene - change the time of day, weather/atmosphere, composition, or focal point. Avoid any similarity to previous variations.',
-      'Explore a DIFFERENT aspect - think of other subjects, elements, features, or perspectives within the theme. Make it visually distinct.',
-      'Design a UNIQUE interpretation - ensure this variation has different composition, different elements, different mood, or different perspective than previous ones.',
-      'Create a FRESH perspective - change the viewpoint, scale, or focus. Think: close-up vs wide view, day vs night, path/road vs open area, single element vs group.',
-      'Explore DIFFERENT elements - vary the subjects, features, structures, or details. Each variation should feel like a different scene entirely.',
-      'Design a DISTINCT scene - change multiple aspects: time of day, composition type, focal elements, and mood. Make it feel like a different photograph or painting.'
-    ];
-    const variationDirection = variationDirections[(variationNumber - 1) % variationDirections.length];
+OUTPUT FORMAT (STRICT):
+Line 1: PRIMARY SUBJECT: ${primarySubject}
+Line 2: One simple sentence (10-15 words max) - subject pose/position and basic composition only.
 
-    // Get global variation control
-    const variationControl = getVariationControl(variationNumber, themeDescription);
+Theme: ${themeDescription}
+Composition type: ${randomFocus}
 
-    const userPrompt = `🚨 CRITICAL: You MUST use this EXACT subject: "${primarySubject}"
-
-Generate an image prompt following this EXACT format:
-
-PRIMARY SUBJECT: ${primarySubject}.
-
-[Then write 1-2 sentences describing ONLY "${primarySubject}" as the main visual focus]
-
-DO NOT change the subject. DO NOT use a different subject. DO NOT generate your own subject. You MUST use "${primarySubject}" exactly as provided.
-
-Create a UNIQUE and DISTINCT prompt for variation #${variationNumber} of a ${themeDescription} illustration.
-
-CRITICAL: This variation must be DIFFERENT from all previous variations. Avoid repeating the same subject, composition, or visual elements. Each variation should explore the ${themeDescription} theme in a fresh, unique way.
-
-${variationSpecifies}
-
-🚨 HIERARCHY RULE - VISUAL FOCUS OVERRIDES THEME:
-The VISUAL FOCUS determines the STRUCTURE and COMPOSITION of the image, NOT the Theme Description.
-- If VISUAL FOCUS is 'Single Hero Object (Central)': The image MUST have an isolated central element as the primary subject, even if the Theme suggests patterns or backgrounds. Use theme elements to create a distinct focal point, NOT a background pattern.
-- If VISUAL FOCUS is 'Framed Vignette': The image MUST show a scene or object within a decorative frame or border. Use theme elements to create the framed content, NOT a repeating background.
-- If VISUAL FOCUS is 'Pattern-Focused (No central object)': THEN you may create a full-page repeating pattern or texture using the theme elements.
-- If VISUAL FOCUS is 'Macro Detail/Texture': THEN you may create a close-up texture or pattern detail.
-- For ALL OTHER FOCUS TYPES: Do NOT generate a full-page background pattern, even if the Theme contains "Pattern" or "Background". Instead, use the theme elements to create the assigned focus structure (e.g., isolated element, framed scene, corner composition, etc.).
-
-🚨 ANTI-REPETITION RULE:
-If the Theme Description contains words like "Pattern", "Background", "Texture", or "Seamless":
-- ONLY generate a full-page repeating pattern/texture if VISUAL FOCUS is 'Pattern-Focused (No central object)' or 'Macro Detail/Texture'.
-- For all other VISUAL FOCUS types (Single Hero Object, Framed Vignette, Asymmetrical Corner, Knolling, Collage, Wide Scene): Use the theme elements to create a DISTINCT focal point, isolated element, framed composition, or specific arrangement - NOT a background pattern.
-
-🎨 DESIGN KIT GENERATION GOAL:
-You are creating a "Design Kit" that contains a MIX of different types of elements:
-- Some variations should be full-page backgrounds/textures (only when Focus is Pattern-Focused or Macro Detail)
-- Some variations should be isolated elements/ephemera (when Focus is Single Hero Object, Framed Vignette, or Asymmetrical Corner)
-- Some variations should be frames or borders (when Focus is Framed Vignette)
-- Some variations should be compositions with multiple items (when Focus is Knolling or Collage)
-- The goal is VARIETY - not all variations should be the same type of element.
-
-${variationControl}
-
-Style: ${pageStyle}. ${elements.length > 0 ? `Elements: ${elements.join(', ')}.` : ''} ${includeFrames ? 'Include frames. ' : ''}${includeBorders ? 'Include borders. ' : ''}
-
-Create a flat, printable page design suitable for digital use. NO 3D objects, NO depth, NO shadows, NO realistic lighting (unless the style requires it). Top-down view, flat illustration style (unless the style specifies otherwise).
-
-EACH VARIATION MUST BE VISUALLY DISTINCT with unique composition, subject matter, color scheme, and visual style.
-
-Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure while incorporating the ${themeDescription} theme elements appropriately. 2-3 sentences. Return ONLY the prompt description.`;
+CRITICAL: Keep it minimal. Style reference images handle all visual styling. You only describe WHAT is shown, not HOW it looks.`;
 
     // Use retry wrapper with header enforcement
+    // For Custom/Override mode, use lower temperature and fewer tokens for minimal prompts
     const result = await callPromptWithHeaderEnforcement(
       primarySubject,
       systemPrompt,
@@ -1117,13 +1052,37 @@ Create a DISTINCT and UNIQUE design that follows the VISUAL FOCUS structure whil
       apiKey,
       apiUrl,
       useOpenRouter,
-      4 // maxAttempts
+      4, // maxAttempts
+      0.1, // temperature (lower for more deterministic, minimal output)
+      100 // max_tokens (reduced for shorter prompts)
     );
 
     // If generation failed (returned null), return null so caller can swap subjects
     if (!result.text) {
       console.warn(`[PromptGen] Failed to generate valid prompt for "${primarySubject}" after ${result.attempt} attempts`);
       return null; // Caller should swap to next subject from master list
+    }
+
+    // Add validation to truncate prompts if they're too long
+    if (result.text) {
+      const bodyText = result.text.replace(/^PRIMARY SUBJECT:.*?\.\s*/i, '').trim();
+      const sentences = bodyText.split(/\.\s+/);
+      
+      // If more than 1 sentence, keep only the first
+      if (sentences.length > 1) {
+        console.warn(`[PromptGen] Prompt too long (${sentences.length} sentences), truncating to first sentence`);
+        const simplified = `PRIMARY SUBJECT: ${primarySubject}. ${sentences[0]}.`;
+        return simplified;
+      }
+      
+      // Check word count (should be 10-15 words after PRIMARY SUBJECT header)
+      const wordCount = bodyText.split(/\s+/).length;
+      if (wordCount > 20) {
+        console.warn(`[PromptGen] Prompt too long (${wordCount} words), truncating to first sentence`);
+        const firstSentence = sentences[0] || bodyText.split('.')[0];
+        const simplified = `PRIMARY SUBJECT: ${primarySubject}. ${firstSentence}.`;
+        return simplified;
+      }
     }
 
     // Log result for audit

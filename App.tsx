@@ -862,10 +862,30 @@ const App: React.FC = () => {
         
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
+          // Determine which uploaded image to use for this request (round-robin distribution)
+          const imageIndex = uploadedImages.length > 0 
+            ? Math.floor((requestIdx / requestsNeeded) * uploadedImages.length) 
+            : 0;
+          
+          // Get image-specific style reference URL
+          const imageStyleRefUrl = uploadedImages[imageIndex]?.styleRefUrl;
+          
+          // Create modified settings with image-specific styleRefUrl
+          const imageSpecificSettings = {
+            ...settings,
+            styleRefUrl: imageStyleRefUrl || settings.styleRefUrl
+          };
+          
+          const imageTheme = uploadedImages[imageIndex]?.theme || uploadedImages[imageIndex]?.fullAnalysis?.clusters?.[0]?.theme || 'Unknown';
+          console.log(`[Midjourney Request ${requestIdx + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`);
+          if (imageStyleRefUrl) {
+            console.log(`[Midjourney Request ${requestIdx + 1}] Style reference URL: ${imageStyleRefUrl}`);
+          }
+          
           // Midjourney/Legnext returns an array of images (typically 4)
           const base64Urls = await generateFunction(
             selectedTheme, 
-            settings,
+            imageSpecificSettings,  // ✅ CHANGED: was "settings", now "imageSpecificSettings"
             settings.parametersForMJ,
             settings.aspectRatio || '1:1',
             settings.midjourneyMode || 'fast',
