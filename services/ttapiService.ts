@@ -799,9 +799,6 @@ const convertUrlToBase64 = async (url: string): Promise<string> => {
         throw fallbackError;
       }
     }
-  });
-
-  return Promise.all(base64Promises);
 };
 
 /**
