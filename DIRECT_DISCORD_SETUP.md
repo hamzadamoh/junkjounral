@@ -1,6 +1,14 @@
 # Direct Discord/Midjourney Integration Setup
 
-This guide explains how to use your own Discord account token to connect directly to Midjourney, bypassing third-party services like Ttapi/GoAPI.
+⚠️ **CRITICAL LIMITATION**: Discord does **NOT** allow sending slash commands programmatically. Slash commands can only be triggered by user interactions in Discord's UI. This means **direct Discord integration may not work** for triggering Midjourney's `/imagine` command.
+
+**This integration sends `/imagine` as plain text, which Midjourney bot will NOT respond to.**
+
+**Recommended**: Use Ttapi or GoAPI instead, as they handle the Discord interaction complexity for you.
+
+---
+
+This guide explains how to attempt direct Discord integration (though it has limitations).
 
 ## ⚠️ Important Notes
 

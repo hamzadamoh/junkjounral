@@ -112,20 +112,70 @@ const sendImagineCommand = async (
 
   console.log(`[DirectMJ] Sending /imagine command: "${cleanPrompt}"`);
 
-  // Discord API endpoint for interactions (slash commands)
-  // Note: This requires using Discord's interaction API
-  // For user tokens, we might need to use a different approach
+  // ⚠️ CRITICAL LIMITATION: Discord does NOT allow sending slash commands programmatically
+  // Slash commands can only be triggered by user interactions in Discord UI
+  // Sending `/imagine` as text will NOT trigger Midjourney bot - it's just plain text
   
-  // Alternative: Send as a regular message that Midjourney bot can parse
-  // Some Midjourney bots accept direct messages
-  const messageUrl = `${DISCORD_API_BASE}/channels/${channelId}/messages`;
+  // Attempt 1: Try to use Interaction API (may not work for triggering other bots' commands)
+  const midjourneyApplicationId = '936929561302675456'; // Midjourney's bot application ID
   
-  const payload = {
-    content: `/imagine ${cleanPrompt}`
-  };
-
   try {
-    // Use Vercel proxy to bypass CORS and keep token secure
+    // Try Interaction API approach (unlikely to work, but worth trying)
+    // This would require your bot/user to have permission to trigger Midjourney's commands
+    const interactionPayload = {
+      type: 2, // APPLICATION_COMMAND
+      application_id: midjourneyApplicationId,
+      guild_id: serverId,
+      channel_id: channelId,
+      data: {
+        id: 'imagine', // Command ID (this won't work - we don't have Midjourney's command structure)
+        name: 'imagine',
+        type: 1, // CHAT_INPUT
+        options: [
+          {
+            name: 'prompt',
+            type: 3, // STRING
+            value: cleanPrompt
+          }
+        ]
+      }
+    };
+
+    console.log(`[DirectMJ] ⚠️ Attempting Interaction API (may not work for other bots' commands)...`);
+    
+    // This will likely fail, but we'll try it
+    try {
+      const interactionResponse = await fetch('/api/discord/interaction', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token,
+          interaction: interactionPayload
+        })
+      });
+
+      if (interactionResponse.ok) {
+        console.log(`[DirectMJ] ✅ Interaction API succeeded (unexpected but great!)`);
+        const taskId = `interaction_${Date.now()}`;
+        taskStorage.set(taskId, {
+          messageId: taskId,
+          prompt: cleanPrompt,
+          status: 'pending',
+          createdAt: Date.now()
+        });
+        return taskId;
+      }
+    } catch (interactionError) {
+      console.log(`[DirectMJ] Interaction API failed (expected):`, interactionError);
+    }
+
+    // Attempt 2: Send as text message (WON'T WORK - Midjourney won't respond)
+    // This is a fallback, but it won't actually trigger Midjourney
+    console.warn(`[DirectMJ] ⚠️ WARNING: Sending as text message - Midjourney bot will NOT respond to this!`);
+    console.warn(`[DirectMJ] Discord does not allow programmatic slash commands. This will fail.`);
+    
     const response = await fetch('/api/discord/message', {
       method: 'POST',
       headers: {

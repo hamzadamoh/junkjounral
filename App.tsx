@@ -853,13 +853,32 @@ const App: React.FC = () => {
       // Wait for all requests to complete in parallel
       await Promise.allSettled(imagePromises);
     } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
-      // For Midjourney (GoAPI, Legnext, Ttapi, or Direct), generate in parallel
+      // For Midjourney (GoAPI, Legnext, Ttapi, or Direct), generate with rate limiting
       // Note: Midjourney returns 4 images per request, so we need fewer requests
       const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : settings.imageService === 'direct' ? 'Direct' : 'Midjourney';
       const requestsNeeded = Math.ceil(total / 4);
-      addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
+      
+      // Rate limiting: Ttapi has strict limits, stagger requests
+      // For Ttapi: Send requests with 2-3 second delays to avoid rate limits
+      // For other services: Can send in parallel or with smaller delays
+      const isTtapi = settings.imageService === 'ttapi';
+      const delayBetweenRequests = isTtapi ? 2500 : 1000; // 2.5s for Ttapi, 1s for others
+      const maxConcurrent = isTtapi ? 3 : 5; // Max 3 concurrent for Ttapi, 5 for others
+      
+      if (isTtapi) {
+        addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request) with rate limiting (${delayBetweenRequests / 1000}s delays, max ${maxConcurrent} concurrent)...`);
+      } else {
+        addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
+      }
       
       const imagePromises = Array.from({ length: requestsNeeded }, async (_, requestIdx) => {
+        // Add delay to stagger requests and avoid rate limits (especially for Ttapi)
+        if (requestIdx > 0 && isTtapi) {
+          const delay = requestIdx * delayBetweenRequests;
+          addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ⏳ Waiting ${delay / 1000}s to avoid rate limits...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
         const startIdx = requestIdx * 4;
         const endIdx = Math.min(startIdx + 4, total);
         const imageRange = `${startIdx + 1}-${endIdx}`;
@@ -867,11 +886,20 @@ const App: React.FC = () => {
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
           // Determine which uploaded image to use for this request (round-robin distribution)
-          // Each image should be used for (requestsNeeded / uploadedImages.length) requests
-          // Formula: imageIndex = Math.floor((requestIdx * uploadedImages.length) / requestsNeeded)
-          // This ensures even distribution: image 0 for requests 0-1, image 1 for requests 2-3, etc.
+          // Each image should be used for approximately (requestsNeeded / uploadedImages.length) requests
+          // Use modulo to cycle through images evenly
+          // Example: 6 images, 9 requests -> each image used 1-2 times
+          // Request 0: 0 % 6 = 0 (image 0)
+          // Request 1: 1 % 6 = 1 (image 1)
+          // Request 2: 2 % 6 = 2 (image 2)
+          // Request 3: 3 % 6 = 3 (image 3)
+          // Request 4: 4 % 6 = 4 (image 4)
+          // Request 5: 5 % 6 = 5 (image 5)
+          // Request 6: 6 % 6 = 0 (image 0)
+          // Request 7: 7 % 6 = 1 (image 1)
+          // Request 8: 8 % 6 = 2 (image 2)
           const imageIndex = uploadedImages.length > 0 
-            ? Math.floor((requestIdx * uploadedImages.length) / requestsNeeded) 
+            ? requestIdx % uploadedImages.length
             : 0;
           
           // Get image-specific style reference URL

@@ -16,11 +16,22 @@ export default async function handler(req, res) {
 
   try {
     // Discord Interaction API endpoint
-    // Note: This is a simplified version - full implementation requires proper interaction handling
+    // ⚠️ NOTE: This likely won't work for triggering other bots' commands
+    // Discord doesn't allow programmatic slash command execution
+    // This endpoint is for receiving interactions, not sending them
+    
+    // Try with user token first (no "Bot " prefix)
+    let authHeader = token;
+    
+    // If token doesn't start with user ID pattern, try bot token format
+    if (!token.match(/^[0-9]{17,19}\./)) {
+      authHeader = `Bot ${token}`;
+    }
+    
     const response = await fetch('https://discord.com/api/v10/interactions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bot ${token}`, // Bot tokens use "Bot " prefix
+        'Authorization': authHeader,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(interaction)

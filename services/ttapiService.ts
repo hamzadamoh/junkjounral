@@ -278,7 +278,9 @@ const sendTaskToTtapi = async (
         } else if (response.status === 401) {
           errorMessage = `Ttapi API error: Invalid API key. Please check that VITE_TTAPI_API_KEY is set correctly.`;
         } else if (response.status === 429) {
-          errorMessage = `Ttapi API error: Rate limit exceeded. Please wait a moment and try again.`;
+          errorMessage = `Ttapi API error: Rate limit exceeded. Will retry with new task.`;
+          // Rate limit - throw special error to trigger retry
+          throw new Error('RATE_LIMIT_RETRY');
         } else {
           errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
           errorMessage = `Ttapi HTTP error: ${response.status} - ${errorDetail}`;
@@ -363,15 +365,23 @@ const getTaskStatus = async (jobId: string): Promise<TtapiJobStatus> => {
 
 /**
  * Polls a ttapi.io task until it completes or fails
+ * Added rate limit handling with exponential backoff
  */
 const pollTaskUntilComplete = async (
   jobId: string,
   maxAttempts: number = 180,
-  initialDelay: number = 3000
+  initialDelay: number = 3000,
+  staggerDelay: number = 0 // Add stagger delay to avoid simultaneous polling
 ): Promise<string[]> => {
+  // Stagger polling start to avoid rate limits when multiple tasks poll simultaneously
+  if (staggerDelay > 0) {
+    await new Promise(resolve => setTimeout(resolve, staggerDelay));
+  }
+  
   let attempts = 0;
   let delay = initialDelay;
   const startTime = Date.now();
+  let consecutiveRateLimitErrors = 0;
 
   while (attempts < maxAttempts) {
     attempts++;
@@ -596,9 +606,44 @@ const pollTaskUntilComplete = async (
         }
         
         if (imageUrls.length > 0) {
-          // If we have exactly 1 image and it's marked as a grid, return it as-is
-          // (We'll split it in convertUrlsToBase64)
-          if (imageUrls.length === 1) {
+          // If we have exactly 1 image and it's a grid, try to get individual images from Discord DM
+          if (imageUrls.length === 1 && imageUrls[0].includes('grid')) {
+            console.log(`[Ttapi] 📋 Got grid image. Attempting to get individual images from Discord DM...`);
+            
+            try {
+              const gridImageUrl = imageUrls[0];
+              const completedAt = new Date().toISOString();
+              
+              // Try to get individual images from Discord DM
+              const dmResponse = await fetch('/api/discord/poll-dm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  prompt: prompt,
+                  jobId: jobId,
+                  gridImageUrl: gridImageUrl,
+                  completedAt: completedAt
+                })
+              });
+
+              if (dmResponse.ok) {
+                const dmResult = await dmResponse.json();
+                if (dmResult.images && dmResult.images.length > 0) {
+                  console.log(`[Ttapi] ✅ Got ${dmResult.images.length} individual image(s) from Discord DM!`);
+                  return dmResult.images; // Return individual images instead of grid
+                } else {
+                  console.warn(`[Ttapi] ⚠️ Discord DM polling returned no images, using grid image`);
+                }
+              } else if (dmResponse.status === 404) {
+                console.log(`[Ttapi] ℹ️ No DM channel found yet. Using grid image (will split client-side).`);
+              } else {
+                console.warn(`[Ttapi] ⚠️ Discord DM polling failed (${dmResponse.status}), using grid image`);
+              }
+            } catch (dmError: any) {
+              console.warn(`[Ttapi] ⚠️ Discord DM polling error, using grid image:`, dmError.message);
+            }
+            
+            // Fallback: return grid image (will be split client-side)
             console.log(`[Ttapi] ✅ Task ${jobId} completed! Found grid image (will split into 4 tiles)`);
           } else {
             console.log(`[Ttapi] ✅ Task ${jobId} completed! Returning ${imageUrls.length} images`);
@@ -628,21 +673,79 @@ const pollTaskUntilComplete = async (
                      url.includes('mjcdn.ttapi.io') ||
                      url.includes('discordapp.com/attachments');
             });
-            if (imageUrls.length > 0) {
-              console.log(`[Ttapi] ✅ Extracted ${imageUrls.length} image URLs from response (filtered)`);
-              return imageUrls;
+          if (imageUrls.length > 0) {
+            console.log(`[Ttapi] ✅ Extracted ${imageUrls.length} image URLs from response (filtered)`);
+            
+            // If we got a grid image (single URL), try to get individual images from Discord DM
+            if (imageUrls.length === 1 && imageUrls[0].includes('grid')) {
+              console.log(`[Ttapi] 📋 Got grid image. Attempting to get individual images from Discord DM...`);
+              
+              try {
+                const gridImageUrl = imageUrls[0];
+                const completedAt = new Date().toISOString();
+                
+                // Try to get individual images from Discord DM
+                const dmResponse = await fetch('/api/discord/poll-dm', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    prompt: prompt,
+                    jobId: jobId,
+                    gridImageUrl: gridImageUrl,
+                    completedAt: completedAt
+                  })
+                });
+
+                if (dmResponse.ok) {
+                  const dmResult = await dmResponse.json();
+                  if (dmResult.images && dmResult.images.length > 0) {
+                    console.log(`[Ttapi] ✅ Got ${dmResult.images.length} individual image(s) from Discord DM!`);
+                    return dmResult.images; // Return individual images instead of grid
+                  } else {
+                    console.warn(`[Ttapi] ⚠️ Discord DM polling returned no images, using grid image`);
+                  }
+                } else if (dmResponse.status === 404) {
+                  console.log(`[Ttapi] ℹ️ No DM channel found yet. Using grid image (will split client-side).`);
+                } else {
+                  console.warn(`[Ttapi] ⚠️ Discord DM polling failed (${dmResponse.status}), using grid image`);
+                }
+              } catch (dmError: any) {
+                console.warn(`[Ttapi] ⚠️ Discord DM polling error, using grid image:`, dmError.message);
+              }
             }
+            
+            return imageUrls;
           }
-          
-          throw new Error('Job completed but no image URLs found in response. Check console for full API response structure.');
         }
+        
+        throw new Error('Job completed but no image URLs found in response. Check console for full API response structure.');
+      }
       }
 
       // Check if task failed
       if (status.status === 'failed' || status.status === 'error') {
         const errorMsg = status.error || status.message || 'Unknown error';
+        
+        // Check if it's a rate limit error
+        if (errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('rate limited')) {
+          consecutiveRateLimitErrors++;
+          console.warn(`[Ttapi] ⚠️ Rate limit detected (consecutive: ${consecutiveRateLimitErrors}). Applying exponential backoff...`);
+          
+          // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
+          const backoffDelay = Math.min(5000 * Math.pow(2, consecutiveRateLimitErrors - 1), 60000);
+          console.log(`[Ttapi] ⏳ Waiting ${backoffDelay / 1000}s before retrying...`);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          
+          // Reset delay to initial after backoff
+          delay = initialDelay;
+          continue; // Retry polling
+        }
+        
         throw new Error(`Ttapi task failed: ${errorMsg}`);
       }
+      
+      // Reset consecutive rate limit errors on successful poll
+      consecutiveRateLimitErrors = 0;
 
       // Diagnostic warnings for long-running tasks
       if (attempts === 30 && (status.status === 'pending' || status.status === 'processing')) {
@@ -905,17 +1008,146 @@ export const generateJournalPage = async (
       process_mode: processMode
     }, null, 2));
 
-    // Send task to ttapi.io
-    const jobId = await sendTaskToTtapi(prompt);
+    // Send task to ttapi.io with retry logic for rate limits
+    let jobId: string | null = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    const baseRetryDelay = 5000; // 5 seconds base delay
+    
+    while (!jobId && retryCount <= maxRetries) {
+      try {
+        jobId = await sendTaskToTtapi(prompt);
+        if (!jobId) {
+          throw new Error('Failed to create ttapi.io task: No job ID returned');
+        }
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        // Check if it's a rate limit error
+        const isRateLimit = error.message?.includes('RATE_LIMIT_RETRY') || 
+                           error.message?.toLowerCase().includes('rate limit') ||
+                           error.message?.includes('429');
+        
+        if (isRateLimit && retryCount < maxRetries) {
+          retryCount++;
+          // Exponential backoff: 5s, 10s, 20s
+          const retryDelay = baseRetryDelay * Math.pow(2, retryCount - 1);
+          console.warn(`[Ttapi] ⚠️ Rate limit detected during task creation (attempt ${retryCount}/${maxRetries}). Waiting ${retryDelay / 1000}s before resending as new task...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          console.log(`[Ttapi] 🔄 Retrying task creation (attempt ${retryCount}/${maxRetries})...`);
+          continue; // Retry
+        } else {
+          // Not a rate limit, or max retries reached - throw the error
+          throw error;
+        }
+      }
+    }
+    
     if (!jobId) {
-      throw new Error('Failed to create ttapi.io task');
+      throw new Error('Failed to create ttapi.io task after retries');
     }
 
-    // Poll until complete - returns all image URLs
-    const imageUrls = await pollTaskUntilComplete(jobId, 180, 5000);
+    // Try to get individual images from Discord DM using REST API (Vercel-compatible)
+    // This avoids needing a persistent Gateway server
+    let imageUrls: string[] = [];
+    const useDiscordDM = import.meta.env.VITE_USE_DISCORD_DM === 'true' || import.meta.env.VITE_DISCORD_TOKEN;
+    
+    if (useDiscordDM) {
+      console.log(`[Ttapi] 🔄 Attempting to get individual images from Discord DM...`);
+      try {
+        // Poll Discord DM via Vercel serverless function
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const dmResponse = await fetch('/api/discord/poll-dm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: prompt,
+            jobId: jobId,
+            requestId: requestId
+          })
+        });
+
+        if (dmResponse.ok) {
+          const dmResult = await dmResponse.json();
+          if (dmResult.images && dmResult.images.length > 0) {
+            imageUrls = dmResult.images;
+            console.log(`[Ttapi] ✅ Got ${imageUrls.length} individual image(s) from Discord DM!`);
+          } else {
+            console.warn(`[Ttapi] ⚠️ Discord DM polling returned no images, falling back to Ttapi polling`);
+          }
+        } else if (dmResponse.status === 404) {
+          // No DM channel yet - Ttapi will create it
+          console.log(`[Ttapi] ℹ️ No DM channel found yet. Ttapi will create it. Falling back to Ttapi polling.`);
+        } else {
+          console.warn(`[Ttapi] ⚠️ Discord DM polling failed (${dmResponse.status}), falling back to Ttapi polling`);
+        }
+      } catch (dmError: any) {
+        console.warn(`[Ttapi] ⚠️ Discord DM polling error, falling back to Ttapi polling:`, dmError.message);
+      }
+    }
+    
+    // Fallback to Ttapi polling if Discord DM didn't work
+    if (imageUrls.length === 0) {
+      console.log(`[Ttapi] 📡 Using Ttapi direct polling (fallback)...`);
+      
+      // Poll until complete - returns all image URLs
+      // Add stagger delay based on variationIndex to avoid simultaneous polling
+      // Each request waits (variationIndex * 500ms) before starting to poll
+      const staggerDelay = (variationIndex ?? 0) * 500; // 0ms, 500ms, 1000ms, 1500ms, etc.
+      
+      let pollingRetryCount = 0;
+      const maxPollingRetries = 2;
+      let currentJobId = jobId;
+      
+      while (imageUrls.length === 0 && pollingRetryCount <= maxPollingRetries) {
+        try {
+          imageUrls = await pollTaskUntilComplete(currentJobId, 180, 5000, staggerDelay);
+          
+          if (!imageUrls || imageUrls.length === 0) {
+            throw new Error('No images returned from ttapi.io');
+          }
+          break; // Success, exit retry loop
+        } catch (error: any) {
+          // Check if we should resend as new task
+          const shouldResend = error.message?.includes('RATE_LIMIT_RESEND_TASK') || 
+                              (error.message?.toLowerCase().includes('rate limit') && pollingRetryCount < maxPollingRetries);
+          
+          if (shouldResend) {
+            pollingRetryCount++;
+            const retryDelay = 10000 * pollingRetryCount; // 10s, 20s
+            console.warn(`[Ttapi] ⚠️ Rate limit during polling (attempt ${pollingRetryCount}/${maxPollingRetries}). Resending prompt as new task after ${retryDelay / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            
+            // Resend the prompt as a completely new task
+            console.log(`[Ttapi] 🔄 Resending prompt as new task (attempt ${pollingRetryCount}/${maxPollingRetries})...`);
+            try {
+              currentJobId = await sendTaskToTtapi(prompt);
+              if (!currentJobId) {
+                throw new Error('Failed to create new task after rate limit');
+              }
+              console.log(`[Ttapi] ✅ New task created: ${currentJobId}`);
+              // Reset stagger delay for new task
+              const newStaggerDelay = (variationIndex ?? 0) * 500;
+              continue; // Retry polling with new job ID
+            } catch (resendError: any) {
+              if (pollingRetryCount >= maxPollingRetries) {
+                throw new Error(`Failed to resend task after rate limit: ${resendError.message}`);
+              }
+              // If resend also fails with rate limit, wait longer and try again
+              const longerDelay = 20000 * pollingRetryCount; // 20s, 40s
+              console.warn(`[Ttapi] ⚠️ Resend also rate limited. Waiting ${longerDelay / 1000}s...`);
+              await new Promise(resolve => setTimeout(resolve, longerDelay));
+              continue;
+            }
+          } else {
+            // Not a rate limit or max retries reached - throw the error
+            throw error;
+          }
+        }
+      }
+    }
     
     if (!imageUrls || imageUrls.length === 0) {
-      throw new Error('No images returned from ttapi.io');
+      throw new Error('No images returned from ttapi.io after retries');
     }
 
     // Convert URLs to base64
