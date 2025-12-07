@@ -1733,8 +1733,38 @@ Now analyze the provided image and produce the JSON object described above.`
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-      throw new Error(`OpenAI Vision API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.error?.message) {
+          errorMessage = errorData.error.message;
+        } else if (errorData.error) {
+          errorMessage = JSON.stringify(errorData.error);
+        }
+      } catch (parseError) {
+        // If JSON parsing fails, try to get text response
+        try {
+          const textResponse = await response.text();
+          if (textResponse) {
+            errorMessage = textResponse.substring(0, 200);
+          }
+        } catch (textError) {
+          // Ignore text parsing errors
+        }
+      }
+      
+      // Provide user-friendly error messages for common status codes
+      if (response.status === 401) {
+        throw new Error('OpenAI API key is invalid or expired. Please check your VITE_OPENAI_API_KEY.');
+      } else if (response.status === 429) {
+        throw new Error('OpenAI API rate limit exceeded. Please wait a moment and try again.');
+      } else if (response.status === 400) {
+        throw new Error(`OpenAI API request error: ${errorMessage}`);
+      } else if (response.status >= 500) {
+        throw new Error(`OpenAI API server error (${response.status}). Please try again later.`);
+      } else {
+        throw new Error(`OpenAI Vision API error (${response.status}): ${errorMessage}`);
+      }
     }
 
     const data: ChatGPTResponse = await response.json();
@@ -1789,7 +1819,17 @@ Now analyze the provided image and produce the JSON object described above.`
       stack: error.stack
     });
     
-    throw new Error(`Failed to analyze image: ${error.message || 'Unknown error'}`);
+    // If the error already has a descriptive message, use it
+    if (error.message && error.message !== 'Unknown error') {
+      throw error;
+    }
+    
+    // Otherwise, provide a generic error with more context
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to OpenAI API. Please check your internet connection.');
+    }
+    
+    throw new Error(`Failed to analyze image: ${error.message || 'Unknown error. Please check your OpenAI API key and try again.'}`);
   }
 };
 

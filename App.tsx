@@ -1494,8 +1494,8 @@ const App: React.FC = () => {
                       setIsAnalyzingImage(true);
                       try {
                         const analysis = await analyzeReferenceImage(base64Image);
-                        if (analysis.status === 'fulfilled' && analysis.value) {
-                          const { theme, style, colors, vibe, fullAnalysis } = analysis.value;
+                        if (analysis && analysis.theme && analysis.style) {
+                          const { theme, style, colors, vibe, fullAnalysis } = analysis;
                           
                           // Upload to WordPress
                           setIsUploadingStyleRef(true);
@@ -1529,10 +1529,11 @@ const App: React.FC = () => {
                             addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
                           }
                         } else {
-                          addLog(`❌ Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`, 'error');
+                          addLog(`❌ Failed to analyze image: Invalid response format`, 'error');
                         }
                       } catch (error: any) {
-                        addLog(`❌ Error: ${error.message || 'Unknown error'}`, 'error');
+                        console.error('Image analysis error:', error);
+                        addLog(`❌ Failed to analyze image: ${error.message || 'Unknown error'}`, 'error');
                       } finally {
                         setIsAnalyzingImage(false);
                         setIsUploadingStyleRef(false);
