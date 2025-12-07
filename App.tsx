@@ -16,7 +16,8 @@ import {
   Copy,
   Check,
   Terminal,
-  ChevronRight
+  ChevronRight,
+  Link
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -37,6 +38,9 @@ const App: React.FC = () => {
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [isCustomTheme, setIsCustomTheme] = useState<boolean>(false);
   const [isImageThemeExpansion, setIsImageThemeExpansion] = useState<boolean>(false);
+  const [isSrefMode, setIsSrefMode] = useState<boolean>(false);
+  const [srefCode, setSrefCode] = useState<string>('');
+  const [srefSubject, setSrefSubject] = useState<string>('');
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -121,12 +125,21 @@ const App: React.FC = () => {
   const handleCustomThemeSelect = () => {
     setIsCustomTheme(true);
     setIsImageThemeExpansion(false);
+    setIsSrefMode(false);
     setSelectedTheme(null);
   };
 
   const handleImageThemeExpansionSelect = () => {
     setIsImageThemeExpansion(true);
     setIsCustomTheme(false);
+    setIsSrefMode(false);
+    setSelectedTheme(null);
+  };
+
+  const handleSrefModeSelect = () => {
+    setIsSrefMode(true);
+    setIsCustomTheme(false);
+    setIsImageThemeExpansion(false);
     setSelectedTheme(null);
   };
 
@@ -392,10 +405,14 @@ const App: React.FC = () => {
     addLog('Generating prompts...');
     
     // Determine the theme name to use
+    // If SREF mode: use the SREF subject
     // If Image Theme Expansion mode: use the PRIMARY SUBJECT (theme) from the single uploaded image
     // If custom theme: use the custom prompt directly
     // Otherwise: use selected theme name
-    const themeName = isImageThemeExpansion && singleImageForTheme?.theme
+    const isSrefModeForTheme = selectedTheme?.id === 'sref-style-match' || isSrefMode;
+    const themeName = isSrefModeForTheme && srefSubject.trim()
+      ? srefSubject.trim()
+      : isImageThemeExpansion && singleImageForTheme?.theme
       ? singleImageForTheme.theme // Use PRIMARY SUBJECT from single image
       : isCustomTheme && customThemePrompt.trim() 
       ? customThemePrompt.trim() 
@@ -607,9 +624,12 @@ const App: React.FC = () => {
           }
         }
         
-        // Determine primary subject: use primarySubjectForExpansion for Image Theme Expansion, otherwise use settings.primarySubject
+        // Determine primary subject: use primarySubjectForExpansion for Image Theme Expansion, use srefSubject for SREF mode, otherwise use settings.primarySubject
+        const isSrefModeForRequest = selectedTheme?.id === 'sref-style-match' || isSrefMode;
         const primarySubjectToUse = isImageThemeModeForRequest 
           ? primarySubjectForExpansion 
+          : isSrefModeForRequest && srefSubject.trim()
+          ? srefSubject.trim()
           : settings.primarySubject?.trim() || undefined;
         console.log(`[${serviceName} Request ${i + 1}] primarySubjectToUse: "${primarySubjectToUse}", isImageThemeModeForRequest: ${isImageThemeModeForRequest}`);
         
@@ -617,6 +637,9 @@ const App: React.FC = () => {
         const imageClusterData = isImageThemeModeForRequest && singleImageForTheme?.fullAnalysis 
           ? singleImageForTheme.fullAnalysis 
           : undefined;
+        
+        // Check if SREF mode is active
+        const isSrefModeForRequest = selectedTheme?.id === 'sref-style-match' || isSrefMode;
         
         return generatePromptWithChatGPT(
           imageTheme,
@@ -634,7 +657,9 @@ const App: React.FC = () => {
           usedSubjects,
           primarySubjectToUse, // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
           0, // recursionDepth
-          imageClusterData // Pass full image cluster data for Image Theme Expansion
+          imageClusterData, // Pass full image cluster data for Image Theme Expansion
+          isSrefModeForRequest, // SREF mode flag
+          srefCode // SREF code/URL
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -841,6 +866,9 @@ const App: React.FC = () => {
           ? singleImageForTheme.fullAnalysis 
           : undefined;
         
+        // Check if SREF mode is active
+        const isSrefModeForPoll = selectedTheme?.id === 'sref-style-match' || isSrefMode;
+        
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
@@ -857,7 +885,9 @@ const App: React.FC = () => {
           usedSubjects,
           primarySubjectForExpansion, // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
           0, // recursionDepth
-          imageClusterDataForPoll // Pass full image cluster data for Image Theme Expansion
+          imageClusterDataForPoll, // Pass full image cluster data for Image Theme Expansion
+          isSrefModeForPoll, // SREF mode flag
+          srefCode // SREF code/URL
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -1045,14 +1075,21 @@ const App: React.FC = () => {
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
           // For Image Theme Expansion mode: use the single image's styleRefUrl
+          // For SREF mode: use the SREF code as style reference
           // For regular mode: use round-robin distribution through uploaded images
           let imageStyleRefUrl: string | undefined;
           let imageIndex = 0;
           
           // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
           const isImageThemeMode = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
+          // Check if we're in SREF mode
+          const isSrefModeForGeneration = selectedTheme?.id === 'sref-style-match' || isSrefMode;
           
-          if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
+          if (isSrefModeForGeneration && srefCode.trim()) {
+            // SREF mode: use the SREF code/URL as style reference
+            imageStyleRefUrl = srefCode.trim();
+            console.log(`[Midjourney Request ${requestIdx + 1}] Using SREF Style Match mode - SREF code: ${srefCode.substring(0, 50)}...`);
+          } else if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
             // Image Theme Expansion mode: use single image's style reference
             // First try singleImageForTheme.styleRefUrl, then fallback to settings.styleRefUrl
             // (settings.styleRefUrl is set during image upload)
@@ -1090,10 +1127,11 @@ const App: React.FC = () => {
           
           // Create modified settings with image-specific styleRefUrl
           // For Image Theme Expansion mode: skip style reference URL, rely on detailed prompt only
+          // For SREF mode: use the SREF code as style reference (don't skip)
           const imageSpecificSettings = {
             ...settings,
             styleRefUrl: imageStyleRefUrl || settings.styleRefUrl,
-            skipStyleReference: isImageThemeMode ? true : false
+            skipStyleReference: isImageThemeMode ? true : false // SREF mode should NOT skip style reference
           };
           
           let imageTheme = 'Unknown';
@@ -1778,6 +1816,94 @@ const App: React.FC = () => {
       );
     }
 
+    // If SREF mode is selected, show the SREF input form
+    if (isSrefMode) {
+      return (
+        <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <button 
+                onClick={() => {
+                  setIsSrefMode(false);
+                  setSrefCode('');
+                  setSrefSubject('');
+                }}
+                className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+              >
+                <ChevronLeft />
+              </button>
+              <h2 className="text-3xl font-serif text-gothic-gold">SREF Style Match</h2>
+            </div>
+            <p className="text-slate-400">
+              Input a subject and Midjourney SREF code/URL. The system will generate subject variations while the SREF handles all styling.
+            </p>
+          </div>
+
+          <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
+            {/* Subject Input */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Primary Subject (Theme)
+              </label>
+              <input
+                type="text"
+                value={srefSubject}
+                onChange={(e) => setSrefSubject(e.target.value)}
+                placeholder="e.g., Gothic Castle, Fantasy Character, Cozy Cottage"
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Enter the main subject or theme. ChatGPT will generate different variations of this subject.
+              </p>
+            </div>
+
+            {/* SREF Code/URL Input */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Midjourney SREF Code or URL
+              </label>
+              <input
+                type="text"
+                value={srefCode}
+                onChange={(e) => setSrefCode(e.target.value)}
+                placeholder="e.g., https://cdn.midjourney.com/... or SREF code"
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Enter the Midjourney style reference code or URL. This will be used as the --sref parameter.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (srefSubject.trim() && srefCode.trim()) {
+                  // Create a custom theme object for SREF mode
+                  const customTheme: Theme = {
+                    id: 'sref-style-match',
+                    name: 'SREF Style Match',
+                    description: `Subject: ${srefSubject.trim()}, SREF: ${srefCode.trim().substring(0, 50)}...`,
+                    thumbnail: '',
+                    basePrompt: srefSubject.trim(),
+                    styleKeywords: ['sref', 'style-match']
+                  };
+                  setSelectedTheme(customTheme);
+                  setIsSrefMode(false);
+                  setStep(2);
+                } else {
+                  alert('Please enter both a subject and SREF code/URL.');
+                }
+              }}
+              disabled={!srefSubject.trim() || !srefCode.trim()}
+              className="w-full bg-gradient-to-r from-gothic-gold to-amber-600 hover:from-amber-500 hover:to-amber-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-black font-bold py-4 rounded-lg shadow-lg shadow-amber-900/20 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+            >
+              <Link className="animate-pulse" size={20} />
+              Continue with SREF Style Match
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // If custom theme mode is selected, show the input form
     if (isCustomTheme) {
       return (
@@ -1973,11 +2099,11 @@ const App: React.FC = () => {
       <div className="text-center space-y-4">
         <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Choose how you want to generate your journal pages - with a custom theme description or by uploading an image to extract the theme.
+          Choose how you want to generate your journal pages - with a custom theme description, by uploading an image to extract the theme, or using a Midjourney style reference code.
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {/* Custom Theme Option */}
           <button
             onClick={handleCustomThemeSelect}
@@ -2006,6 +2132,22 @@ const App: React.FC = () => {
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Image Theme Expansion</h3>
               <p className="text-sm text-slate-400">
                 Upload one image - ChatGPT extracts the theme and generates different subjects
+              </p>
+            </div>
+          </button>
+
+          {/* SREF Style Match Option */}
+          <button
+            onClick={handleSrefModeSelect}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <Link className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">SREF Style Match</h3>
+              <p className="text-sm text-slate-400">
+                Input a subject and Midjourney SREF code - generates subject variations with style from SREF
               </p>
             </div>
           </button>
