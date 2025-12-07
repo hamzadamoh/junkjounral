@@ -403,9 +403,14 @@ const App: React.FC = () => {
     
     // For Image Theme Expansion: use the PRIMARY SUBJECT as the theme for all variations
     // ChatGPT will generate different subjects but same theme/style
-    const primarySubjectForExpansion = isImageThemeExpansion && singleImageForTheme?.theme
+    // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
+    const isImageThemeMode = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
+    const primarySubjectForExpansion = (isImageThemeMode && singleImageForTheme?.theme)
       ? singleImageForTheme.theme
+      : (selectedTheme?.id === 'image-theme-expansion' && selectedTheme?.basePrompt)
+      ? selectedTheme.basePrompt // Fallback: use basePrompt from selectedTheme (set when "Continue with Image Theme" is clicked)
       : settings.primarySubject?.trim() || undefined;
+    console.log(`[Image Theme Expansion] primarySubjectForExpansion: "${primarySubjectForExpansion}", isImageThemeExpansion: ${isImageThemeExpansion}, selectedTheme?.id: "${selectedTheme?.id}", selectedTheme?.basePrompt: "${selectedTheme?.basePrompt}", singleImageForTheme?.theme: "${singleImageForTheme?.theme}"`);
     
     // Note: customThemePrompt and customArtStyle fields have been removed from UI
     // They are kept in settings for backward compatibility but are no longer used
@@ -653,9 +658,14 @@ const App: React.FC = () => {
         let imageSubjectList: string[] = [];
         
         // For Image Theme Expansion mode: use the single image's theme and style for all variations
-        if (isImageThemeExpansion && singleImageForTheme) {
-          imageTheme = singleImageForTheme.theme || imageTheme;
-          if (singleImageForTheme.style) {
+        // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
+        const isImageThemeMode = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
+        if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
+          imageTheme = singleImageForTheme?.theme || selectedTheme?.basePrompt || imageTheme;
+          console.log(`[Image Theme Expansion] imageTheme set to: "${imageTheme}", singleImageForTheme?.theme: "${singleImageForTheme?.theme}", selectedTheme?.basePrompt: "${selectedTheme?.basePrompt}"`);
+          
+          // Build style description from single image analysis or use settings.customArtStyle
+          if (singleImageForTheme?.style) {
             // Build style description from single image analysis
             if (singleImageForTheme.fullAnalysis?.clusters?.[0]) {
               const cluster = singleImageForTheme.fullAnalysis.clusters[0];
@@ -686,6 +696,10 @@ const App: React.FC = () => {
                 imageStyle = `${imageStyle} Color palette: ${singleImageForTheme.colors}.`;
               }
             }
+          } else if (settings.customArtStyle && settings.customArtStyle.trim()) {
+            // Fallback: use customArtStyle from settings (set when image was uploaded)
+            imageStyle = settings.customArtStyle;
+            console.log(`[Image Theme Expansion] Using customArtStyle from settings: "${imageStyle}"`);
           }
           // For Image Theme Expansion, we don't need a subject list - ChatGPT will generate different subjects
           imageSubjectList = [];

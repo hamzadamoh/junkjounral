@@ -893,10 +893,11 @@ export const generatePromptWithChatGPT = async (
   const forbiddenSubjects = usedSubjects ? Array.from(usedSubjects).filter(s => !s.includes('##FAILED')).map(s => s.replace('##FAILED', '')) : [];
   
   // Use user-specified subject if provided, otherwise use master list
+  console.log(`[PromptGen] primarySubjectOverride: "${primarySubjectOverride}", masterSubjectList length: ${masterSubjectList?.length || 0}`);
   if (primarySubjectOverride && primarySubjectOverride.trim()) {
     // User explicitly specified a subject - use it for all variations
     primarySubject = primarySubjectOverride.trim();
-    console.log(`[PromptGen] Using user-specified subject: "${primarySubject}"`);
+    console.log(`[PromptGen] ✅ Using user-specified subject: "${primarySubject}"`);
   } else if (masterSubjectList && masterSubjectList.length > 0) {
     // No user subject - auto-generate from master list
     let attempts = 0;
