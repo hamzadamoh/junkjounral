@@ -2231,24 +2231,45 @@ Generate the JSON package with:
       .filter((s: string) => s.length > 0)
       .join(', ');
     
+    // Clean mj_prompt: remove "PRIMARY SUBJECT:" header if present
+    let cleanedMjPrompt = llmOutput.mj_prompt.trim();
+    cleanedMjPrompt = cleanedMjPrompt.replace(/^PRIMARY SUBJECT:\s*/i, '').trim();
+    
     // Validate mj_prompt doesn't contain style tokens (use normalized version)
-    validateMJPrompt(llmOutput.mj_prompt, normalizedStyleTokens);
+    validateMJPrompt(cleanedMjPrompt, normalizedStyleTokens);
+    
+    // Validate sref_url if provided (must be valid HTTPS URL)
+    let validatedSrefUrl: string | null = sref_url;
+    if (sref_url && sref_url.trim()) {
+      try {
+        const url = new URL(sref_url.trim());
+        if (url.protocol !== 'https:') {
+          console.warn(`[generateMJPackage] sref_url is not HTTPS, treating as null: ${sref_url}`);
+          validatedSrefUrl = null;
+        } else {
+          validatedSrefUrl = url.toString();
+        }
+      } catch {
+        console.warn(`[generateMJPackage] sref_url is not a valid URL, treating as null: ${sref_url}`);
+        validatedSrefUrl = null;
+      }
+    }
     
     // Build mj_ref (normalized style_tokens + palette_tokens)
     const mj_ref = `${normalizedStyleTokens}, ${normalizedPaletteTokens}`;
     
     // Build mj_flags with defaults: stylize=50, sref_weight=0.7, chaos=10
-    const mj_flags = formatMJFlags(mj_ref, sref_url, finalSeed, 50, 0.7, 10);
+    const mj_flags = formatMJFlags(mj_ref, validatedSrefUrl, finalSeed, 50, 0.7, 10);
     
     // Construct final package (use normalized tokens)
     const package_: MJPackage = {
       subject_suggestion: llmOutput.subject_suggestion.trim(),
       style_tokens: normalizedStyleTokens,
       palette_tokens: normalizedPaletteTokens,
-      sref_url: sref_url,
+      sref_url: validatedSrefUrl,
       batch_seed: finalBatchSeed,
       variation_index: variation_index,
-      mj_prompt: llmOutput.mj_prompt.trim(),
+      mj_prompt: cleanedMjPrompt,
       mj_ref: mj_ref.trim(),
       mj_flags: mj_flags
     };
