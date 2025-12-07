@@ -1,10 +1,28 @@
 // Get API key from environment variable only
+// Handle both production (import.meta.env) and test (globalThis.import.meta.env) environments
+const getEnvVar = (key: string): string => {
+  // Check for test environment mock first
+  const testEnv = (globalThis as any).import?.meta?.env;
+  if (testEnv) {
+    return (testEnv as any)[key] || '';
+  }
+  
+  // Production: use import.meta.env (Babel will transform this in tests)
+  // Using a function to delay evaluation and allow Babel transformation
+  try {
+    // @ts-expect-error - import.meta is available in Vite but not in Jest
+    return (import.meta.env as any)[key] || '';
+  } catch {
+    return '';
+  }
+};
+
 const getOpenAIApiKey = (): string => {
-  return import.meta.env.VITE_OPENAI_API_KEY || '';
+  return getEnvVar('VITE_OPENAI_API_KEY');
 };
 
 const getOpenRouterApiKey = (): string => {
-  return import.meta.env.VITE_OPENROUTER_API_KEY || '';
+  return getEnvVar('VITE_OPENROUTER_API_KEY');
 };
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -1987,7 +2005,8 @@ function normalizeForComparison(str: string): string {
   return str
     .toLowerCase()
     .replace(/&/g, 'and')  // Normalize & to 'and'
-    .replace(/[^\w\s]/g, ' ')  // Replace punctuation with spaces
+    .replace(/-/g, ' ')  // Replace hyphens with spaces (so "water-color" → "water color")
+    .replace(/[^\w\s]/g, ' ')  // Replace other punctuation with spaces
     .replace(/\s+/g, ' ')  // Normalize whitespace
     .trim();
 }

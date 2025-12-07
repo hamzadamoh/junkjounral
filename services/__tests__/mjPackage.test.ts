@@ -2,6 +2,34 @@
  * Unit tests for Midjourney prompt package generation
  */
 
+// Mock import.meta.env before importing the module
+Object.defineProperty(globalThis, 'import', {
+  value: {
+    meta: {
+      env: {
+        VITE_OPENAI_API_KEY: 'test-openai-key',
+        VITE_OPENROUTER_API_KEY: 'test-openrouter-key',
+        VITE_WORDPRESS_API_URL: 'https://test-wordpress.com',
+        VITE_WORDPRESS_USERNAME: 'test-user',
+        VITE_WORDPRESS_PASSWORD: 'test-pass',
+      }
+    }
+  },
+  writable: true,
+  configurable: true
+});
+
+// Mock window.location for OpenRouter
+Object.defineProperty(globalThis, 'window', {
+  value: {
+    location: {
+      origin: 'http://localhost:3000'
+    }
+  },
+  writable: true,
+  configurable: true
+});
+
 import { generateMJPackage, formatMJFlags, MJPackage } from '../chatgptService';
 
 // Mock fetch for testing
@@ -213,6 +241,172 @@ describe('generateMJPackage', () => {
     
     expect(result.batch_seed).toBeGreaterThan(0);
     expect(typeof result.batch_seed).toBe('number');
+    // Verify seed is computed correctly: batch_seed * 1000 + variation_index
+    const expectedSeed = result.batch_seed * 1000 + 1;
+    expect(result.mj_flags).toContain(`--seed ${expectedSeed}`);
+  });
+  
+  it('should throw error for invalid variation_index (negative)', async () => {
+    await expect(
+      generateMJPackage('Test theme', 1, -1, null)
+    ).rejects.toThrow('variation_index must be a non-negative integer');
+  });
+  
+  it('should throw error for invalid variation_index (non-integer)', async () => {
+    await expect(
+      generateMJPackage('Test theme', 1, 1.5 as any, null)
+    ).rejects.toThrow('variation_index must be a non-negative integer');
+  });
+  
+  it('should throw error when LLM returns invalid JSON', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: 'Invalid JSON { broken'
+          }
+        }]
+      })
+    });
+    
+    await expect(
+      generateMJPackage('Test theme', 1, 1, null)
+    ).rejects.toThrow('Failed to parse image analysis response');
+  });
+  
+  it('should throw error when LLM response missing required fields', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              subject_suggestion: 'test',
+              // Missing style_tokens, palette_tokens, mj_prompt
+            })
+          }
+        }]
+      })
+    });
+    
+    await expect(
+      generateMJPackage('Test theme', 1, 1, null)
+    ).rejects.toThrow('Failed to parse image analysis response');
+  });
+  
+  it('should detect style token with & symbol (ink & watercolor)', async () => {
+    const mockResponse = {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            subject_suggestion: 'fox portrait',
+            style_tokens: 'ink & watercolor, paper-grain',
+            palette_tokens: 'amber, sienna',
+            mj_prompt: 'A fox painted with ink and watercolor' // Contains "ink and watercolor" which matches "ink & watercolor"
+          })
+        }
+      }]
+    };
+    
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    });
+    
+    await expect(
+      generateMJPackage('Test theme', 1, 1, null)
+    ).rejects.toThrow('mj_prompt contains style token');
+  });
+  
+  it('should detect style token with hyphen (paper-grain)', async () => {
+    const mockResponse = {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            subject_suggestion: 'fox portrait',
+            style_tokens: 'ink & watercolor, paper-grain',
+            palette_tokens: 'amber, sienna',
+            mj_prompt: 'Fox portrait with paper grain texture' // Contains "paper grain" which matches "paper-grain"
+          })
+        }
+      }]
+    };
+    
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    });
+    
+    await expect(
+      generateMJPackage('Test theme', 1, 1, null)
+    ).rejects.toThrow('mj_prompt contains style token');
+  });
+  
+  it('should NOT throw when mj_prompt does not contain style tokens', async () => {
+    const mockResponse = {
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            subject_suggestion: 'fox portrait',
+            style_tokens: 'ink & watercolor, paper-grain',
+            palette_tokens: 'amber, sienna',
+            mj_prompt: 'Fox portrait, three-quarter view' // No style tokens
+          })
+        }
+      }]
+    };
+    
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse
+    });
+    
+    const result = await generateMJPackage('Test theme', 1, 1, null);
+    
+    expect(result.mj_prompt).toBe('Fox portrait, three-quarter view');
+    expect(result.mj_flags).toBeDefined();
+  });
+});
+
+describe('formatMJFlags edge cases', () => {
+  it('should format sref_weight with one decimal place (avoid floating point precision issues)', () => {
+    const mj_ref = 'test style';
+    const seed = 12345;
+    
+    // Test with 0.7 (should not become 0.7000000000001)
+    const result1 = formatMJFlags(mj_ref, 'https://example.com/image.jpg', seed, 50, 0.7, 10);
+    expect(result1).toContain('--sref-weight 0.7');
+    expect(result1).not.toContain('0.7000000000001');
+    
+    // Test with 0.9
+    const result2 = formatMJFlags(mj_ref, 'https://example.com/image.jpg', seed, 50, 0.9, 10);
+    expect(result2).toContain('--sref-weight 0.9');
+  });
+  
+  it('should omit --sref when sref_url is null', () => {
+    const mj_ref = 'test style';
+    const seed = 12345;
+    
+    const result = formatMJFlags(mj_ref, null, seed, 50, 0.7, 10);
+    
+    expect(result).not.toContain('--sref');
+    expect(result).not.toContain('--sref-weight');
+    expect(result).toContain('--ref');
+    expect(result).toContain('--seed');
+  });
+  
+  it('should ensure seed, stylize, and chaos are integers', () => {
+    const mj_ref = 'test style';
+    const seed = 12345.7; // Non-integer
+    const stylize = 50.3; // Non-integer
+    const chaos = 10.9; // Non-integer
+    
+    const result = formatMJFlags(mj_ref, null, seed, stylize, 0.7, chaos);
+    
+    expect(result).toContain('--seed 12345'); // Should be floored
+    expect(result).toContain('--stylize 50'); // Should be floored
+    expect(result).toContain('--chaos 10'); // Should be floored
   });
 });
 
