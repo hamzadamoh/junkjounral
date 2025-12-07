@@ -428,8 +428,15 @@ const App: React.FC = () => {
             theme: image.theme || image.fullAnalysis.clusters?.[0]?.theme,
             style: image.style || image.fullAnalysis.clusters?.[0]?.style,
             technique: image.fullAnalysis.clusters?.[0]?.technique,
-            primary_subject: image.fullAnalysis.clusters?.[0]?.primary_subject
-          } : null;
+            primary_subject: image.fullAnalysis.clusters?.[0]?.primary_subject,
+            colors: image.colors || image.fullAnalysis.clusters?.[0]?.palette?.map((p: any) => `${p.name} (${p.hex})`).join(', ') || '',
+            vibe: image.vibe || image.fullAnalysis.clusters?.[0]?.vibe || ''
+          } : (image.colors || image.vibe ? {
+            theme: image.theme,
+            style: image.style,
+            colors: image.colors || '',
+            vibe: image.vibe || ''
+          } : null);
           
           try {
             const subjectList = await generateImageSpecificSubjectList(

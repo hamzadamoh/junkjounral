@@ -251,7 +251,7 @@ function resetBatchIfNeeded(variationNumber: number): void {
  * Prohibits cartoon/absurd subjects (gnomes, raccoons, mushrooms, floating islands, etc.)
  */
 export async function generateImageSpecificSubjectList(
-  imageAnalysis: { theme?: string; style?: string; technique?: string; primary_subject?: string } | null,
+  imageAnalysis: { theme?: string; style?: string; technique?: string; primary_subject?: string; colors?: string; vibe?: string } | null,
   batchSize: number,
   apiKey: string,
   apiUrl: string,
@@ -260,32 +260,13 @@ export async function generateImageSpecificSubjectList(
   const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
   const listSize = Math.max(batchSize, 36); // Generate at least 36 subjects
 
-  // Determine subject categories based on image analysis
+  // Extract image analysis data - let ChatGPT analyze the style dynamically
   const imageTheme = imageAnalysis?.theme || 'Nature';
   const imageStyle = imageAnalysis?.style || '';
   const primarySubject = imageAnalysis?.primary_subject || '';
-  
-  // Detect if image is animal-focused, botanical, or atmospheric
-  const isAnimal = /animal|creature|portrait|deer|fox|unicorn|peacock|bird|owl|wolf|bear|stag|horse/i.test(imageTheme + imageStyle + primarySubject);
-  const isBotanical = /botanical|floral|flower|plant|leaf|vine|garden|herb/i.test(imageTheme + imageStyle + primarySubject);
-  const isAtmospheric = /atmospheric|vignette|scene|landscape|forest|doorway|path|clearing/i.test(imageTheme + imageStyle + primarySubject);
-
-  // Build subject categories
-  let subjectCategories = '';
-  if (isAnimal) {
-    subjectCategories = 'Animal portraits (centered, elegant): deer, stag, fox, peacock, owl, swan, horse, wolf, bear, eagle, hawk, raven, butterfly, dragonfly';
-  }
-  if (isBotanical) {
-    subjectCategories += (subjectCategories ? ' | ' : '') + 'Botanical compositions: elegant flower arrangements, pressed botanical specimens, vine patterns, leaf clusters, herb gardens, rose bouquets, fern fronds, wildflower meadows';
-  }
-  if (isAtmospheric) {
-    subjectCategories += (subjectCategories ? ' | ' : '') + 'Atmospheric vignette nature scenes: forest doorways, moonlit clearings, misty paths, enchanted groves, twilight meadows, dawn-lit valleys, starlit forests, sun-dappled glades';
-  }
-  
-  // Default to all categories if none detected
-  if (!subjectCategories) {
-    subjectCategories = 'Animal portraits (centered, elegant) | Botanical compositions | Atmospheric vignette nature scenes';
-  }
+  const imageColors = imageAnalysis?.colors || '';
+  const imageVibe = imageAnalysis?.vibe || '';
+  const imageTechnique = imageAnalysis?.technique || '';
 
   try {
     const headers: Record<string, string> = {
@@ -306,13 +287,19 @@ export async function generateImageSpecificSubjectList(
         messages: [
           {
             role: 'system',
-            content: `You are a sophisticated nature-focused subject generator. Generate exactly ${listSize} unique, elegant, nature-focused subjects that match the style of the reference image.
+            content: `You are a sophisticated subject generator that analyzes reference images and creates subjects matching their exact aesthetic. 
 
-STYLE REQUIREMENTS:
-- Sophisticated magical realism illustrations
-- Elegant, centered compositions
-- Nature-focused: animals, botanical elements, atmospheric nature scenes
-- NO cartoon, whimsical, or absurd subjects
+YOUR TASK:
+1. Analyze the image style, colors, vibe, and technique provided
+2. Detect the specific aesthetic (e.g., teal/golden magical realism, dark fantasy, fiery fantasy, watercolor, digital painting, vintage, botanical, etc.)
+3. Generate exactly ${listSize} unique subjects that match the detected style
+
+STYLE ANALYSIS REQUIREMENTS:
+- Analyze the color palette to understand the aesthetic (teal/golden = magical realism, dark/orange/crimson = dark fantasy, pastels = soft/whimsical, etc.)
+- Analyze the vibe/mood (whimsical, enchanted, dramatic, intense, mystical, serene, etc.)
+- Analyze the technique (watercolor, digital painting, gouache, acrylic, etc.)
+- Analyze the composition style (centered portrait, botanical, atmospheric, landscape, etc.)
+- Generate subjects that match ALL these aspects
 
 FORBIDDEN SUBJECTS (DO NOT INCLUDE):
 - Gnomes, fairies, elves, goblins, trolls
@@ -321,25 +308,44 @@ FORBIDDEN SUBJECTS (DO NOT INCLUDE):
 - Floating islands, flying castles, fantasy landscapes
 - Anthropomorphic animals (animals wearing clothes, standing upright)
 - Cute or cartoon-style animals
-- Fantasy creatures (dragons, unicorns are acceptable ONLY if they match the elegant, centered portrait style)
+- Generic "nature" subjects (be too specific - e.g., "nature scene" is too generic)
 
-ALLOWED SUBJECTS:
-- Elegant animal portraits: deer, stag, fox, peacock, owl, swan, horse, wolf, bear, eagle, hawk, raven, butterfly, dragonfly
-- Sophisticated botanical compositions: elegant flower arrangements, pressed botanical specimens, vine patterns, leaf clusters, herb gardens, rose bouquets, fern fronds
-- Atmospheric nature scenes: forest doorways, moonlit clearings, misty paths, enchanted groves, twilight meadows, dawn-lit valleys, starlit forests, sun-dappled glades
+SUBJECT REQUIREMENTS:
+- Must match the detected style from the image analysis
+- Must be specific (2-4 words)
+- Must be visually distinct
+- Must fit the color palette, vibe, and technique of the reference image
+- Examples of good subjects: "elegant deer portrait", "enchanted crystal heart", "glowing golden lantern", "mystical stairway", "dramatic fox silhouette", "fiery peacock display"
 
 OUTPUT FORMAT: Numbered list only, one subject per line. Each subject must be 2-4 words, specific, and visually distinct.`
           },
           {
             role: 'user',
-            content: `Generate ${listSize} unique, sophisticated, nature-focused subjects based on this image analysis:
+            content: `Analyze this image and generate ${listSize} unique subjects that match its exact aesthetic:
+
+IMAGE ANALYSIS:
 Theme: "${imageTheme}"
 Style: "${imageStyle}"
+${imageTechnique ? `Technique: "${imageTechnique}"` : ''}
 Primary Subject: "${primarySubject}"
+${imageColors ? `Color Palette: "${imageColors}"` : ''}
+${imageVibe ? `Vibe/Atmosphere: "${imageVibe}"` : ''}
 
-Subject Categories: ${subjectCategories}
+INSTRUCTIONS:
+1. Analyze the style, colors, and vibe to detect the specific aesthetic
+2. Generate subjects that match:
+   - The color palette (e.g., if teal/golden → magical realism subjects; if dark/orange/crimson → dark fantasy subjects; if pastels → soft/whimsical subjects)
+   - The vibe (e.g., if whimsical/enchanted → magical elements; if dramatic/intense → dramatic subjects; if serene → peaceful subjects)
+   - The technique (e.g., if watercolor → soft subjects; if digital painting → bold subjects)
+   - The composition style (e.g., if centered portrait → centered subjects; if botanical → botanical subjects)
 
-Generate subjects that match the elegant, centered, nature-focused style. Output ONLY a numbered list, one subject per line.`
+3. Be specific: Instead of "nature scene", use "enchanted forest doorway" or "moonlit clearing"
+4. Match the aesthetic: 
+   - If the image has teal/golden magical realism, generate subjects like "elegant deer portrait", "enchanted crystal heart", "glowing golden lantern"
+   - If the image has dark fantasy, generate subjects like "dramatic deer silhouette", "mysterious fox in shadows", "gothic peacock display"
+   - If the image has a different style, analyze it and generate appropriate subjects
+
+Output ONLY a numbered list, one subject per line.`
           }
         ],
         temperature: 0.4, // Lower temperature for more deterministic, sophisticated results
@@ -382,7 +388,7 @@ Generate subjects that match the elegant, centered, nature-focused style. Output
     console.error('[Image-Specific Subject List] Generation failed:', error);
   }
 
-  // Fallback: nature-focused subjects
+  // Fallback: generic subjects (should rarely be used since ChatGPT should handle style detection)
   const fallbackSubjects: string[] = [
     // Animal portraits
     'elegant deer portrait', 'majestic stag silhouette', 'graceful fox profile', 'peacock feather display', 'wise owl portrait', 'swan in moonlight', 'noble horse head', 'proud wolf howl', 'grizzly bear portrait', 'eagle in flight', 'hawk on branch', 'raven on tree',
