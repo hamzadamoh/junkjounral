@@ -876,7 +876,9 @@ export const generatePromptWithChatGPT = async (
   usedSubjects?: Set<string>,
   primarySubjectOverride?: string, // Optional: override subject selection for swapping
   recursionDepth: number = 0, // NEW: explicit recursion depth counter
-  imageClusterData?: any // Optional: full image cluster data from analysis (for Image Theme Expansion)
+  imageClusterData?: any, // Optional: full image cluster data from analysis (for Image Theme Expansion)
+  isSrefMode: boolean = false, // NEW: SREF Style Match mode flag
+  srefCode: string = '' // NEW: Midjourney SREF code/URL
 ): Promise<string | null> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
@@ -888,6 +890,113 @@ export const generatePromptWithChatGPT = async (
     const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
     const envVar = useOpenRouter ? 'VITE_OPENROUTER_API_KEY' : 'VITE_OPENAI_API_KEY';
     throw new Error(`${serviceName} API key is not configured. Please set ${envVar} in your environment variables.`);
+  }
+
+  // ============================================
+  // SREF STYLE MATCH MODE (New - Check First)
+  // ============================================
+  if (isSrefMode) {
+    // Determine primary subject for SREF mode
+    let primarySubject: string;
+    if (primarySubjectOverride && primarySubjectOverride.trim()) {
+      primarySubject = primarySubjectOverride.trim();
+    } else if (masterSubjectList && masterSubjectList.length > 0) {
+      const forbiddenSubjects = usedSubjects ? Array.from(usedSubjects).filter(s => !s.includes('##FAILED')).map(s => s.replace('##FAILED', '')) : [];
+      let attempts = 0;
+      do {
+        const subjectIndex = hash32(variationNumber + attempts * 100, masterSubjectList.length);
+        primarySubject = masterSubjectList[subjectIndex];
+        attempts++;
+      } while (usedSubjects?.has(primarySubject.toLowerCase()) && attempts < 10);
+      
+      if (usedSubjects?.has(primarySubject.toLowerCase())) {
+        const available = masterSubjectList.filter(s => !usedSubjects?.has(s.toLowerCase()));
+        if (available.length > 0) {
+          primarySubject = available[hash32(variationNumber, available.length)];
+        }
+      }
+    } else {
+      primarySubject = `${theme} element ${variationNumber}`;
+    }
+
+    // Get list of already used subjects to avoid duplicates
+    const usedSubjectsList = usedSubjects ? Array.from(usedSubjects).filter(s => !s.includes('##FAILED')).map(s => s.replace('##FAILED', '').toLowerCase()) : [];
+    const usedSubjectsText = usedSubjectsList.length > 0 ? `\n\n⚠️ ALREADY USED SUBJECTS (DO NOT REPEAT): ${usedSubjectsList.slice(-10).join(', ')}` : '';
+
+    // Build variation control text
+    const themeDescription = customThemePrompt && customThemePrompt.trim() ? `${theme} with ${customThemePrompt.trim()}` : theme;
+    const variationControl = `\n\n🎯 VARIATION CONTROL (Variation #${variationNumber}):
+- CRITICAL: You MUST explore a DIFFERENT subject, element, or composition than all previous variations.
+- Switch between: different subjects, different perspectives (wide/close-up), different focal points, different poses/actions.
+- Avoid repeating the same visual elements, objects, or compositions.
+- GOAL: Each image must be distinct enough to be a separate variation.
+- REMEMBER: Never output the same subject or composition twice. Explore the entire breadth of "${themeDescription}".${usedSubjectsText}`;
+
+    const systemPrompt = `You are a Subject Variation Generator for Midjourney SREF Mode.
+
+YOUR GOAL:
+The user has provided a specific Style Reference (--sref). 
+Your job is to generate DISTINCT SUBJECT VARIATIONS for the theme "${primarySubject}".
+
+CRITICAL RULES:
+1. **SUBJECT ONLY:** Describe WHAT is in the image (Action, Pose, Setting).
+2. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge", "illustration", "camera", "lighting", "texture", "aesthetic", "mood", "atmosphere", "vibe", "colors", "palette", "shadows", "background". The --sref handles all of that.
+3. **BE BRIEF:** 10-15 words max.
+4. **NO PHOTOGRAPHY TERMS:** Do NOT use "photo", "photorealistic", "DSLR", "bokeh", "depth of field", "cinematic", "lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic".
+
+Output format: "PRIMARY SUBJECT: ${primarySubject}. [Variation Description]."`;
+
+    const userPrompt = `Generate Variation #${variationNumber} for the subject: "${primarySubject}".
+
+INSTRUCTIONS:
+1. Create a unique scenario/pose for this subject (different from previous variations).
+2. Keep it strictly descriptive of the content (what is shown, not how it looks).
+3. NO style descriptors - the --sref parameter will handle all styling.
+4. Focus on: subject action, pose, setting, composition type.
+
+Theme: ${themeDescription}${variationControl}
+
+Output ONLY: "PRIMARY SUBJECT: ${primarySubject}. [Your prompt]"`;
+
+    // Use retry wrapper with header enforcement
+    const result = await callPromptWithHeaderEnforcement(
+      primarySubject,
+      systemPrompt,
+      userPrompt,
+      apiKey,
+      apiUrl,
+      useOpenRouter,
+      4, // maxAttempts
+      0.2, // temperature (low for deterministic, subject-focused output)
+      150 // max_tokens (enough for brief subject descriptions)
+    );
+
+    if (!result.text) {
+      console.warn(`[PromptGen] Failed to generate SREF mode prompt for "${primarySubject}" after ${result.attempt} attempts`);
+      return null;
+    }
+
+    // Validate and clean the output
+    if (result.text) {
+      // Remove any style words that might have slipped through
+      const styleWords = ['watercolor', 'vintage', 'grunge', 'illustration', 'camera', 'lighting', 'texture', 'aesthetic', 'mood', 'atmosphere', 'vibe', 'colors', 'palette', 'shadows', 'background', 'photorealistic', 'digital', '3D', 'smooth', 'shiny', 'modern'];
+      let cleaned = result.text;
+      styleWords.forEach(word => {
+        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+        cleaned = cleaned.replace(regex, '');
+      });
+      // Clean up extra spaces
+      cleaned = cleaned.replace(/\s+/g, ' ').trim();
+      
+      // Ensure it starts with PRIMARY SUBJECT
+      if (!cleaned.toLowerCase().includes('primary subject:')) {
+        cleaned = `PRIMARY SUBJECT: ${primarySubject}. ${cleaned}`;
+      }
+      
+      return cleaned;
+    }
+
+    return result.text;
   }
 
   // ============================================
