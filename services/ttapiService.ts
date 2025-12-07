@@ -1174,11 +1174,20 @@ export const generateJournalPage = async (
         if (dmResponse.ok) {
           const dmResult = await dmResponse.json();
           if (dmResult.images && dmResult.images.length > 0) {
-            console.log(`[Ttapi] ✅ Got ${dmResult.images.length} individual image(s) from Discord DM!`);
-            // Convert Discord DM URLs to base64
-            const base64Images = await convertUrlsToBase64(dmResult.images);
-            console.log(`[Ttapi] ✅ Successfully converted ${base64Images.length} image(s) to base64`);
-            return base64Images;
+            // If Discord DM returns only 1 image, it's likely the grid - split it
+            if (dmResult.images.length === 1) {
+              console.log(`[Ttapi] ⚠️ Discord DM returned only 1 image (likely grid). Splitting grid image...`);
+              const base64Images = await splitGridImage(dmResult.images[0]);
+              console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
+              return base64Images;
+            } else {
+              // Discord DM returned multiple images (4 individual images)
+              console.log(`[Ttapi] ✅ Got ${dmResult.images.length} individual image(s) from Discord DM!`);
+              // Convert Discord DM URLs to base64
+              const base64Images = await convertUrlsToBase64(dmResult.images);
+              console.log(`[Ttapi] ✅ Successfully converted ${base64Images.length} image(s) to base64`);
+              return base64Images;
+            }
           } else {
             console.warn(`[Ttapi] ⚠️ Discord DM polling returned no images, using grid image`);
           }
