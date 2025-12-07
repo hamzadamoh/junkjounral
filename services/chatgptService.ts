@@ -301,14 +301,16 @@ STYLE ANALYSIS REQUIREMENTS:
 - Analyze the composition style (centered portrait, botanical, atmospheric, landscape, etc.)
 - Generate subjects that match ALL these aspects
 
-FORBIDDEN SUBJECTS (DO NOT INCLUDE):
-- Gnomes, fairies, elves, goblins, trolls
-- Raccoons, squirrels, chipmunks (too cartoon-like)
-- Mushrooms (unless part of a sophisticated botanical composition)
-- Floating islands, flying castles, fantasy landscapes
-- Anthropomorphic animals (animals wearing clothes, standing upright)
-- Cute or cartoon-style animals
-- Generic "nature" subjects (be too specific - e.g., "nature scene" is too generic)
+FORBIDDEN SUBJECTS (DO NOT INCLUDE - unless they match the PRIMARY SUBJECT):
+- Gnomes, goblins, trolls (unless PRIMARY SUBJECT specifically mentions them)
+- Raccoons, squirrels, chipmunks (too cartoon-like, unless in the image)
+- Mushrooms (unless part of a sophisticated botanical composition or in PRIMARY SUBJECT)
+- Floating islands, flying castles (unless in PRIMARY SUBJECT)
+- Anthropomorphic animals (animals wearing clothes, standing upright, unless in PRIMARY SUBJECT)
+- Cute or cartoon-style animals (unless in PRIMARY SUBJECT)
+- Generic "nature" subjects if PRIMARY SUBJECT is clearly fantasy/magical (be specific - e.g., "nature scene" is too generic)
+
+IMPORTANT: If PRIMARY SUBJECT contains "elf", "elemental", "fairy", "fire", "flames", "magical creature", etc., these are ALLOWED and REQUIRED in your subjects!
 
 SUBJECT REQUIREMENTS:
 - Must match the detected style from the image analysis
@@ -321,29 +323,41 @@ OUTPUT FORMAT: Numbered list only, one subject per line. Each subject must be 2-
           },
           {
             role: 'user',
-            content: `Analyze this image and generate ${listSize} unique subjects that match its exact aesthetic:
+            content: `Analyze this image and generate ${listSize} unique subjects that match its EXACT content and aesthetic:
 
 IMAGE ANALYSIS:
 Theme: "${imageTheme}"
 Style: "${imageStyle}"
 ${imageTechnique ? `Technique: "${imageTechnique}"` : ''}
-Primary Subject: "${primarySubject}"
+**PRIMARY SUBJECT: "${primarySubject}"** ⚠️ THIS IS THE MOST IMPORTANT FIELD - MATCH THIS!
 ${imageColors ? `Color Palette: "${imageColors}"` : ''}
 ${imageVibe ? `Vibe/Atmosphere: "${imageVibe}"` : ''}
 
-INSTRUCTIONS:
-1. Analyze the style, colors, and vibe to detect the specific aesthetic
-2. Generate subjects that match:
-   - The color palette (e.g., if teal/golden → magical realism subjects; if dark/orange/crimson → dark fantasy subjects; if pastels → soft/whimsical subjects)
-   - The vibe (e.g., if whimsical/enchanted → magical elements; if dramatic/intense → dramatic subjects; if serene → peaceful subjects)
-   - The technique (e.g., if watercolor → soft subjects; if digital painting → bold subjects)
-   - The composition style (e.g., if centered portrait → centered subjects; if botanical → botanical subjects)
+CRITICAL INSTRUCTIONS:
+1. **MATCH THE PRIMARY SUBJECT FIRST**: 
+   - If PRIMARY SUBJECT contains "elf" → Generate subjects like "mystical elf portrait", "fire-wielding elf", "elven creature", "forest elf", "fire elf"
+   - If PRIMARY SUBJECT contains "elemental" → Generate subjects like "fire elemental form", "earth elemental essence", "water elemental manifestation", "elemental being"
+   - If PRIMARY SUBJECT contains "fire" or "flames" → Generate subjects like "flame-wreathed creature", "fire spirit", "burning entity", "flame elemental", "fire-wielding being"
+   - If PRIMARY SUBJECT contains "magical creature" → Generate subjects like "magical being", "enchanted creature", "mystical entity"
+   - If PRIMARY SUBJECT is "Deer portrait" → Generate subjects like "elegant deer portrait", "majestic stag", "forest deer"
+   - **DO NOT default to generic "nature" subjects if PRIMARY SUBJECT is clearly fantasy/magical!**
 
-3. Be specific: Instead of "nature scene", use "enchanted forest doorway" or "moonlit clearing"
-4. Match the aesthetic: 
-   - If the image has teal/golden magical realism, generate subjects like "elegant deer portrait", "enchanted crystal heart", "glowing golden lantern"
-   - If the image has dark fantasy, generate subjects like "dramatic deer silhouette", "mysterious fox in shadows", "gothic peacock display"
-   - If the image has a different style, analyze it and generate appropriate subjects
+2. Match the color palette:
+   - If fiery red/orange → fire/fantasy subjects (especially if PRIMARY SUBJECT mentions fire/flames)
+   - If teal/golden → magical realism subjects
+   - If dark/orange/crimson → dark fantasy subjects
+   - If pastels → soft/whimsical subjects
+
+3. Match the vibe:
+   - If dramatic/intense/fiery → dramatic/fire subjects
+   - If whimsical/enchanted → magical/fantasy subjects
+   - If serene → peaceful subjects
+
+4. Match the technique and composition style
+
+5. Be specific: Instead of "nature scene", use "enchanted forest doorway" or "moonlit clearing" (but ONLY if PRIMARY SUBJECT is nature-focused)
+
+**REMEMBER: If PRIMARY SUBJECT = "Elf with fire" or "Elemental creature" or "Fire/flames", your subjects MUST include these elements!**
 
 Output ONLY a numbered list, one subject per line.`
           }
@@ -373,14 +387,24 @@ Output ONLY a numbered list, one subject per line.`
         .map(line => line.replace(/^\d+[\.\)]\s*/, '').trim())
         .filter(line => {
           const lower = line.toLowerCase();
-          // Filter out forbidden subjects
-          const forbidden = ['gnome', 'fairy', 'elf', 'goblin', 'troll', 'raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic'];
+          // Filter out forbidden subjects (but allow if they match the primary subject)
+          // Only filter if the primary subject doesn't contain these elements
+          const primarySubjectLower = (primarySubject || '').toLowerCase();
+          const isFantasyImage = primarySubjectLower.includes('elf') || primarySubjectLower.includes('elemental') || 
+                                 primarySubjectLower.includes('fairy') || primarySubjectLower.includes('magical') ||
+                                 primarySubjectLower.includes('fire') || primarySubjectLower.includes('flame');
+          
+          // If image is fantasy/magical, allow fantasy subjects; otherwise filter them
+          const forbidden = isFantasyImage 
+            ? ['raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic'] // Allow elves, elementals, fairies for fantasy images
+            : ['gnome', 'fairy', 'elf', 'goblin', 'troll', 'raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic']; // Filter all for nature images
+          
           return line.length > 0 && line.length < 60 && !forbidden.some(f => lower.includes(f));
         })
         .slice(0, listSize);
       
       if (subjects.length >= Math.min(batchSize, 20)) {
-        console.log(`[Image-Specific Subject List] Generated ${subjects.length} nature-focused subjects`);
+        console.log(`[Image-Specific Subject List] Generated ${subjects.length} subjects for theme "${imageTheme}" (Primary Subject: "${primarySubject}")`);
         return subjects;
       }
     }
@@ -1015,9 +1039,99 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
     return controlText;
   };
 
-  // CRITICAL: If colorIntensity is 'Custom / Override', use ULTRA-MINIMAL prompt for Midjourney style reference mode
+  // CRITICAL: If colorIntensity is 'Custom / Override', check if we should expand on PRIMARY SUBJECT with detected style
   if (colorIntensity === 'Custom / Override') {
-    const systemPrompt = `You generate MINIMAL subject-only prompts for Midjourney.
+    // Check if user provided PRIMARY SUBJECT and we have detected style - if so, expand on it while maintaining style
+    const hasUserPrimarySubject = primarySubject && primarySubject.trim().length > 0;
+    const hasDetectedStyle = customArtStyle && customArtStyle.trim().length > 0;
+    const shouldExpandWithStyle = hasUserPrimarySubject && hasDetectedStyle;
+    
+    if (shouldExpandWithStyle) {
+      // User provided PRIMARY SUBJECT + detected style → Expand on PRIMARY SUBJECT while maintaining style
+      const systemPrompt = `You are a prompt generator that expands on a PRIMARY SUBJECT while maintaining a specific detected style/vibe from a reference image.
+
+YOUR TASK:
+1. Use the PRIMARY SUBJECT as the main focus
+2. Expand on it creatively (different subjects than the original image, but same style)
+3. Maintain the EXACT detected style/vibe from the reference image
+4. Generate variations that are DIFFERENT from the original image's subject
+
+DETECTED STYLE/VIBE FROM REFERENCE IMAGE:
+${customArtStyle}
+
+RULES:
+1. PRIMARY SUBJECT is the main focus - expand on it creatively
+2. Keep the SAME style/vibe (technique, colors, mood, composition from detected style)
+3. Generate DIFFERENT subjects than the original image (if original was "fox", generate "owl", "deer", "swan", "butterfly", etc. - but keep the same style)
+4. Include style elements from detected style naturally in the description
+5. Make it specific and visually distinct
+
+EXAMPLES:
+If PRIMARY SUBJECT = "Enchanted Garden Fantasy" and detected style = "watercolor, moonlit, wildflowers, teal sky, warm moon glow":
+→ "PRIMARY SUBJECT: Enchanted Garden Fantasy. Mystical owl perched on moonlit wildflower branch, gazing at warm golden moon in teal starry sky, soft watercolor style."
+
+If PRIMARY SUBJECT = "Enchanted Garden Fantasy" and detected style = "watercolor, moonlit, wildflowers":
+→ "PRIMARY SUBJECT: Enchanted Garden Fantasy. Ethereal deer standing in moonlit wildflower meadow, surrounded by soft pastel blooms, watercolor dreamscape."
+
+Output format: "PRIMARY SUBJECT: [subject]. [Expanded description with style elements from detected style]"`;
+
+      const userPrompt = `Generate a prompt for variation ${variationNumber} that expands on the PRIMARY SUBJECT while maintaining the detected style/vibe.
+
+PRIMARY SUBJECT: ${primarySubject}
+
+DETECTED STYLE/VIBE FROM REFERENCE IMAGE:
+${customArtStyle}
+
+INSTRUCTIONS:
+1. Use "${primarySubject}" as the main focus
+2. Expand on it creatively - generate a DIFFERENT subject than the original image (if original was "fox", use "owl", "deer", "swan", "butterfly", "rabbit", etc.)
+3. Maintain the EXACT detected style/vibe (technique, colors, mood, composition)
+4. Include style elements naturally: ${customArtStyle.includes('watercolor') ? 'watercolor technique' : ''} ${customArtStyle.includes('moonlit') ? 'moonlit atmosphere' : ''} ${customArtStyle.includes('wildflower') ? 'wildflower field' : ''}
+5. Make it specific and visually distinct
+
+OUTPUT FORMAT:
+Line 1: PRIMARY SUBJECT: ${primarySubject}
+Line 2: Expanded description (15-25 words) that includes the subject AND style elements from detected style.
+
+Theme: ${themeDescription}
+Composition type: ${randomFocus}
+
+CRITICAL: Keep the SAME style/vibe but use a DIFFERENT subject than the original image.`;
+      
+      // Use retry wrapper with header enforcement
+      const result = await callPromptWithHeaderEnforcement(
+        primarySubject,
+        systemPrompt,
+        userPrompt,
+        apiKey,
+        apiUrl,
+        useOpenRouter,
+        4, // maxAttempts
+        0.4, // temperature (higher for more creative expansion)
+        200 // max_tokens (more tokens for expanded descriptions)
+      );
+
+      if (!result.text) {
+        console.warn(`[PromptGen] Failed to generate expanded prompt for "${primarySubject}" after ${result.attempt} attempts`);
+        return null;
+      }
+
+      // Validation and truncation
+      if (result.text) {
+        const lines = result.text.split('\n').filter(l => l.trim());
+        if (lines.length >= 2) {
+          const sentences = lines[1].split(/[.!?]+/).filter(s => s.trim());
+          if (sentences.length > 1) {
+            const simplified = `PRIMARY SUBJECT: ${primarySubject}. ${sentences[0]}.`;
+            return simplified;
+          }
+        }
+      }
+
+      return result.text;
+    } else {
+      // No user PRIMARY SUBJECT or no detected style → Use ultra-minimal prompt
+      const systemPrompt = `You generate MINIMAL subject-only prompts for Midjourney.
 
 RULES:
 1. Start with "PRIMARY SUBJECT: [exact subject]"
@@ -1040,7 +1154,7 @@ FORBIDDEN EXAMPLES:
 
 Output ONLY: "PRIMARY SUBJECT: [subject]. [8-12 word sentence with zero style words]"`;
 
-    const userPrompt = `Generate a minimal subject description for variation ${variationNumber}.
+      const userPrompt = `Generate a minimal subject description for variation ${variationNumber}.
 
 REQUIRED SUBJECT: ${primarySubject}
 
