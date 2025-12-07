@@ -2012,11 +2012,10 @@ function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
 /**
  * Generates a Midjourney-optimized prompt package
  * @param imageAnalysisOrTheme - Either an ImageAnalysisResponse (from analyzeReferenceImage) or a theme string
- * @param batch_seed - Optional batch seed (if null, will generate a random positive integer)
- * @param variation_index - Variation number
- * @param sref_url - Optional style reference URL
- * @param promptService - Service to use ('openai' or 'openrouter')
- * @param callerProvidedSeed - Optional seed provided by caller for reproducible batches (overrides batch_seed if provided)
+ * @param batch_seed - Optional batch seed (if null, will generate a random positive integer > 0)
+ * @param variation_index - Variation number (integer >= 0)
+ * @param sref_url - Optional style reference URL (string or null)
+ * @param promptService - Optional service to use ('openai' or 'openrouter')
  * @returns MJPackage with all required fields
  */
 export async function generateMJPackage(
@@ -2024,13 +2023,10 @@ export async function generateMJPackage(
   batch_seed: number | null,
   variation_index: number,
   sref_url: string | null,
-  promptService?: 'openai' | 'openrouter',
-  callerProvidedSeed?: number
+  promptService?: 'openai' | 'openrouter'
 ): Promise<MJPackage> {
-  // Use callerProvidedSeed if provided (for reproducible batches), otherwise use batch_seed or generate random
-  const finalBatchSeed = callerProvidedSeed !== undefined 
-    ? callerProvidedSeed 
-    : (batch_seed !== null ? batch_seed : Math.floor(Math.random() * 1000000) + 1);
+  // Generate batch_seed if null (random positive integer > 0)
+  const finalBatchSeed = batch_seed !== null ? batch_seed : Math.floor(Math.random() * 1000000) + 1;
   
   // Compute Midjourney seed: SEED = batch_seed * 1000 + variation_index
   const finalSeed = finalBatchSeed * 1000 + variation_index;
@@ -2146,12 +2142,12 @@ Generate the JSON package with:
     try {
       llmOutput = JSON.parse(content);
     } catch (parseError) {
-      throw new Error(`Failed to parse LLM JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      throw new Error('Failed to parse image analysis response');
     }
     
     // Validate required fields
     if (!llmOutput.subject_suggestion || !llmOutput.style_tokens || !llmOutput.palette_tokens || !llmOutput.mj_prompt) {
-      throw new Error('LLM response missing required fields');
+      throw new Error('Failed to parse image analysis response');
     }
     
     // Validate mj_prompt doesn't contain style tokens
@@ -2178,6 +2174,14 @@ Generate the JSON package with:
     
     return package_;
   } catch (error: any) {
+    // Re-throw validation errors as-is
+    if (error.message === 'mj_prompt contains style token') {
+      throw error;
+    }
+    // Re-throw parse errors as-is
+    if (error.message === 'Failed to parse image analysis response') {
+      throw error;
+    }
     throw new Error(`Failed to generate MJ package: ${error.message || 'Unknown error'}`);
   }
 }
