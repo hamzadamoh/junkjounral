@@ -1065,30 +1065,34 @@ DETECTED STYLE/VIBE FROM REFERENCE IMAGE:
 ${customArtStyle}
 
 RULES:
-1. PRIMARY SUBJECT is the THEME - analyze it to determine what subjects naturally fit this theme
+1. PRIMARY SUBJECT is the THEME - analyze it deeply to determine what subjects naturally fit this theme
 2. Keep the SAME style/vibe (technique, colors, mood, composition from detected style)
 3. Each variation must have a DIFFERENT specific subject that fits the theme:
-   - Analyze the PRIMARY SUBJECT to understand the theme (e.g., "Farmhouse Christmas" → winter, Christmas, farmhouse elements)
-   - Generate subjects that fit: animals (deer, owl, fox, etc.), objects (cottage, fireplace, wreath, etc.), scenes (winter landscape, snowy path, etc.)
-   - Think about what subjects naturally belong to this theme based on the detected style
-   - NEVER repeat "rabbit" or any other subject across variations!
-4. Include style elements from detected style naturally in the description
-5. Make it specific and visually distinct
-6. Generate subjects DYNAMICALLY based on the theme - don't rely on hardcoded lists
+   - Analyze the PRIMARY SUBJECT to understand the theme's essence, context, and aesthetic
+   - Think creatively about what subjects, objects, animals, scenes, or elements naturally belong to this theme
+   - Generate subjects DYNAMICALLY - do NOT use hardcoded lists
+   - NEVER repeat any subject across variations!
+4. **CRITICAL - STYLE PRESERVATION**: The prompt must be detailed enough to recreate the exact style even without the reference image. Include:
+   - Technique (watercolor, digital, illustration, etc.)
+   - Color palette (specific colors from detected style)
+   - Mood/atmosphere (cozy, festive, mystical, etc.)
+   - Composition style (centered, portrait, etc.)
+   - Lighting (soft, warm, moonlit, etc.)
+   - Textures (smooth, textured, brushstrokes, etc.)
+   - Any other style elements from the detected style
+5. Make it specific and visually distinct - the prompt should be comprehensive enough to maintain the original image's style
+6. Generate subjects DYNAMICALLY based on the theme - analyze the theme and think creatively
 
-EXAMPLES:
+EXAMPLES (showing dynamic subject generation):
 If PRIMARY SUBJECT = "Farmhouse Christmas" and detected style = "watercolor, winter, cozy":
-→ Variation 1: "PRIMARY SUBJECT: Farmhouse Christmas. Elegant deer standing in snow-covered garden, surrounded by soft watercolor winter hues."
-→ Variation 2: "PRIMARY SUBJECT: Farmhouse Christmas. Cozy owl perched on snowy evergreen branch, with warm cottage lights in background, watercolor style."
-→ Variation 3: "PRIMARY SUBJECT: Farmhouse Christmas. Snow-covered stone cottage with glowing windows, surrounded by winter trees, soft watercolor technique."
+→ Variation 1: "PRIMARY SUBJECT: Farmhouse Christmas. Elegant deer standing in snow-covered garden, surrounded by soft watercolor winter hues, warm amber lighting, cozy atmosphere."
+→ Variation 2: "PRIMARY SUBJECT: Farmhouse Christmas. Cozy owl perched on snowy evergreen branch, with warm cottage lights in background, watercolor style, soft brushstrokes, festive mood."
 
 If PRIMARY SUBJECT = "Enchanted Garden Fantasy" and detected style = "watercolor, moonlit, wildflowers":
-→ Variation 1: "PRIMARY SUBJECT: Enchanted Garden Fantasy. Mystical owl perched on moonlit wildflower branch, gazing at warm golden moon, soft watercolor style."
-→ Variation 2: "PRIMARY SUBJECT: Enchanted Garden Fantasy. Ethereal deer standing in moonlit wildflower meadow, surrounded by soft pastel blooms, watercolor dreamscape."
+→ Variation 1: "PRIMARY SUBJECT: Enchanted Garden Fantasy. Mystical owl perched on moonlit wildflower branch, gazing at warm golden moon, soft watercolor style, ethereal lighting, magical atmosphere."
+→ Variation 2: "PRIMARY SUBJECT: Enchanted Garden Fantasy. Ethereal deer standing in moonlit wildflower meadow, surrounded by soft pastel blooms, watercolor dreamscape, gentle shadows, enchanting mood."
 
-If PRIMARY SUBJECT = "Elf Elemental Fire" and detected style = "fiery, magical, fantasy":
-→ Variation 1: "PRIMARY SUBJECT: Elf Elemental Fire. Mystical phoenix rising from flames, surrounded by magical fire elements, vibrant fantasy style."
-→ Variation 2: "PRIMARY SUBJECT: Elf Elemental Fire. Enchanted fire sprite dancing among glowing embers, ethereal magical atmosphere, fantasy illustration."
+Note: These are examples showing the format. You must generate DIFFERENT subjects dynamically based on the actual theme provided.
 
 Output format: "PRIMARY SUBJECT: [theme]. [Expanded description with DIFFERENT specific subject (that fits the theme) AND style elements from detected style]"`;
 
@@ -1100,22 +1104,30 @@ DETECTED STYLE/VIBE FROM REFERENCE IMAGE:
 ${customArtStyle}
 
 INSTRUCTIONS:
-1. "${primarySubject}" is the THEME - analyze it and generate a SPECIFIC, UNIQUE subject that fits this theme for THIS variation ${variationNumber}
+1. "${primarySubject}" is the THEME - analyze it deeply to understand what subjects naturally fit this theme
 2. **CRITICAL**: This is variation ${variationNumber} - use a DIFFERENT subject than variations 1-${variationNumber - 1}
-3. **GENERATE SUBJECT BASED ON THEME**: 
-   - Analyze "${primarySubject}" to understand what subjects fit this theme
-   - If "${primarySubject}" = "Farmhouse Christmas" → Generate subjects like: deer, owl, cottage, fireplace, wreath, snowflake, boots, window, pinecone, snowman, lantern, evergreen, ornament, stocking, candle, garland, sleigh, bell, etc.
-   - If "${primarySubject}" = "Enchanted Garden Fantasy" → Generate subjects like: deer, owl, swan, butterfly, hummingbird, enchanted stairs, glowing lantern, crystal heart, mystical doorway, ethereal portal, etc.
-   - If "${primarySubject}" = "Winter Scene" → Generate subjects like: deer, owl, fox, snow-covered trees, winter cabin, frozen pond, etc.
-   - **Generate a subject that naturally fits the "${primarySubject}" theme and detected style**
-4. **NEVER repeat subjects**: If previous variations used "rabbit", "deer", "owl", etc., use a DIFFERENT subject that still fits the theme
-5. Maintain the EXACT detected style/vibe (technique, colors, mood, composition)
-6. Include style elements naturally: ${customArtStyle.includes('watercolor') ? 'watercolor technique' : ''} ${customArtStyle.includes('moonlit') ? 'moonlit atmosphere' : ''} ${customArtStyle.includes('wildflower') ? 'wildflower field' : ''} ${customArtStyle.includes('winter') ? 'winter scene' : ''} ${customArtStyle.includes('cozy') ? 'cozy atmosphere' : ''} ${customArtStyle.includes('festive') ? 'festive mood' : ''} ${customArtStyle.includes('christmas') ? 'Christmas elements' : ''}
-7. Make it specific and visually distinct
+3. **GENERATE SUBJECT DYNAMICALLY**: 
+   - Analyze "${primarySubject}" to understand the theme's essence, mood, and context
+   - Think creatively about what subjects, objects, animals, scenes, or elements naturally belong to this theme
+   - Generate a subject that fits the theme's aesthetic, mood, and context
+   - **DO NOT use hardcoded lists - think dynamically based on the theme**
+4. **NEVER repeat subjects**: If previous variations used any subject, use a DIFFERENT subject that still fits the theme
+5. **MAINTAIN EXACT STYLE**: The prompt must be detailed enough to recreate the exact style even without the reference image. Include:
+   - Technique (${customArtStyle.includes('watercolor') ? 'watercolor' : customArtStyle.includes('digital') ? 'digital' : customArtStyle.includes('illustration') ? 'illustration' : 'artistic'})
+   - Color palette (extract from detected style: ${customArtStyle.includes('color') ? 'include specific colors' : 'include color descriptions'})
+   - Mood/atmosphere (${customArtStyle.includes('cozy') ? 'cozy' : customArtStyle.includes('festive') ? 'festive' : customArtStyle.includes('mystical') ? 'mystical' : 'atmospheric'})
+   - Composition style (centered, portrait, etc.)
+   - Lighting (soft, warm, moonlit, etc.)
+   - Textures (smooth, textured, brushstrokes, etc.)
+6. Include ALL style elements from detected style naturally in the description
+7. Make it specific and visually distinct - the prompt should be detailed enough to maintain the original image's style
 
 OUTPUT FORMAT:
 Line 1: PRIMARY SUBJECT: ${primarySubject}
-Line 2: Expanded description (15-25 words) that includes a SPECIFIC, UNIQUE subject (that fits "${primarySubject}" theme) AND style elements from detected style.
+Line 2: Expanded description (20-30 words) that includes:
+   - A SPECIFIC, UNIQUE subject that fits "${primarySubject}" theme
+   - ALL style elements from detected style (technique, colors, mood, composition, lighting, textures)
+   - The description must be detailed enough to recreate the exact style even without the reference image
 
 Theme: ${themeDescription}
 Composition type: ${randomFocus}

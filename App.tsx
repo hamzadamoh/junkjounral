@@ -36,7 +36,9 @@ const App: React.FC = () => {
   const [step, setStep] = useState<number>(1);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
   const [isCustomTheme, setIsCustomTheme] = useState<boolean>(false);
+  const [isImageThemeExpansion, setIsImageThemeExpansion] = useState<boolean>(false);
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
+  const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
     pageCount: 1, // Defaulting to 1 for demo purposes to save quota
     textureIntensity: 'Medium',
@@ -118,6 +120,13 @@ const App: React.FC = () => {
 
   const handleCustomThemeSelect = () => {
     setIsCustomTheme(true);
+    setIsImageThemeExpansion(false);
+    setSelectedTheme(null);
+  };
+
+  const handleImageThemeExpansionSelect = () => {
+    setIsImageThemeExpansion(true);
+    setIsCustomTheme(false);
     setSelectedTheme(null);
   };
 
@@ -382,10 +391,21 @@ const App: React.FC = () => {
     // STEP 1: Generate prompts
     addLog('Generating prompts...');
     
-    // Determine the theme name to use - if custom theme, use the custom prompt directly
-    const themeName = isCustomTheme && customThemePrompt.trim() 
+    // Determine the theme name to use
+    // If Image Theme Expansion mode: use the PRIMARY SUBJECT (theme) from the single uploaded image
+    // If custom theme: use the custom prompt directly
+    // Otherwise: use selected theme name
+    const themeName = isImageThemeExpansion && singleImageForTheme?.theme
+      ? singleImageForTheme.theme // Use PRIMARY SUBJECT from single image
+      : isCustomTheme && customThemePrompt.trim() 
       ? customThemePrompt.trim() 
       : selectedTheme?.name || 'Custom Theme';
+    
+    // For Image Theme Expansion: use the PRIMARY SUBJECT as the theme for all variations
+    // ChatGPT will generate different subjects but same theme/style
+    const primarySubjectForExpansion = isImageThemeExpansion && singleImageForTheme?.theme
+      ? singleImageForTheme.theme
+      : settings.primarySubject?.trim() || undefined;
     
     // Note: customThemePrompt and customArtStyle fields have been removed from UI
     // They are kept in settings for backward compatibility but are no longer used
@@ -632,7 +652,48 @@ const App: React.FC = () => {
         
         let imageSubjectList: string[] = [];
         
-        if (uploadedImages.length > 0) {
+        // For Image Theme Expansion mode: use the single image's theme and style for all variations
+        if (isImageThemeExpansion && singleImageForTheme) {
+          imageTheme = singleImageForTheme.theme || imageTheme;
+          if (singleImageForTheme.style) {
+            // Build style description from single image analysis
+            if (singleImageForTheme.fullAnalysis?.clusters?.[0]) {
+              const cluster = singleImageForTheme.fullAnalysis.clusters[0];
+              imageStyle = cluster.style || '';
+              
+              if (cluster.technique) {
+                imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
+              }
+              
+              if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
+                imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
+              }
+              
+              if (cluster.palette && Array.isArray(cluster.palette)) {
+                const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
+                imageStyle = `${imageStyle} Color palette: ${colorList}.`;
+              }
+              
+              if (cluster.vibe) {
+                imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
+              }
+            } else {
+              imageStyle = singleImageForTheme.style;
+              if (singleImageForTheme.vibe) {
+                imageStyle = `${imageStyle} Vibe/Atmosphere: ${singleImageForTheme.vibe}.`;
+              }
+              if (singleImageForTheme.colors) {
+                imageStyle = `${imageStyle} Color palette: ${singleImageForTheme.colors}.`;
+              }
+            }
+          }
+          // For Image Theme Expansion, we don't need a subject list - ChatGPT will generate different subjects
+          imageSubjectList = [];
+          
+          if (i === 0) {
+            addLog(`[Image Theme Expansion] Using PRIMARY SUBJECT: "${imageTheme}" - ChatGPT will generate different subjects for each variation`, 'success');
+          }
+        } else if (uploadedImages.length > 0) {
           // Calculate which image to use for this prompt
           // This ensures each image is used equally: imageIndex = Math.floor(i / usesPerImage) % uploadedImages.length
           const imageIndex = usesPerImage > 0 
@@ -702,9 +763,9 @@ const App: React.FC = () => {
           'Custom / Override', // Always use Custom / Override to respect image style exactly
           imageStyle, // Use image-specific style (exact copy from analysis)
           settings.promptService || 'openai',
-          imageSubjectList, // Use image-specific subject list
+          imageSubjectList, // Use image-specific subject list (empty for Image Theme Expansion)
           usedSubjects,
-          settings.primarySubject?.trim() || undefined, // User-specified primary subject (if provided)
+          primarySubjectForExpansion, // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
           0
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
@@ -892,25 +953,36 @@ const App: React.FC = () => {
         
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
-          // Determine which uploaded image to use for this request (round-robin distribution)
-          // Each image should be used for approximately (requestsNeeded / uploadedImages.length) requests
-          // Use modulo to cycle through images evenly
-          // Example: 6 images, 9 requests -> each image used 1-2 times
-          // Request 0: 0 % 6 = 0 (image 0)
-          // Request 1: 1 % 6 = 1 (image 1)
-          // Request 2: 2 % 6 = 2 (image 2)
-          // Request 3: 3 % 6 = 3 (image 3)
-          // Request 4: 4 % 6 = 4 (image 4)
-          // Request 5: 5 % 6 = 5 (image 5)
-          // Request 6: 6 % 6 = 0 (image 0)
-          // Request 7: 7 % 6 = 1 (image 1)
-          // Request 8: 8 % 6 = 2 (image 2)
-          const imageIndex = uploadedImages.length > 0 
-            ? requestIdx % uploadedImages.length
-            : 0;
+          // For Image Theme Expansion mode: use the single image's styleRefUrl
+          // For regular mode: use round-robin distribution through uploaded images
+          let imageStyleRefUrl: string | undefined;
+          let imageIndex = 0;
           
-          // Get image-specific style reference URL
-          const imageStyleRefUrl = uploadedImages[imageIndex]?.styleRefUrl;
+          if (isImageThemeExpansion && singleImageForTheme) {
+            // Image Theme Expansion mode: use single image's style reference
+            imageStyleRefUrl = singleImageForTheme.styleRefUrl;
+            imageIndex = 0; // Always use the single image
+            console.log(`[Midjourney Request ${requestIdx + 1}] Using Image Theme Expansion mode - single image style reference`);
+          } else if (uploadedImages.length > 0) {
+            // Regular mode: round-robin distribution
+            // Each image should be used for approximately (requestsNeeded / uploadedImages.length) requests
+            // Use modulo to cycle through images evenly
+            // Example: 6 images, 9 requests -> each image used 1-2 times
+            // Request 0: 0 % 6 = 0 (image 0)
+            // Request 1: 1 % 6 = 1 (image 1)
+            // Request 2: 2 % 6 = 2 (image 2)
+            // Request 3: 3 % 6 = 3 (image 3)
+            // Request 4: 4 % 6 = 4 (image 4)
+            // Request 5: 5 % 6 = 5 (image 5)
+            // Request 6: 6 % 6 = 0 (image 0)
+            // Request 7: 7 % 6 = 1 (image 1)
+            // Request 8: 8 % 6 = 2 (image 2)
+            imageIndex = requestIdx % uploadedImages.length;
+            imageStyleRefUrl = uploadedImages[imageIndex]?.styleRefUrl;
+          } else {
+            // Fallback: use settings.styleRefUrl
+            imageStyleRefUrl = settings.styleRefUrl;
+          }
           
           // TEMPORARY DEBUG: Uncomment to test with single reference URL
           // const debugStyleRefUrl = "https://gold-stingray-884517.hostingersite.com/wp-content/uploads/2025/12/style-ref-1764982392518.png"; // Replace with your test URL
@@ -923,14 +995,29 @@ const App: React.FC = () => {
             styleRefUrl: imageStyleRefUrl || settings.styleRefUrl
           };
           
-          const imageTheme = uploadedImages[imageIndex]?.theme || uploadedImages[imageIndex]?.fullAnalysis?.clusters?.[0]?.theme || 'Unknown';
-          console.log(`[Midjourney Request ${requestIdx + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`);
+          let imageTheme = 'Unknown';
+          if (isImageThemeExpansion && singleImageForTheme) {
+            imageTheme = singleImageForTheme.theme || 'Unknown';
+            console.log(`[Midjourney Request ${requestIdx + 1}] Using Image Theme Expansion mode (Theme: "${imageTheme}")`);
+          } else if (uploadedImages.length > 0) {
+            imageTheme = uploadedImages[imageIndex]?.theme || uploadedImages[imageIndex]?.fullAnalysis?.clusters?.[0]?.theme || 'Unknown';
+            console.log(`[Midjourney Request ${requestIdx + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`);
+          }
+          
           if (imageStyleRefUrl) {
             console.log(`[Midjourney Request ${requestIdx + 1}] Style reference URL: ${imageStyleRefUrl}`);
-            console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Using image-specific styleRefUrl (Image ${imageIndex + 1} of ${uploadedImages.length})`);
+            if (isImageThemeExpansion && singleImageForTheme) {
+              console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Using Image Theme Expansion styleRefUrl`);
+            } else {
+              console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Using image-specific styleRefUrl (Image ${imageIndex + 1} of ${uploadedImages.length})`);
+            }
           } else {
-            console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ No style reference URL found for image ${imageIndex + 1}`);
-            console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ Falling back to settings.styleRefUrl: ${settings.styleRefUrl || 'none'}`);
+            console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ No style reference URL found`);
+            if (isImageThemeExpansion && singleImageForTheme) {
+              console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ Image Theme Expansion mode but no styleRefUrl - check image upload`);
+            } else {
+              console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ Falling back to settings.styleRefUrl: ${settings.styleRefUrl || 'none'}`);
+            }
           }
           
           // Midjourney/Legnext returns an array of images (typically 4)
@@ -1350,6 +1437,226 @@ const App: React.FC = () => {
   // --- Render Steps ---
 
   const renderThemeSelection = () => {
+    // If Image Theme Expansion mode is selected, show the single image upload form
+    if (isImageThemeExpansion) {
+      return (
+        <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <button 
+                onClick={() => {
+                  setIsImageThemeExpansion(false);
+                  setSingleImageForTheme(null);
+                }}
+                className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+              >
+                <ChevronLeft />
+              </button>
+              <h2 className="text-3xl font-serif text-gothic-gold">Image Theme Expansion</h2>
+            </div>
+            <p className="text-slate-400">
+              Upload ONE image. ChatGPT will extract the theme (PRIMARY SUBJECT) and generate multiple prompts with DIFFERENT subjects but the SAME theme and style.
+            </p>
+          </div>
+
+          <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
+            {/* Single Image Upload Section */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Upload ONE Reference Image
+              </label>
+              <div className="space-y-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (!files || files.length === 0) return;
+                    const file = files[0]; // Only take first file
+                    
+                    if (!file.type.startsWith('image/')) {
+                      alert(`"${file.name}" is not an image file.`);
+                      return;
+                    }
+
+                    if (file.size > 20 * 1024 * 1024) {
+                      alert(`"${file.name}" is too large (max 20MB).`);
+                      return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                      const base64Image = e.target?.result as string;
+                      const id = `single-theme-${Date.now()}`;
+                      
+                      // Analyze the image
+                      setIsAnalyzingImage(true);
+                      try {
+                        const analysis = await analyzeReferenceImage(base64Image);
+                        if (analysis.status === 'fulfilled' && analysis.value) {
+                          const { theme, style, colors, vibe, fullAnalysis } = analysis.value;
+                          
+                          // Upload to WordPress
+                          setIsUploadingStyleRef(true);
+                          const wordPressUrl = await uploadImageToWordPress(base64Image);
+                          
+                          const imageData = {
+                            id,
+                            base64: base64Image,
+                            theme,
+                            style,
+                            colors,
+                            vibe,
+                            styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined,
+                            fullAnalysis
+                          };
+                          
+                          setSingleImageForTheme(imageData);
+                          
+                          // Update settings with style reference
+                          if (wordPressUrl.status === 'fulfilled') {
+                            setSettings(prev => ({
+                              ...prev,
+                              styleRefUrl: wordPressUrl.value,
+                              customArtStyle: style || '',
+                              colorIntensity: 'Custom / Override'
+                            }));
+                          }
+                          
+                          addLog(`✅ Image analyzed: Theme="${theme}", Style="${style}"`, 'success');
+                          if (wordPressUrl.status === 'fulfilled') {
+                            addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
+                          }
+                        } else {
+                          addLog(`❌ Failed to analyze image: ${analysis.reason?.message || 'Unknown error'}`, 'error');
+                        }
+                      } catch (error: any) {
+                        addLog(`❌ Error: ${error.message || 'Unknown error'}`, 'error');
+                      } finally {
+                        setIsAnalyzingImage(false);
+                        setIsUploadingStyleRef(false);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                  className="hidden"
+                  id="single-image-upload"
+                  disabled={isAnalyzingImage}
+                />
+                <label
+                  htmlFor="single-image-upload"
+                  className={`block w-full p-8 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
+                    isAnalyzingImage
+                      ? 'border-slate-600 bg-slate-900/50 cursor-not-allowed'
+                      : singleImageForTheme
+                      ? 'border-gothic-gold bg-gothic-gold/10'
+                      : 'border-slate-600 bg-slate-900 hover:border-gothic-gold hover:bg-slate-800'
+                  }`}
+                >
+                  {isAnalyzingImage ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <RefreshCw className="animate-spin text-gothic-gold" size={24} />
+                      <span className="text-sm text-slate-400">Analyzing image...</span>
+                    </div>
+                  ) : singleImageForTheme ? (
+                    <div className="w-full space-y-3">
+                      <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded border border-gothic-gold/30">
+                        <div className="relative w-24 h-24 rounded overflow-hidden border border-gothic-gold flex-shrink-0">
+                          <img
+                            src={singleImageForTheme.base64}
+                            alt="Reference"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gothic-gold font-medium mb-1">Reference Image</div>
+                          {singleImageForTheme.theme && (
+                            <div className="text-xs text-slate-300 mb-1">
+                              <span className="text-slate-500">Theme:</span> {singleImageForTheme.theme}
+                            </div>
+                          )}
+                          {singleImageForTheme.style && (
+                            <div className="text-xs text-slate-400 truncate" title={singleImageForTheme.style}>
+                              <span className="text-slate-500">Style:</span> {singleImageForTheme.style.substring(0, 50)}...
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setSingleImageForTheme(null);
+                            setSettings(prev => ({ ...prev, styleRefUrl: undefined, customArtStyle: '' }));
+                          }}
+                          className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/20 flex-shrink-0"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full text-xs text-gothic-gold hover:text-gothic-gold/80 py-2 border border-gothic-gold/30 rounded hover:bg-gothic-gold/10"
+                      >
+                        Replace Image
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageIcon className="text-slate-400" size={24} />
+                      <span className="text-sm text-slate-400">
+                        Click to upload ONE image
+                      </span>
+                      <span className="text-xs text-slate-500">PNG, JPG, WEBP up to 20MB</span>
+                    </div>
+                  )}
+                </label>
+                
+                <p className="text-xs text-slate-500 mt-2">
+                  Upload ONE image. ChatGPT will extract the PRIMARY SUBJECT (theme) and generate different subjects for each variation while maintaining the same style.
+                </p>
+                {settings.styleRefUrl && (
+                  <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded text-xs text-green-400">
+                    ✅ Style Reference uploaded: {settings.styleRefUrl.substring(0, 50)}...
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (singleImageForTheme && singleImageForTheme.theme) {
+                  // Create a custom theme object with the extracted PRIMARY SUBJECT
+                  const customTheme: Theme = {
+                    id: 'image-theme-expansion',
+                    name: 'Image Theme Expansion',
+                    description: `Theme extracted from image: ${singleImageForTheme.theme}`,
+                    thumbnail: singleImageForTheme.base64,
+                    basePrompt: singleImageForTheme.theme,
+                    styleKeywords: ['image-extracted', 'dynamic']
+                  };
+                  setSelectedTheme(customTheme);
+                  setIsImageThemeExpansion(false);
+                  setStep(2);
+                } else {
+                  alert('Please upload and analyze an image first.');
+                }
+              }}
+              disabled={!singleImageForTheme || !singleImageForTheme.theme}
+              className="w-full bg-gradient-to-r from-gothic-gold to-amber-600 hover:from-amber-500 hover:to-amber-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-black font-bold py-4 rounded-lg shadow-lg shadow-amber-900/20 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+            >
+              <Sparkles className="animate-pulse" size={20} />
+              Continue with Image Theme
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // If custom theme mode is selected, show the input form
     if (isCustomTheme) {
       return (
