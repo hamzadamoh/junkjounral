@@ -1852,30 +1852,11 @@ const App: React.FC = () => {
       <div className="text-center space-y-4">
         <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Choose a foundational theme for your junk journal collection. Each theme comes with specialized prompts and textures tailored for print.
+          Choose how you want to generate your journal pages - with a custom theme description or by uploading an image to extract the theme.
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {THEMES.map(theme => (
-          <button
-            key={theme.id}
-            onClick={() => handleThemeSelect(theme)}
-            className="group relative overflow-hidden rounded-xl bg-gothic-800 border border-slate-700 hover:border-gothic-gold transition-all duration-300 text-left h-80"
-          >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent z-10" />
-            <img 
-              src={theme.thumbnail} 
-              alt={theme.name} 
-              className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-transform duration-500"
-            />
-            <div className="absolute bottom-0 left-0 p-6 z-20 w-full">
-              <h3 className="text-xl font-serif text-slate-100 mb-2 group-hover:text-gothic-gold transition-colors">{theme.name}</h3>
-              <p className="text-sm text-slate-300 line-clamp-2">{theme.description}</p>
-            </div>
-          </button>
-        ))}
-          
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
           {/* Custom Theme Option */}
           <button
             onClick={handleCustomThemeSelect}
@@ -1888,6 +1869,22 @@ const App: React.FC = () => {
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Custom Theme</h3>
               <p className="text-sm text-slate-400">
                 Create your own unique theme with a custom description
+              </p>
+            </div>
+          </button>
+
+          {/* Image Theme Expansion Option */}
+          <button
+            onClick={handleImageThemeExpansionSelect}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <ImageIcon className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Image Theme Expansion</h3>
+              <p className="text-sm text-slate-400">
+                Upload one image - ChatGPT extracts the theme and generates different subjects
               </p>
             </div>
           </button>
