@@ -1082,58 +1082,57 @@ export const generateJournalPage = async (
     let imageUrls: string[] = [];
     
     // Poll until complete - returns all image URLs
-      // Add stagger delay based on variationIndex to avoid simultaneous polling
-      // Each request waits (variationIndex * 500ms) before starting to poll
-      const staggerDelay = (variationIndex ?? 0) * 500; // 0ms, 500ms, 1000ms, 1500ms, etc.
-      
-      let pollingRetryCount = 0;
-      const maxPollingRetries = 2;
-      let currentJobId = jobId;
-      
-      while (imageUrls.length === 0 && pollingRetryCount <= maxPollingRetries) {
-        try {
-          imageUrls = await pollTaskUntilComplete(currentJobId, 180, 5000, staggerDelay);
+    // Add stagger delay based on variationIndex to avoid simultaneous polling
+    // Each request waits (variationIndex * 500ms) before starting to poll
+    const staggerDelay = (variationIndex ?? 0) * 500; // 0ms, 500ms, 1000ms, 1500ms, etc.
+    
+    let pollingRetryCount = 0;
+    const maxPollingRetries = 2;
+    let currentJobId = jobId;
+    
+    while (imageUrls.length === 0 && pollingRetryCount <= maxPollingRetries) {
+      try {
+        imageUrls = await pollTaskUntilComplete(currentJobId, 180, 5000, staggerDelay);
+        
+        if (!imageUrls || imageUrls.length === 0) {
+          throw new Error('No images returned from ttapi.io');
+        }
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        // Check if we should resend as new task
+        const shouldResend = error.message?.includes('RATE_LIMIT_RESEND_TASK') || 
+                            (error.message?.toLowerCase().includes('rate limit') && pollingRetryCount < maxPollingRetries);
+        
+        if (shouldResend) {
+          pollingRetryCount++;
+          const retryDelay = 10000 * pollingRetryCount; // 10s, 20s
+          console.warn(`[Ttapi] ⚠️ Rate limit during polling (attempt ${pollingRetryCount}/${maxPollingRetries}). Resending prompt as new task after ${retryDelay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
           
-          if (!imageUrls || imageUrls.length === 0) {
-            throw new Error('No images returned from ttapi.io');
-          }
-          break; // Success, exit retry loop
-        } catch (error: any) {
-          // Check if we should resend as new task
-          const shouldResend = error.message?.includes('RATE_LIMIT_RESEND_TASK') || 
-                              (error.message?.toLowerCase().includes('rate limit') && pollingRetryCount < maxPollingRetries);
-          
-          if (shouldResend) {
-            pollingRetryCount++;
-            const retryDelay = 10000 * pollingRetryCount; // 10s, 20s
-            console.warn(`[Ttapi] ⚠️ Rate limit during polling (attempt ${pollingRetryCount}/${maxPollingRetries}). Resending prompt as new task after ${retryDelay / 1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-            
-            // Resend the prompt as a completely new task
-            console.log(`[Ttapi] 🔄 Resending prompt as new task (attempt ${pollingRetryCount}/${maxPollingRetries})...`);
-            try {
-              currentJobId = await sendTaskToTtapi(prompt);
-              if (!currentJobId) {
-                throw new Error('Failed to create new task after rate limit');
-              }
-              console.log(`[Ttapi] ✅ New task created: ${currentJobId}`);
-              // Reset stagger delay for new task
-              const newStaggerDelay = (variationIndex ?? 0) * 500;
-              continue; // Retry polling with new job ID
-            } catch (resendError: any) {
-              if (pollingRetryCount >= maxPollingRetries) {
-                throw new Error(`Failed to resend task after rate limit: ${resendError.message}`);
-              }
-              // If resend also fails with rate limit, wait longer and try again
-              const longerDelay = 20000 * pollingRetryCount; // 20s, 40s
-              console.warn(`[Ttapi] ⚠️ Resend also rate limited. Waiting ${longerDelay / 1000}s...`);
-              await new Promise(resolve => setTimeout(resolve, longerDelay));
-              continue;
+          // Resend the prompt as a completely new task
+          console.log(`[Ttapi] 🔄 Resending prompt as new task (attempt ${pollingRetryCount}/${maxPollingRetries})...`);
+          try {
+            currentJobId = await sendTaskToTtapi(prompt);
+            if (!currentJobId) {
+              throw new Error('Failed to create new task after rate limit');
             }
-          } else {
-            // Not a rate limit or max retries reached - throw the error
-            throw error;
+            console.log(`[Ttapi] ✅ New task created: ${currentJobId}`);
+            // Reset stagger delay for new task
+            const newStaggerDelay = (variationIndex ?? 0) * 500;
+            continue; // Retry polling with new job ID
+          } catch (resendError: any) {
+            if (pollingRetryCount >= maxPollingRetries) {
+              throw new Error(`Failed to resend task after rate limit: ${resendError.message}`);
+            }
+            // If resend also fails with rate limit, wait longer and try again
+            const longerDelay = 20000 * pollingRetryCount; // 20s, 40s
+            console.warn(`[Ttapi] ⚠️ Resend also rate limited. Waiting ${longerDelay / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, longerDelay));
+            continue;
           }
+        } else {
+          // Not a rate limit or max retries reached - throw the error
+          throw error;
         }
       }
     }
