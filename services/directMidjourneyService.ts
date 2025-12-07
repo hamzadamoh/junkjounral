@@ -1,15 +1,18 @@
 import { Theme, GenerationSettings } from '../types';
 
 /**
- * Direct Midjourney Integration using Discord Account Token
+ * Direct Midjourney Integration using Discord Token
  * 
  * This service connects directly to Midjourney via Discord API,
  * bypassing third-party services like Ttapi/GoAPI.
  * 
  * Requirements:
  * - Discord account with Midjourney subscription
- * - Discord user token (Authorization header)
+ * - Discord token (user token OR bot token)
  * - Server ID and Channel ID where Midjourney bot is active
+ * 
+ * Note: Bot tokens require using Discord's Interaction API for slash commands.
+ * User tokens can send messages but may not work with slash commands.
  */
 
 // Get Discord credentials from environment variables
