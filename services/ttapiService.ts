@@ -976,13 +976,17 @@ export const generateJournalPage = async (
     }
     
     // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, only add aspect ratio
-    if (settings.colorIntensity === 'Custom / Override') {
-      // For Custom / Override: Only add aspect ratio, DO NOT add any style constraints
+    // Also skip adding problematic phrases for Image Theme Expansion mode (skipStyleReference = true)
+    if (settings.colorIntensity === 'Custom / Override' || settings.skipStyleReference) {
+      // For Custom / Override or Image Theme Expansion: Only add aspect ratio, DO NOT add any style constraints
       // Trust the ChatGPT prompt entirely
       // Use extracted aspect ratio if found, otherwise use the provided aspectRatio
       const finalAspectRatio = extractedAspectRatio || (aspectRatio && aspectRatio !== '1:1' ? aspectRatio : null);
       if (finalAspectRatio) {
         prompt += ` --ar ${finalAspectRatio}`;
+      }
+      if (settings.skipStyleReference) {
+        console.log(`[Ttapi] Skipping style reference URL - relying on detailed prompt only for variation ${variationIndex ?? 0}`);
       }
     } else if (customPrompt) {
       // For other modes with custom prompts: Add minimal flat design constraints
