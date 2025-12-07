@@ -84,6 +84,21 @@ interface ImageAnalysisResponse {
   vibe?: string;
 }
 
+/**
+ * Midjourney-optimized prompt package schema
+ */
+export interface MJPackage {
+  subject_suggestion: string;         // 2-6 words, e.g. "deer portrait", "birch forest path"
+  style_tokens: string;               // 3-6 short comma-separated tokens, e.g. "winter watercolor, soft teal palette, paper grain"
+  palette_tokens: string;              // 2-5 comma-separated colors/hues e.g. "icy teal, frost blue, soft gray"
+  sref_url: string | null;            // URL of uploaded style reference image or null
+  batch_seed: number;                  // deterministic seed for batch (caller can pass)
+  variation_index: number;             // variation number supplied by caller
+  mj_prompt: string;                   // minimal subject prompt for /imagine (subject only)
+  mj_ref: string;                      // single string used for --ref (should be: style_tokens + palette_tokens)
+  mj_flags: string;                    // full flags ready to append to /imagine (see example)
+}
+
 // ============================================
 // GLOBAL CONTENT VARIABLES (Apply to ALL Modes)
 // These ensure variety in WHAT is shown, regardless of style
@@ -1920,4 +1935,238 @@ Now analyze the provided image and produce the JSON object described above.`
     throw new Error(`Failed to analyze image: ${error.message || 'Unknown error. Please check your OpenAI API key and try again.'}`);
   }
 };
+
+/**
+ * Formats Midjourney flags string from components
+ * @param mj_ref - Combined style and palette tokens for --ref
+ * @param sref_url - Optional style reference URL
+ * @param seed - Computed seed value
+ * @param stylize - Stylize value (default: 50)
+ * @param sref_weight - Style reference weight (default: 0.7)
+ * @param chaos - Chaos value (default: 10)
+ * @returns Formatted flags string ready to append to /imagine command
+ */
+export function formatMJFlags(
+  mj_ref: string,
+  sref_url: string | null,
+  seed: number,
+  stylize: number = 50,
+  sref_weight: number = 0.7,
+  chaos: number = 10
+): string {
+  const flags: string[] = [];
+  
+  // Add --ref with quoted mj_ref
+  flags.push(`--ref "${mj_ref}"`);
+  
+  // Add --sref if URL is provided
+  if (sref_url) {
+    flags.push(`--sref ${sref_url} --sref-weight ${sref_weight}`);
+  }
+  
+  // Add seed
+  flags.push(`--seed ${seed}`);
+  
+  // Add stylize
+  flags.push(`--stylize ${stylize}`);
+  
+  // Add chaos
+  flags.push(`--chaos ${chaos}`);
+  
+  return flags.join(' ');
+}
+
+/**
+ * Validates that mj_prompt contains no style tokens
+ * @param mj_prompt - The prompt to validate
+ * @param style_tokens - Style tokens to check against
+ * @throws Error if style tokens are found in prompt
+ */
+function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
+  const styleWords = style_tokens.toLowerCase().split(',').map(s => s.trim());
+  const promptLower = mj_prompt.toLowerCase();
+  
+  for (const token of styleWords) {
+    const words = token.split(/\s+/);
+    // Check if any style word appears in the prompt
+    for (const word of words) {
+      if (word.length > 3 && promptLower.includes(word)) {
+        throw new Error(`mj_prompt contains style token "${word}" from style_tokens. Prompt should only contain subject description.`);
+      }
+    }
+  }
+}
+
+/**
+ * Generates a Midjourney-optimized prompt package
+ * @param imageOrTheme - Either an ImageAnalysisResponse (from analyzeReferenceImage) or a theme string
+ * @param batchSeed - Optional batch seed (if not provided, will generate one)
+ * @param variationIndex - Variation number (0-based or 1-based, will be normalized)
+ * @param sref_url - Optional style reference URL
+ * @param promptService - Service to use ('openai' or 'openrouter')
+ * @returns MJPackage with all required fields
+ */
+export async function generateMJPackage(
+  imageOrTheme: ImageAnalysisResponse | string,
+  batchSeed: number | null = null,
+  variationIndex: number,
+  sref_url: string | null = null,
+  promptService: 'openai' | 'openrouter' = 'openai'
+): Promise<MJPackage> {
+  // Normalize variation index (ensure it's 1-based)
+  const normalizedVariationIndex = variationIndex < 1 ? 1 : variationIndex;
+  
+  // Compute batch seed (use provided, or generate from timestamp)
+  const finalBatchSeed = batchSeed || Math.floor(Date.now() / 1000) % 1000000;
+  
+  // Compute Midjourney seed: SEED = batch_seed * 1000 + variation_index
+  const mjSeed = finalBatchSeed * 1000 + normalizedVariationIndex;
+  
+  // Determine API service
+  const useOpenRouter = promptService === 'openrouter';
+  const apiKey = useOpenRouter ? getOpenRouterApiKey() : getOpenAIApiKey();
+  const apiUrl = useOpenRouter ? OPENROUTER_API_URL : OPENAI_API_URL;
+  
+  if (!apiKey) {
+    throw new Error(`${promptService === 'openrouter' ? 'OpenRouter' : 'OpenAI'} API key is not configured.`);
+  }
+  
+  // Extract data from image analysis or theme
+  let cluster: ImageCluster | null = null;
+  let themeDescription = '';
+  
+  if (typeof imageOrTheme === 'string') {
+    // Theme string provided
+    themeDescription = imageOrTheme;
+  } else {
+    // Image analysis provided
+    if (imageOrTheme.clusters && imageOrTheme.clusters.length > 0) {
+      cluster = imageOrTheme.clusters[0];
+      themeDescription = cluster.theme || '';
+    } else {
+      throw new Error('Invalid image analysis: no clusters found');
+    }
+  }
+  
+  // Build system prompt for LLM
+  const systemPrompt = `You are a Midjourney prompt generator. Your task is to analyze an image (or theme) and output EXACT JSON matching this schema:
+
+{
+  "subject_suggestion": string,      // 2-6 words, e.g. "deer portrait", "birch forest path"
+  "style_tokens": string,            // 3-6 short comma-separated tokens, e.g. "winter watercolor, soft teal palette, paper grain"
+  "palette_tokens": string,          // 2-5 comma-separated colors/hues e.g. "icy teal, frost blue, soft gray"
+  "mj_prompt": string                // minimal subject prompt (8-12 words max), subject only, NO style descriptors
+}
+
+RULES:
+1. subject_suggestion: 2-6 words describing the main subject
+2. style_tokens: 3-6 short phrases, comma-separated, no punctuation except commas. Examples: "watercolor wash", "delicate ink linework", "soft paper grain", "muted sepia"
+3. palette_tokens: 2-5 color names, comma-separated, prefer human-readable names
+4. mj_prompt: ONLY the subject and minimal positional modifiers (8-12 words max). NO style descriptors, NO colors, NO technique words. Examples: "Owl perched on frosted branch", "Majestic stag portrait, three-quarter view"
+
+CRITICAL: mj_prompt must NOT contain any words from style_tokens or palette_tokens. It should be pure subject description only.
+
+Output ONLY valid JSON, no extra text.`;
+
+  // Build user prompt
+  let userPrompt = '';
+  if (cluster) {
+    // Image analysis provided - use cluster data
+    userPrompt = `Analyze this image and generate a Midjourney prompt package.
+
+Image Analysis:
+- Theme: ${cluster.theme}
+- Primary Subject: ${cluster.primary_subject}
+- Style: ${cluster.style}
+- Technique: ${cluster.technique}
+- Colors: ${cluster.palette.map(c => `${c.name} (${c.hex})`).join(', ')}
+- Vibe: ${cluster.vibe}
+- Textures: ${cluster.dominant_textures?.join(', ') || 'none'}
+
+Generate the JSON package. For style_tokens, extract 3-6 short phrases from the style, technique, and textures.
+For palette_tokens, use 2-5 color names from the palette.
+For mj_prompt, use ONLY the primary_subject with minimal positional modifiers (8-12 words), NO style words.`;
+  } else {
+    // Theme string provided
+    userPrompt = `Generate a Midjourney prompt package for theme: "${themeDescription}"
+
+Generate the JSON package with:
+- subject_suggestion: A 2-6 word subject that fits this theme
+- style_tokens: 3-6 short style phrases (e.g. "watercolor wash, delicate ink linework, paper grain")
+- palette_tokens: 2-5 color names appropriate for this theme
+- mj_prompt: Subject only (8-12 words), NO style descriptors`;
+  }
+  
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        ...(useOpenRouter ? { 'HTTP-Referer': window.location.origin } : {})
+      },
+      body: JSON.stringify({
+        model: useOpenRouter ? 'openai/gpt-4o-mini' : 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2, // Low temperature for deterministic style/palette
+        max_tokens: 200
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+    }
+    
+    const data: ChatGPTResponse = await response.json();
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error('No response from API');
+    }
+    
+    const content = data.choices[0].message.content;
+    let llmOutput: any;
+    
+    try {
+      llmOutput = JSON.parse(content);
+    } catch (parseError) {
+      throw new Error(`Failed to parse LLM JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
+    
+    // Validate required fields
+    if (!llmOutput.subject_suggestion || !llmOutput.style_tokens || !llmOutput.palette_tokens || !llmOutput.mj_prompt) {
+      throw new Error('LLM response missing required fields');
+    }
+    
+    // Validate mj_prompt doesn't contain style tokens
+    validateMJPrompt(llmOutput.mj_prompt, llmOutput.style_tokens);
+    
+    // Build mj_ref (style_tokens + palette_tokens)
+    const mj_ref = `${llmOutput.style_tokens}, ${llmOutput.palette_tokens}`;
+    
+    // Build mj_flags
+    const mj_flags = formatMJFlags(mj_ref, sref_url, mjSeed);
+    
+    // Construct final package
+    const package_: MJPackage = {
+      subject_suggestion: llmOutput.subject_suggestion.trim(),
+      style_tokens: llmOutput.style_tokens.trim(),
+      palette_tokens: llmOutput.palette_tokens.trim(),
+      sref_url: sref_url,
+      batch_seed: finalBatchSeed,
+      variation_index: normalizedVariationIndex,
+      mj_prompt: llmOutput.mj_prompt.trim(),
+      mj_ref: mj_ref.trim(),
+      mj_flags: mj_flags
+    };
+    
+    return package_;
+  } catch (error: any) {
+    console.error('[generateMJPackage] Error:', error);
+    throw new Error(`Failed to generate MJ package: ${error.message || 'Unknown error'}`);
+  }
+}
 
