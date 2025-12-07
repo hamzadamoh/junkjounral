@@ -32,6 +32,7 @@ export interface GenerationSettings {
   promptService?: 'openai' | 'openrouter';
   styleRefUrl?: string; // WordPress URL for Midjourney --sref parameter
   primarySubject?: string; // Optional: user-specified primary subject for all variations
+  skipStyleReference?: boolean; // If true, don't pass style reference URL to Midjourney (rely on detailed prompt only)
 }
 
 export interface GeneratedImage {

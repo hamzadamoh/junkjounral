@@ -960,9 +960,14 @@ const App: React.FC = () => {
           
           if (isImageThemeExpansion && singleImageForTheme) {
             // Image Theme Expansion mode: use single image's style reference
-            imageStyleRefUrl = singleImageForTheme.styleRefUrl;
+            // First try singleImageForTheme.styleRefUrl, then fallback to settings.styleRefUrl
+            // (settings.styleRefUrl is set during image upload)
+            imageStyleRefUrl = singleImageForTheme.styleRefUrl || settings.styleRefUrl;
             imageIndex = 0; // Always use the single image
             console.log(`[Midjourney Request ${requestIdx + 1}] Using Image Theme Expansion mode - single image style reference`);
+            console.log(`[Midjourney Request ${requestIdx + 1}] singleImageForTheme.styleRefUrl: ${singleImageForTheme.styleRefUrl || 'undefined'}`);
+            console.log(`[Midjourney Request ${requestIdx + 1}] settings.styleRefUrl: ${settings.styleRefUrl || 'undefined'}`);
+            console.log(`[Midjourney Request ${requestIdx + 1}] Final imageStyleRefUrl: ${imageStyleRefUrl || 'undefined'}`);
           } else if (uploadedImages.length > 0) {
             // Regular mode: round-robin distribution
             // Each image should be used for approximately (requestsNeeded / uploadedImages.length) requests
@@ -990,9 +995,11 @@ const App: React.FC = () => {
           // console.log(`[DEBUG] Forcing same style reference for all requests: ${debugStyleRefUrl}`);
           
           // Create modified settings with image-specific styleRefUrl
+          // For Image Theme Expansion mode: skip style reference URL, rely on detailed prompt only
           const imageSpecificSettings = {
             ...settings,
-            styleRefUrl: imageStyleRefUrl || settings.styleRefUrl
+            styleRefUrl: imageStyleRefUrl || settings.styleRefUrl,
+            skipStyleReference: isImageThemeExpansion && singleImageForTheme ? true : false
           };
           
           let imageTheme = 'Unknown';

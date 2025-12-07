@@ -193,6 +193,35 @@ const cleanPromptForMidjourney = (prompt: string): string => {
   // Replace all newlines with spaces
   cleaned = cleaned.replace(/\n+/g, ' ');
   
+  // CRITICAL: Remove problematic phrases that Midjourney interprets as parameters
+  // These phrases often appear after --ar and cause "Invalid parameter" errors
+  const problematicPhrases = [
+    /flat printable page,?\s*/gi,
+    /SINGLE PAGE ONLY,?\s*/gi,
+    /not a scene,?\s*/gi,
+    /not multiple objects,?\s*/gi,
+    /not a still life composition,?\s*/gi,
+    /no 3D objects,?\s*/gi,
+    /no shadows,?\s*/gi,
+    /no depth,?\s*/gi,
+    /no realistic photography,?\s*/gi,
+    /no realistic lighting,?\s*/gi,
+    /flat illustration style,?\s*/gi,
+    /top-down view,?\s*/gi,
+    /printable scrapbook page,?\s*/gi,
+    /digital design,?\s*/gi,
+    /flat lay design,?\s*/gi,
+    /high resolution printable journal page,?\s*/gi
+  ];
+  
+  problematicPhrases.forEach(phrase => {
+    cleaned = cleaned.replace(phrase, '');
+  });
+  
+  // Replace commas with periods (commas can be interpreted as parameter separators)
+  // But only if they're not part of a URL or parameter
+  cleaned = cleaned.replace(/,(\s+)(?![a-z]+:)/gi, '.$1');
+  
   // Replace multiple spaces with single space
   cleaned = cleaned.replace(/\s+/g, ' ');
   
@@ -909,12 +938,27 @@ export const generateJournalPage = async (
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
+    // CRITICAL: Extract --ar parameter if it exists in the middle of the prompt
+    // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
+    let extractedAspectRatio: string | null = null;
+    const arMatch = prompt.match(/--ar\s+([^\s]+)/i);
+    if (arMatch) {
+      extractedAspectRatio = arMatch[1];
+      // Remove --ar from the prompt (we'll add it back at the end)
+      prompt = prompt.replace(/--ar\s+[^\s]+/gi, '').trim();
+    }
+    
+    // Clean the prompt FIRST to remove problematic phrases that Midjourney interprets as parameters
+    prompt = cleanPromptForMidjourney(prompt);
+    
     // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, only add aspect ratio
     if (settings.colorIntensity === 'Custom / Override') {
       // For Custom / Override: Only add aspect ratio, DO NOT add any style constraints
       // Trust the ChatGPT prompt entirely
-      if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
-        prompt += ` --ar ${aspectRatio}`;
+      // Use extracted aspect ratio if found, otherwise use the provided aspectRatio
+      const finalAspectRatio = extractedAspectRatio || (aspectRatio && aspectRatio !== '1:1' ? aspectRatio : null);
+      if (finalAspectRatio) {
+        prompt += ` --ar ${finalAspectRatio}`;
       }
     } else if (customPrompt) {
       // For other modes with custom prompts: Add minimal flat design constraints
@@ -956,19 +1000,23 @@ export const generateJournalPage = async (
 
     // MAXIMUM style reference influence - force Midjourney to follow reference style
     // Same as GoAPI implementation
-    if (settings.styleRefUrl && settings.styleRefUrl.trim()) {
+    // Add style reference BEFORE aspect ratio (parameters should be at the end)
+    // Skip style reference if skipStyleReference flag is set (e.g., Image Theme Expansion mode - rely on detailed prompt only)
+    if (!settings.skipStyleReference && settings.styleRefUrl && settings.styleRefUrl.trim()) {
       prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 1000`;
       console.log(`[Ttapi] Added MAXIMUM style reference (--sw 1000) for variation ${variationIndex ?? 0}: ${settings.styleRefUrl}`);
+    } else if (settings.skipStyleReference) {
+      console.log(`[Ttapi] Skipping style reference URL - relying on detailed prompt only for variation ${variationIndex ?? 0}`);
     }
 
-    // Add aspect ratio last (after style reference if present)
-    if (aspectRatio && aspectRatio !== '1:1' && !prompt.includes('--ar')) {
-      prompt += ` --ar ${aspectRatio}`;
+    // Add aspect ratio LAST (after style reference if present)
+    // Only add if not already present and not in Custom / Override mode (which handles it above)
+    if (settings.colorIntensity !== 'Custom / Override') {
+      const finalAspectRatio = extractedAspectRatio || (aspectRatio && aspectRatio !== '1:1' ? aspectRatio : null);
+      if (finalAspectRatio && !prompt.includes('--ar')) {
+        prompt += ` --ar ${finalAspectRatio}`;
+      }
     }
-
-    // Clean the prompt before sending to remove newlines and problematic characters
-    // This prevents Midjourney from interpreting newlines as parameter separators
-    prompt = cleanPromptForMidjourney(prompt);
 
     // Log the EXACT prompt being sent to Midjourney for debugging
     console.log(`[Ttapi] FULL PROMPT BEING SENT: "${prompt}"`);

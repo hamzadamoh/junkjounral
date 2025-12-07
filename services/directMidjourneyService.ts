@@ -401,8 +401,13 @@ export const generateJournalPage = async (
     console.log(`[DirectMJ] Full prompt: "${prompt}"`);
 
     // Send /imagine command
+    // Skip style reference if skipStyleReference flag is set (e.g., Image Theme Expansion mode - rely on detailed prompt only)
+    const styleRefUrlToUse = settings.skipStyleReference ? undefined : settings.styleRefUrl;
     if (onProgress) onProgress('Sending command to Midjourney...');
-    const taskId = await sendImagineCommand(prompt, settings.styleRefUrl);
+    if (settings.skipStyleReference) {
+      console.log(`[DirectMJ] Skipping style reference URL - relying on detailed prompt only`);
+    }
+    const taskId = await sendImagineCommand(prompt, styleRefUrlToUse);
 
     // Poll for response
     if (onProgress) onProgress('Waiting for Midjourney to generate images...');

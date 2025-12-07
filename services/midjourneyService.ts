@@ -585,9 +585,12 @@ export const generateJournalPage = async (
     }
 
     // MAXIMUM style reference influence - force Midjourney to follow reference style
-    if (settings.styleRefUrl && settings.styleRefUrl.trim()) {
+    // Skip style reference if skipStyleReference flag is set (e.g., Image Theme Expansion mode - rely on detailed prompt only)
+    if (!settings.skipStyleReference && settings.styleRefUrl && settings.styleRefUrl.trim()) {
       prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 1000`;
       console.log(`[Midjourney] Added MAXIMUM style reference (--sw 1000) for variation ${variationIndex ?? 0}: ${settings.styleRefUrl}`);
+    } else if (settings.skipStyleReference) {
+      console.log(`[Midjourney] Skipping style reference URL - relying on detailed prompt only for variation ${variationIndex ?? 0}`);
     }
 
     // Add aspect ratio last (after style reference if present)
