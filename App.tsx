@@ -1082,15 +1082,33 @@ const App: React.FC = () => {
         }
       });
 
-      await Promise.allSettled(imagePromises);
+      const results = await Promise.allSettled(imagePromises);
+      
+      // Calculate summary from actual results
+      let completedCount = 0;
+      let errorCount = 0;
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          // Count images from this successful request (4 images per request, or remaining if last)
+          const startIdx = result.value.index * 4;
+          const endIdx = Math.min(startIdx + 4, total);
+          completedCount += (endIdx - startIdx);
+        } else {
+          // Count errors from this failed request
+          const requestIdx = result.status === 'fulfilled' && result.value.index !== undefined 
+            ? result.value.index 
+            : idx;
+          const startIdx = requestIdx * 4;
+          const endIdx = Math.min(startIdx + 4, total);
+          errorCount += (endIdx - startIdx);
+        }
+      });
+      
+      addLog(`\n📊 Generation Summary:`, 'success');
+      addLog(`   ✅ Completed: ${completedCount}/${total}`, 'success');
+      addLog(`   ❌ Errors: ${errorCount}/${total}`, errorCount > 0 ? 'error' : 'success');
+      addLog(`   ⏳ Remaining: ${total - completedCount - errorCount}/${total}`, 'log');
     }
-
-    const completedCount = generatedImages.filter(img => img.status === 'completed' && img.url).length;
-    const errorCount = generatedImages.filter(img => img.status === 'error').length;
-    addLog(`\n📊 Generation Summary:`, 'success');
-    addLog(`   ✅ Completed: ${completedCount}/${total}`, 'success');
-    addLog(`   ❌ Errors: ${errorCount}/${total}`, errorCount > 0 ? 'error' : 'success');
-    addLog(`   ⏳ Remaining: ${total - completedCount - errorCount}/${total}`, 'log');
 
     setStatus(GenerationStatus.COMPLETED);
     setCurrentProgress(100);
