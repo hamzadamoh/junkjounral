@@ -1,10 +1,12 @@
-// Get WordPress credentials from environment variables
+// Import WordPress config from env module
+import { getWordPressConfig } from './env';
+
 const getWordPressUsername = (): string => {
-  return import.meta.env.VITE_WP_USERNAME || '';
+  return getWordPressConfig().username;
 };
 
 const getWordPressAppPassword = (): string => {
-  return import.meta.env.VITE_WP_APP_PASSWORD || '';
+  return getWordPressConfig().password;
 };
 
 const WORDPRESS_MEDIA_ENDPOINT = 'https://gold-stingray-884517.hostingersite.com/wp-json/wp/v2/media';

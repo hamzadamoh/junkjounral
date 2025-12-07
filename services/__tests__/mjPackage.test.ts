@@ -2,22 +2,16 @@
  * Unit tests for Midjourney prompt package generation
  */
 
-// Mock import.meta.env before importing the module
-Object.defineProperty(globalThis, 'import', {
-  value: {
-    meta: {
-      env: {
-        VITE_OPENAI_API_KEY: 'test-openai-key',
-        VITE_OPENROUTER_API_KEY: 'test-openrouter-key',
-        VITE_WORDPRESS_API_URL: 'https://test-wordpress.com',
-        VITE_WORDPRESS_USERNAME: 'test-user',
-        VITE_WORDPRESS_PASSWORD: 'test-pass',
-      }
-    }
-  },
-  writable: true,
-  configurable: true
-});
+// Mock the env module before importing chatgptService
+jest.mock('../env', () => ({
+  getOpenAIApiKey: () => 'test-openai-key',
+  getOpenRouterApiKey: () => 'test-openrouter-key',
+  getWordPressConfig: () => ({
+    apiUrl: 'https://test-wordpress.com',
+    username: 'test-user',
+    password: 'test-pass',
+  }),
+}));
 
 // Mock window.location for OpenRouter
 Object.defineProperty(globalThis, 'window', {
@@ -198,10 +192,10 @@ describe('generateMJPackage', () => {
       choices: [{
         message: {
           content: JSON.stringify({
-            subject_suggestion: 'test subject',
-            style_tokens: 'test style',
-            palette_tokens: 'test color',
-            mj_prompt: 'Test subject description'
+            subject_suggestion: 'deer portrait',
+            style_tokens: 'watercolor wash, delicate ink',
+            palette_tokens: 'amber, sienna',
+            mj_prompt: 'Deer portrait, three-quarter view'
           })
         }
       }]
@@ -223,10 +217,10 @@ describe('generateMJPackage', () => {
       choices: [{
         message: {
           content: JSON.stringify({
-            subject_suggestion: 'test subject',
-            style_tokens: 'test style',
-            palette_tokens: 'test color',
-            mj_prompt: 'Test subject description'
+            subject_suggestion: 'owl portrait',
+            style_tokens: 'ink illustration, paper texture',
+            palette_tokens: 'charcoal, sepia',
+            mj_prompt: 'Owl portrait, side profile view'
           })
         }
       }]

@@ -1,29 +1,5 @@
-// Get API key from environment variable only
-// Handle both production (import.meta.env) and test (globalThis.import.meta.env) environments
-const getEnvVar = (key: string): string => {
-  // Check for test environment mock first
-  const testEnv = (globalThis as any).import?.meta?.env;
-  if (testEnv) {
-    return (testEnv as any)[key] || '';
-  }
-  
-  // Production: use import.meta.env (Babel will transform this in tests)
-  // Using a function to delay evaluation and allow Babel transformation
-  try {
-    // @ts-expect-error - import.meta is available in Vite but not in Jest
-    return (import.meta.env as any)[key] || '';
-  } catch {
-    return '';
-  }
-};
-
-const getOpenAIApiKey = (): string => {
-  return getEnvVar('VITE_OPENAI_API_KEY');
-};
-
-const getOpenRouterApiKey = (): string => {
-  return getEnvVar('VITE_OPENROUTER_API_KEY');
-};
+// Import environment variable accessors
+import { getOpenAIApiKey, getOpenRouterApiKey } from './env';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
