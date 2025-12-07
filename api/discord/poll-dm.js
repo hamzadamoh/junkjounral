@@ -275,9 +275,12 @@ function extractImageUrls(message) {
   }
 
   // Parse grid image and extract individual URLs
+  // Note: Midjourney bot in DMs typically only shows the grid image
+  // Individual images appear after clicking U1-U4 buttons, which we can't do via API
+  // So we'll try to extract individual URLs if they exist, otherwise return the grid
   const gridUrl = imageUrls.find(url => url.includes('grid'));
   if (gridUrl) {
-    // Extract base URL and generate individual image URLs
+    // Try to extract individual URLs from grid URL pattern
     // Grid: https://cdn.midjourney.com/.../grid_0.png
     // Individual: .../0_0.png, .../0_1.png, .../0_2.png, .../0_3.png
     const baseUrl = gridUrl.replace(/grid_\d+\.png.*$/, '');
@@ -288,6 +291,17 @@ function extractImageUrls(message) {
     // Replace grid URL with individual URLs
     const gridIndex = imageUrls.indexOf(gridUrl);
     imageUrls.splice(gridIndex, 1, ...individualUrls);
+  } else if (imageUrls.length === 1) {
+    // If we only have 1 image and it's not a grid, it might be a single image
+    // Try to check if it's a Discord CDN URL that might have individual variants
+    const singleUrl = imageUrls[0];
+    if (singleUrl.includes('cdn.discordapp.com') || singleUrl.includes('discord.com')) {
+      // This is likely a grid image from Discord CDN
+      // Individual images would be in separate messages after clicking U buttons
+      // Since we can't click buttons, we'll return the single image (grid)
+      // The client will split it
+      console.log(`[Discord] Found single Discord CDN image (likely grid). Individual images require button clicks.`);
+    }
   }
 
   // Remove duplicates
