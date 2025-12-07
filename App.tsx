@@ -867,8 +867,11 @@ const App: React.FC = () => {
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
           // Determine which uploaded image to use for this request (round-robin distribution)
+          // Each image should be used for (requestsNeeded / uploadedImages.length) requests
+          // Formula: imageIndex = Math.floor((requestIdx * uploadedImages.length) / requestsNeeded)
+          // This ensures even distribution: image 0 for requests 0-1, image 1 for requests 2-3, etc.
           const imageIndex = uploadedImages.length > 0 
-            ? Math.floor((requestIdx / requestsNeeded) * uploadedImages.length) 
+            ? Math.floor((requestIdx * uploadedImages.length) / requestsNeeded) 
             : 0;
           
           // Get image-specific style reference URL
@@ -889,8 +892,10 @@ const App: React.FC = () => {
           console.log(`[Midjourney Request ${requestIdx + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`);
           if (imageStyleRefUrl) {
             console.log(`[Midjourney Request ${requestIdx + 1}] Style reference URL: ${imageStyleRefUrl}`);
+            console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Using image-specific styleRefUrl (Image ${imageIndex + 1} of ${uploadedImages.length})`);
           } else {
             console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ No style reference URL found for image ${imageIndex + 1}`);
+            console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ Falling back to settings.styleRefUrl: ${settings.styleRefUrl || 'none'}`);
           }
           
           // Midjourney/Legnext returns an array of images (typically 4)
