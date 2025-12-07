@@ -1209,15 +1209,16 @@ CRITICAL: Keep it minimal. Style reference images handle all visual styling. You
       }
     }
 
-    // Log result for audit
-    if (result.corrected) {
-      console.log(`[PromptGen] Prompt for "${primarySubject}" was corrected (attempt ${result.attempt})`);
-    }
-    if (!result.matched) {
-      console.warn(`[PromptGen] ⚠️ Semantic mismatch: Prompt for "${primarySubject}" may not describe the subject correctly`);
-    }
+      // Log result for audit
+      if (result.corrected) {
+        console.log(`[PromptGen] Prompt for "${primarySubject}" was corrected (attempt ${result.attempt})`);
+      }
+      if (!result.matched) {
+        console.warn(`[PromptGen] ⚠️ Semantic mismatch: Prompt for "${primarySubject}" may not describe the subject correctly`);
+      }
 
-    return result.text;
+      return result.text;
+    }
   }
 
   // Get global variation control for all modes (themeDescription already defined above)
