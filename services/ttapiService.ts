@@ -195,28 +195,37 @@ const cleanPromptForMidjourney = (prompt: string): string => {
   
   // CRITICAL: Remove problematic phrases that Midjourney interprets as parameters
   // These phrases often appear after --ar and cause "Invalid parameter" errors
+  // Use more flexible patterns to catch variations with/without commas, periods, etc.
   const problematicPhrases = [
-    /flat printable page,?\s*/gi,
-    /SINGLE PAGE ONLY,?\s*/gi,
-    /not a scene,?\s*/gi,
-    /not multiple objects,?\s*/gi,
-    /not a still life composition,?\s*/gi,
-    /no 3D objects,?\s*/gi,
-    /no shadows,?\s*/gi,
-    /no depth,?\s*/gi,
-    /no realistic photography,?\s*/gi,
-    /no realistic lighting,?\s*/gi,
-    /flat illustration style,?\s*/gi,
-    /top-down view,?\s*/gi,
-    /printable scrapbook page,?\s*/gi,
-    /digital design,?\s*/gi,
-    /flat lay design,?\s*/gi,
-    /high resolution printable journal page,?\s*/gi
+    /\bflat\s+printable\s+page,?\s*/gi,
+    /\bSINGLE\s+PAGE\s+ONLY,?\s*/gi,
+    /\bnot\s+a\s+scene,?\s*/gi,
+    /\bnot\s+multiple\s+objects,?\s*/gi,
+    /\bnot\s+a\s+still\s+life\s+composition,?\s*/gi,
+    /\bno\s+3D\s+objects,?\s*/gi,
+    /\bno\s+shadows,?\s*/gi,
+    /\bno\s+depth,?\s*/gi,
+    /\bno\s+realistic\s+photography,?\s*/gi,
+    /\bno\s+realistic\s+lighting,?\s*/gi,
+    /\bflat\s+illustration\s+style,?\s*/gi,
+    /\btop-down\s+view,?\s*/gi,
+    /\bprintable\s+scrapbook\s+page,?\s*/gi,
+    /\bdigital\s+design,?\s*/gi,
+    /\bflat\s+lay\s+design,?\s*/gi,
+    /\bhigh\s+resolution\s+printable\s+journal\s+page,?\s*/gi,
+    // Also catch individual words that might be split
+    /\bflat\s+printable\b/gi,
+    /\bSINGLE\s+PAGE\b/gi,
+    /\bONLY,?\b/gi
   ];
   
   problematicPhrases.forEach(phrase => {
     cleaned = cleaned.replace(phrase, '');
   });
+  
+  // Remove any remaining problematic patterns (catch-all for comma-separated lists)
+  // Remove sequences like "word, word, word" that might be interpreted as parameters
+  cleaned = cleaned.replace(/,\s*(?:flat|printable|SINGLE|PAGE|ONLY|not|multiple|objects|still|life|composition|3D|shadows|depth|realistic|photography|lighting|illustration|style|top-down|view|scrapbook|digital|design|lay|high|resolution|journal|page)\b/gi, '');
   
   // Replace commas with periods (commas can be interpreted as parameter separators)
   // But only if they're not part of a URL or parameter
@@ -230,6 +239,10 @@ const cleanPromptForMidjourney = (prompt: string): string => {
   
   // Remove any trailing periods before parameters
   cleaned = cleaned.replace(/\.\s*$/, '');
+  
+  // Final cleanup: remove any double periods or periods followed by spaces before end
+  cleaned = cleaned.replace(/\.\s*\./g, '.');
+  cleaned = cleaned.replace(/\s+\./g, '.');
   
   return cleaned.trim();
 };
@@ -940,12 +953,28 @@ export const generateJournalPage = async (
     
     // CRITICAL: Extract --ar parameter if it exists in the middle of the prompt
     // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
+    // Remove --ar and everything after it (except valid Midjourney parameters)
     let extractedAspectRatio: string | null = null;
     const arMatch = prompt.match(/--ar\s+([^\s]+)/i);
     if (arMatch) {
       extractedAspectRatio = arMatch[1];
-      // Remove --ar from the prompt (we'll add it back at the end)
-      prompt = prompt.replace(/--ar\s+[^\s]+/gi, '').trim();
+      // Find the position of --ar
+      const arIndex = prompt.search(/--ar\s+[^\s]+/i);
+      if (arIndex !== -1) {
+        // Get everything before --ar
+        const beforeAr = prompt.substring(0, arIndex).trim();
+        // Get everything after --ar (including the aspect ratio value)
+        const afterAr = prompt.substring(arIndex + arMatch[0].length).trim();
+        // Check if there are valid Midjourney parameters after --ar (--sref, --sw, etc.)
+        const validParamsMatch = afterAr.match(/^\s*(--sref|--sw|--relax|--turbo|--fast|--v\s+\d+|--style\s+\w+)/i);
+        if (validParamsMatch) {
+          // Keep only valid parameters, remove all other text
+          prompt = (beforeAr + ' ' + afterAr.substring(afterAr.search(validParamsMatch[0]))).trim();
+        } else {
+          // Remove everything after --ar (no valid parameters found)
+          prompt = beforeAr;
+        }
+      }
     }
     
     // Clean the prompt FIRST to remove problematic phrases that Midjourney interprets as parameters
