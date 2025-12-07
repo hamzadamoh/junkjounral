@@ -660,25 +660,31 @@ const App: React.FC = () => {
       let mismatchCount = 0;
       
       // Duplicate detection: check for repeated PRIMARY SUBJECT headers
-      const subjectMap = new Map<string, number[]>();
-      requestPrompts.forEach((prompt, idx) => {
-        const match = prompt.match(/^PRIMARY SUBJECT:\s*(.+?)(?:\.|$)/i);
-        if (match) {
-          const subject = match[1].toLowerCase().trim();
-          if (!subjectMap.has(subject)) {
-            subjectMap.set(subject, []);
+      // Skip duplicate detection for Image Theme Expansion mode (theme is intentionally the same)
+      const isImageThemeModeForDuplicateCheck = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
+      if (!isImageThemeModeForDuplicateCheck) {
+        const subjectMap = new Map<string, number[]>();
+        requestPrompts.forEach((prompt, idx) => {
+          const match = prompt.match(/^PRIMARY SUBJECT:\s*(.+?)(?:\.|$)/i);
+          if (match) {
+            const subject = match[1].toLowerCase().trim();
+            if (!subjectMap.has(subject)) {
+              subjectMap.set(subject, []);
+            }
+            subjectMap.get(subject)!.push(idx);
           }
-          subjectMap.get(subject)!.push(idx);
-        }
-      });
-      
-      // Log duplicates
-      subjectMap.forEach((indices, subject) => {
-        if (indices.length > 1) {
-          console.warn(`[Duplicate Detection] Subject "${subject}" appears in variations: ${indices.join(', ')}`);
-          addLog(`⚠️ Duplicate subject detected: "${subject}" in variations ${indices.join(', ')}`, 'error');
-        }
-      });
+        });
+        
+        // Log duplicates
+        subjectMap.forEach((indices, subject) => {
+          if (indices.length > 1) {
+            console.warn(`[Duplicate Detection] Subject "${subject}" appears in variations: ${indices.join(', ')}`);
+            addLog(`⚠️ Duplicate subject detected: "${subject}" in variations ${indices.join(', ')}`, 'error');
+          }
+        });
+      } else {
+        console.log(`[Duplicate Detection] Skipping duplicate check for Image Theme Expansion mode (theme is intentionally the same: "${primarySubjectForExpansion}")`);
+      }
       
       // Check console logs for correction warnings (approximate count)
       const correctionWarnings = consoleLogs.filter(log => log.message.includes('was corrected')).length;
