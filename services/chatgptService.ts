@@ -1990,8 +1990,8 @@ function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
     const words = token.split(/\s+/);
     // Check if any style word appears in the prompt
     for (const word of words) {
-      if (word.length > 3 && promptLower.includes(word)) {
-        throw new Error(`mj_prompt contains style token "${word}" from style_tokens. Prompt should only contain subject description.`);
+      if (word.length > 0 && promptLower.includes(word)) {
+        throw new Error('mj_prompt contains style token');
       }
     }
   }
@@ -1999,49 +1999,47 @@ function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
 
 /**
  * Generates a Midjourney-optimized prompt package
- * @param imageOrTheme - Either an ImageAnalysisResponse (from analyzeReferenceImage) or a theme string
- * @param batchSeed - Optional batch seed (if not provided, will generate one)
- * @param variationIndex - Variation number (0-based or 1-based, will be normalized)
+ * @param imageAnalysisOrTheme - Either an ImageAnalysisResponse (from analyzeReferenceImage) or a theme string
+ * @param batch_seed - Optional batch seed (if null, will generate a random positive integer)
+ * @param variation_index - Variation number
  * @param sref_url - Optional style reference URL
  * @param promptService - Service to use ('openai' or 'openrouter')
  * @returns MJPackage with all required fields
  */
 export async function generateMJPackage(
-  imageOrTheme: ImageAnalysisResponse | string,
-  batchSeed: number | null = null,
-  variationIndex: number,
-  sref_url: string | null = null,
-  promptService: 'openai' | 'openrouter' = 'openai'
+  imageAnalysisOrTheme: any,
+  batch_seed: number | null,
+  variation_index: number,
+  sref_url: string | null,
+  promptService?: 'openai' | 'openrouter'
 ): Promise<MJPackage> {
-  // Normalize variation index (ensure it's 1-based)
-  const normalizedVariationIndex = variationIndex < 1 ? 1 : variationIndex;
-  
-  // Compute batch seed (use provided, or generate from timestamp)
-  const finalBatchSeed = batchSeed || Math.floor(Date.now() / 1000) % 1000000;
+  // Generate batch_seed if null (random positive integer > 0)
+  const finalBatchSeed = batch_seed !== null ? batch_seed : Math.floor(Math.random() * 1000000) + 1;
   
   // Compute Midjourney seed: SEED = batch_seed * 1000 + variation_index
-  const mjSeed = finalBatchSeed * 1000 + normalizedVariationIndex;
+  const finalSeed = finalBatchSeed * 1000 + variation_index;
   
-  // Determine API service
-  const useOpenRouter = promptService === 'openrouter';
+  // Determine API service (default to 'openai' if not provided)
+  const service = promptService || 'openai';
+  const useOpenRouter = service === 'openrouter';
   const apiKey = useOpenRouter ? getOpenRouterApiKey() : getOpenAIApiKey();
   const apiUrl = useOpenRouter ? OPENROUTER_API_URL : OPENAI_API_URL;
   
   if (!apiKey) {
-    throw new Error(`${promptService === 'openrouter' ? 'OpenRouter' : 'OpenAI'} API key is not configured.`);
+    throw new Error(`${service === 'openrouter' ? 'OpenRouter' : 'OpenAI'} API key is not configured.`);
   }
   
   // Extract data from image analysis or theme
   let cluster: ImageCluster | null = null;
   let themeDescription = '';
   
-  if (typeof imageOrTheme === 'string') {
+  if (typeof imageAnalysisOrTheme === 'string') {
     // Theme string provided
-    themeDescription = imageOrTheme;
+    themeDescription = imageAnalysisOrTheme;
   } else {
     // Image analysis provided
-    if (imageOrTheme.clusters && imageOrTheme.clusters.length > 0) {
-      cluster = imageOrTheme.clusters[0];
+    if (imageAnalysisOrTheme.clusters && imageAnalysisOrTheme.clusters.length > 0) {
+      cluster = imageAnalysisOrTheme.clusters[0];
       themeDescription = cluster.theme || '';
     } else {
       throw new Error('Invalid image analysis: no clusters found');
@@ -2111,8 +2109,7 @@ Generate the JSON package with:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        response_format: { type: 'json_object' },
-        temperature: 0.2, // Low temperature for deterministic style/palette
+        temperature: 0.2,
         max_tokens: 200
       })
     });
@@ -2147,8 +2144,8 @@ Generate the JSON package with:
     // Build mj_ref (style_tokens + palette_tokens)
     const mj_ref = `${llmOutput.style_tokens}, ${llmOutput.palette_tokens}`;
     
-    // Build mj_flags
-    const mj_flags = formatMJFlags(mj_ref, sref_url, mjSeed);
+    // Build mj_flags with defaults: stylize=50, sref_weight=0.7, chaos=10
+    const mj_flags = formatMJFlags(mj_ref, sref_url, finalSeed, 50, 0.7, 10);
     
     // Construct final package
     const package_: MJPackage = {
@@ -2157,7 +2154,7 @@ Generate the JSON package with:
       palette_tokens: llmOutput.palette_tokens.trim(),
       sref_url: sref_url,
       batch_seed: finalBatchSeed,
-      variation_index: normalizedVariationIndex,
+      variation_index: variation_index,
       mj_prompt: llmOutput.mj_prompt.trim(),
       mj_ref: mj_ref.trim(),
       mj_flags: mj_flags
@@ -2165,7 +2162,6 @@ Generate the JSON package with:
     
     return package_;
   } catch (error: any) {
-    console.error('[generateMJPackage] Error:', error);
     throw new Error(`Failed to generate MJ package: ${error.message || 'Unknown error'}`);
   }
 }
