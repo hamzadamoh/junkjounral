@@ -972,14 +972,17 @@ const App: React.FC = () => {
           let imageStyleRefUrl: string | undefined;
           let imageIndex = 0;
           
-          if (isImageThemeExpansion && singleImageForTheme) {
+          // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
+          const isImageThemeMode = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
+          
+          if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
             // Image Theme Expansion mode: use single image's style reference
             // First try singleImageForTheme.styleRefUrl, then fallback to settings.styleRefUrl
             // (settings.styleRefUrl is set during image upload)
-            imageStyleRefUrl = singleImageForTheme.styleRefUrl || settings.styleRefUrl;
+            imageStyleRefUrl = singleImageForTheme?.styleRefUrl || settings.styleRefUrl;
             imageIndex = 0; // Always use the single image
             console.log(`[Midjourney Request ${requestIdx + 1}] Using Image Theme Expansion mode - single image style reference`);
-            console.log(`[Midjourney Request ${requestIdx + 1}] singleImageForTheme.styleRefUrl: ${singleImageForTheme.styleRefUrl || 'undefined'}`);
+            console.log(`[Midjourney Request ${requestIdx + 1}] singleImageForTheme?.styleRefUrl: ${singleImageForTheme?.styleRefUrl || 'undefined'}`);
             console.log(`[Midjourney Request ${requestIdx + 1}] settings.styleRefUrl: ${settings.styleRefUrl || 'undefined'}`);
             console.log(`[Midjourney Request ${requestIdx + 1}] Final imageStyleRefUrl: ${imageStyleRefUrl || 'undefined'}`);
           } else if (uploadedImages.length > 0) {
@@ -1013,12 +1016,12 @@ const App: React.FC = () => {
           const imageSpecificSettings = {
             ...settings,
             styleRefUrl: imageStyleRefUrl || settings.styleRefUrl,
-            skipStyleReference: isImageThemeExpansion && singleImageForTheme ? true : false
+            skipStyleReference: isImageThemeMode ? true : false
           };
           
           let imageTheme = 'Unknown';
-          if (isImageThemeExpansion && singleImageForTheme) {
-            imageTheme = singleImageForTheme.theme || 'Unknown';
+          if (isImageThemeMode) {
+            imageTheme = singleImageForTheme?.theme || selectedTheme?.basePrompt || 'Unknown';
             console.log(`[Midjourney Request ${requestIdx + 1}] Using Image Theme Expansion mode (Theme: "${imageTheme}")`);
           } else if (uploadedImages.length > 0) {
             imageTheme = uploadedImages[imageIndex]?.theme || uploadedImages[imageIndex]?.fullAnalysis?.clusters?.[0]?.theme || 'Unknown';
@@ -1027,17 +1030,18 @@ const App: React.FC = () => {
           
           if (imageStyleRefUrl) {
             console.log(`[Midjourney Request ${requestIdx + 1}] Style reference URL: ${imageStyleRefUrl}`);
-            if (isImageThemeExpansion && singleImageForTheme) {
-              console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Using Image Theme Expansion styleRefUrl`);
+            if (isImageThemeMode) {
+              console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Image Theme Expansion mode - styleRefUrl available (but will be skipped, relying on detailed prompt only)`);
             } else {
               console.log(`[Midjourney Request ${requestIdx + 1}] ✅ Using image-specific styleRefUrl (Image ${imageIndex + 1} of ${uploadedImages.length})`);
             }
           } else {
-            console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ No style reference URL found`);
-            if (isImageThemeExpansion && singleImageForTheme) {
-              console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ Image Theme Expansion mode but no styleRefUrl - check image upload`);
-            } else {
+            // Only show warning if NOT in Image Theme Expansion mode (where skipping styleRefUrl is intentional)
+            if (!isImageThemeMode) {
+              console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ No style reference URL found`);
               console.warn(`[Midjourney Request ${requestIdx + 1}] ⚠️ Falling back to settings.styleRefUrl: ${settings.styleRefUrl || 'none'}`);
+            } else {
+              console.log(`[Midjourney Request ${requestIdx + 1}] ℹ️ Image Theme Expansion mode - styleRefUrl intentionally skipped (relying on detailed prompt only)`);
             }
           }
           
