@@ -1978,6 +1978,8 @@ export function formatMJFlags(
 
 /**
  * Validates that mj_prompt contains no style tokens
+ * Uses word boundaries to avoid false positives on short/common words
+ * Handles symbols (e.g., &) and multi-word phrases correctly
  * @param mj_prompt - The prompt to validate
  * @param style_tokens - Style tokens to check against
  * @throws Error if style tokens are found in prompt
@@ -1987,10 +1989,20 @@ function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
   const promptLower = mj_prompt.toLowerCase();
   
   for (const token of styleWords) {
-    const words = token.split(/\s+/);
-    // Check if any style word appears in the prompt
+    // Handle multi-word phrases and symbols (e.g., "ink & watercolor", "hand-drawn")
+    // Split by common separators: spaces, &, -, and other punctuation
+    // Keep words that are meaningful (length > 2 to avoid false positives on "a", "in", "on", etc.)
+    const words = token.split(/[\s&\-]+/).filter(w => w.length > 2);
+    
+    // Check if any style word appears as a whole word in the prompt
     for (const word of words) {
-      if (word.length > 0 && promptLower.includes(word)) {
+      // Escape special regex characters in the word
+      const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // Use word boundary regex to match whole words only
+      // \b matches word boundaries (between word and non-word characters)
+      const wordBoundaryRegex = new RegExp(`\\b${escapedWord}\\b`, 'i');
+      if (wordBoundaryRegex.test(promptLower)) {
         throw new Error('mj_prompt contains style token');
       }
     }
@@ -2004,6 +2016,7 @@ function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
  * @param variation_index - Variation number
  * @param sref_url - Optional style reference URL
  * @param promptService - Service to use ('openai' or 'openrouter')
+ * @param callerProvidedSeed - Optional seed provided by caller for reproducible batches (overrides batch_seed if provided)
  * @returns MJPackage with all required fields
  */
 export async function generateMJPackage(
@@ -2011,10 +2024,13 @@ export async function generateMJPackage(
   batch_seed: number | null,
   variation_index: number,
   sref_url: string | null,
-  promptService?: 'openai' | 'openrouter'
+  promptService?: 'openai' | 'openrouter',
+  callerProvidedSeed?: number
 ): Promise<MJPackage> {
-  // Generate batch_seed if null (random positive integer > 0)
-  const finalBatchSeed = batch_seed !== null ? batch_seed : Math.floor(Math.random() * 1000000) + 1;
+  // Use callerProvidedSeed if provided (for reproducible batches), otherwise use batch_seed or generate random
+  const finalBatchSeed = callerProvidedSeed !== undefined 
+    ? callerProvidedSeed 
+    : (batch_seed !== null ? batch_seed : Math.floor(Math.random() * 1000000) + 1);
   
   // Compute Midjourney seed: SEED = batch_seed * 1000 + variation_index
   const finalSeed = finalBatchSeed * 1000 + variation_index;
