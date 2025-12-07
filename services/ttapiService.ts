@@ -1142,8 +1142,47 @@ export const generateJournalPage = async (
     }
 
     // Convert URLs to base64
-    // If we have exactly 1 image, it's likely a grid - split it into 4 tiles
+    // If we have exactly 1 image, it's likely a grid - try Discord DM first to get individual images
     if (imageUrls.length === 1) {
+      console.log(`[Ttapi] 📋 Got grid image. Attempting to get individual images from Discord DM...`);
+      
+      try {
+        const gridImageUrl = imageUrls[0];
+        const completedAt = new Date().toISOString();
+        
+        // Try to get individual images from Discord DM
+        const dmResponse = await fetch('/api/discord/poll-dm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: prompt,
+            jobId: jobId,
+            gridImageUrl: gridImageUrl,
+            completedAt: completedAt
+          })
+        });
+
+        if (dmResponse.ok) {
+          const dmResult = await dmResponse.json();
+          if (dmResult.images && dmResult.images.length > 0) {
+            console.log(`[Ttapi] ✅ Got ${dmResult.images.length} individual image(s) from Discord DM!`);
+            // Convert Discord DM URLs to base64
+            const base64Images = await convertUrlsToBase64(dmResult.images);
+            console.log(`[Ttapi] ✅ Successfully converted ${base64Images.length} image(s) to base64`);
+            return base64Images;
+          } else {
+            console.warn(`[Ttapi] ⚠️ Discord DM polling returned no images, using grid image`);
+          }
+        } else if (dmResponse.status === 404) {
+          console.log(`[Ttapi] ℹ️ No DM channel found yet. Using grid image (will split client-side).`);
+        } else {
+          console.warn(`[Ttapi] ⚠️ Discord DM polling failed (${dmResponse.status}), using grid image`);
+        }
+      } catch (dmError: any) {
+        console.warn(`[Ttapi] ⚠️ Discord DM polling error, using grid image:`, dmError.message);
+      }
+      
+      // Fallback: split grid image client-side
       console.log(`[Ttapi] Detected grid image - splitting into 4 individual tiles...`);
       const base64Images = await splitGridImage(imageUrls[0]);
       console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
