@@ -802,6 +802,36 @@ const pollTaskUntilComplete = async (
 };
 
 /**
+ * Converts image URLs to base64 data URLs
+ */
+const convertUrlsToBase64 = async (imageUrls: string[]): Promise<string[]> => {
+  const convertPromises = imageUrls.map(async (url) => {
+    try {
+      const imageResponse = await fetch(url);
+      const blob = await imageResponse.blob();
+      
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to convert image to data URL'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error(`Failed to convert image URL ${url}:`, error);
+      throw error;
+    }
+  });
+  
+  return Promise.all(convertPromises);
+};
+
+/**
  * Splits a grid image into 4 individual images (2x2 grid)
  * Returns an array of 4 base64 data URLs
  */
@@ -1046,50 +1076,12 @@ export const generateJournalPage = async (
       throw new Error('Failed to create ttapi.io task after retries');
     }
 
-    // Try to get individual images from Discord DM using REST API (Vercel-compatible)
-    // This avoids needing a persistent Gateway server
+    // Poll Ttapi until task is complete - returns image URLs (may be grid or individual)
+    console.log(`[Ttapi] 📡 Polling Ttapi for task completion...`);
+    
     let imageUrls: string[] = [];
-    const useDiscordDM = import.meta.env.VITE_USE_DISCORD_DM === 'true' || import.meta.env.VITE_DISCORD_TOKEN;
     
-    if (useDiscordDM) {
-      console.log(`[Ttapi] 🔄 Attempting to get individual images from Discord DM...`);
-      try {
-        // Poll Discord DM via Vercel serverless function
-        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const dmResponse = await fetch('/api/discord/poll-dm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: prompt,
-            jobId: jobId,
-            requestId: requestId
-          })
-        });
-
-        if (dmResponse.ok) {
-          const dmResult = await dmResponse.json();
-          if (dmResult.images && dmResult.images.length > 0) {
-            imageUrls = dmResult.images;
-            console.log(`[Ttapi] ✅ Got ${imageUrls.length} individual image(s) from Discord DM!`);
-          } else {
-            console.warn(`[Ttapi] ⚠️ Discord DM polling returned no images, falling back to Ttapi polling`);
-          }
-        } else if (dmResponse.status === 404) {
-          // No DM channel yet - Ttapi will create it
-          console.log(`[Ttapi] ℹ️ No DM channel found yet. Ttapi will create it. Falling back to Ttapi polling.`);
-        } else {
-          console.warn(`[Ttapi] ⚠️ Discord DM polling failed (${dmResponse.status}), falling back to Ttapi polling`);
-        }
-      } catch (dmError: any) {
-        console.warn(`[Ttapi] ⚠️ Discord DM polling error, falling back to Ttapi polling:`, dmError.message);
-      }
-    }
-    
-    // Fallback to Ttapi polling if Discord DM didn't work
-    if (imageUrls.length === 0) {
-      console.log(`[Ttapi] 📡 Using Ttapi direct polling (fallback)...`);
-      
-      // Poll until complete - returns all image URLs
+    // Poll until complete - returns all image URLs
       // Add stagger delay based on variationIndex to avoid simultaneous polling
       // Each request waits (variationIndex * 500ms) before starting to poll
       const staggerDelay = (variationIndex ?? 0) * 500; // 0ms, 500ms, 1000ms, 1500ms, etc.
