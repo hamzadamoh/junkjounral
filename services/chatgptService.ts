@@ -866,7 +866,8 @@ export const generatePromptWithChatGPT = async (
   masterSubjectList?: string[],
   usedSubjects?: Set<string>,
   primarySubjectOverride?: string, // Optional: override subject selection for swapping
-  recursionDepth: number = 0 // NEW: explicit recursion depth counter
+  recursionDepth: number = 0, // NEW: explicit recursion depth counter
+  imageClusterData?: any // Optional: full image cluster data from analysis (for Image Theme Expansion)
 ): Promise<string | null> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
@@ -1052,8 +1053,54 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
       const usedSubjectsList = usedSubjects ? Array.from(usedSubjects).filter(s => !s.includes('##FAILED')).map(s => s.replace('##FAILED', '').toLowerCase()) : [];
       const usedSubjectsText = usedSubjectsList.length > 0 ? `\n\n⚠️ ALREADY USED SUBJECTS (DO NOT REPEAT): ${usedSubjectsList.slice(-10).join(', ')}` : '';
       
+      // If we have full image cluster data, use it to extract all style parameters
+      const hasFullClusterData = imageClusterData && imageClusterData.clusters && imageClusterData.clusters[0];
+      const cluster = hasFullClusterData ? imageClusterData.clusters[0] : null;
+      
+      // Extract style parameters from cluster or customArtStyle
+      const basePromptExample = cluster?.recommended_prompt_example || '';
+      const colorPalette = cluster?.palette ? cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ') : '';
+      const technique = cluster?.technique || '';
+      const vibe = cluster?.vibe || '';
+      const textures = cluster?.dominant_textures ? cluster.dominant_textures.join(', ') : '';
+      const originalStyle = cluster?.style || customArtStyle || '';
+      
       // User provided PRIMARY SUBJECT + detected style → Expand on PRIMARY SUBJECT while maintaining style
-      const systemPrompt = `You are a prompt generator that expands on a PRIMARY SUBJECT (theme) while maintaining a specific detected style/vibe from a reference image.
+      const systemPrompt = hasFullClusterData 
+        ? `You are a prompt generator that creates variations of an image while maintaining EXACT style parameters.
+
+YOUR TASK:
+1. You have a BASE PROMPT that recreates the original image with all its style parameters (colors, technique, vibe, textures, composition, lighting)
+2. For EACH variation, generate a prompt that:
+   - Uses a DIFFERENT subject than the original and previous variations
+   - Maintains EXACTLY the same style parameters (colors, technique, vibe, textures, composition style, lighting)
+   - Follows the same prompt structure and format as the base prompt
+3. The style parameters are FIXED - you can ONLY change the subject/content, everything else must stay identical
+
+BASE PROMPT (recreates original image):
+${basePromptExample}
+
+FIXED STYLE PARAMETERS (MUST be preserved in ALL variations):
+- Technique: ${technique}
+- Color Palette: ${colorPalette}
+- Vibe/Atmosphere: ${vibe}
+- Textures: ${textures}
+- Style Description: ${originalStyle}
+
+RULES:
+1. Extract the SUBJECT from the base prompt and replace it with a DIFFERENT subject that fits the theme
+2. Keep ALL style parameters EXACTLY the same (colors, technique, vibe, textures, composition, lighting)
+3. Maintain the same prompt structure and format
+4. NEVER repeat subjects across variations
+5. The prompt should be detailed enough to recreate the exact same style with the new subject
+
+OUTPUT FORMAT:
+Line 1: PRIMARY SUBJECT: ${primarySubject}
+Line 2: A detailed prompt (20-30 words) that:
+   - Describes a DIFFERENT subject than the original
+   - Includes ALL the fixed style parameters (technique, colors, vibe, textures)
+   - Follows the same structure as the base prompt`
+        : `You are a prompt generator that expands on a PRIMARY SUBJECT (theme) while maintaining a specific detected style/vibe from a reference image.
 
 YOUR TASK:
 1. PRIMARY SUBJECT is the THEME (e.g., "Farmhouse Christmas", "Enchanted Garden Fantasy", "Winter Scene") - analyze it to understand what subjects fit this theme
@@ -1097,7 +1144,46 @@ Note: These are examples showing the format. You must generate DIFFERENT subject
 
 Output format: "PRIMARY SUBJECT: [theme]. [Expanded description with DIFFERENT specific subject (that fits the theme) AND style elements from detected style]"`;
 
-      const userPrompt = `Generate a prompt for variation ${variationNumber} that expands on the PRIMARY SUBJECT while maintaining the detected style/vibe.
+      const userPrompt = hasFullClusterData
+        ? `Generate a prompt for variation ${variationNumber} that uses a DIFFERENT subject but maintains EXACTLY the same style parameters.
+
+BASE PROMPT (original image):
+${basePromptExample}
+
+FIXED STYLE PARAMETERS (MUST be identical in your output):
+- Technique: ${technique}
+- Color Palette: ${colorPalette}
+- Vibe/Atmosphere: ${vibe}
+- Textures: ${textures}
+- Style: ${originalStyle}
+
+INSTRUCTIONS:
+1. **CRITICAL**: This is variation ${variationNumber} - use a DIFFERENT subject than the original image and variations 1-${variationNumber - 1}
+2. **EXTRACT THE SUBJECT** from the base prompt and replace it with a different subject that fits the "${primarySubject}" theme
+3. **KEEP ALL STYLE PARAMETERS IDENTICAL**: 
+   - Use the EXACT same technique: ${technique}
+   - Use the EXACT same colors: ${colorPalette}
+   - Use the EXACT same vibe: ${vibe}
+   - Use the EXACT same textures: ${textures}
+   - Maintain the same composition style, lighting, and overall structure
+4. **NEVER repeat subjects**: If previous variations used any subject, use a DIFFERENT subject that still fits the theme
+5. Follow the same prompt structure and format as the base prompt
+
+OUTPUT FORMAT:
+Line 1: PRIMARY SUBJECT: ${primarySubject}
+Line 2: A detailed prompt (20-30 words) that:
+   - Describes a DIFFERENT subject than the original (extract and replace the subject from base prompt)
+   - Includes ALL the fixed style parameters EXACTLY as specified above
+   - Follows the same structure and format as the base prompt
+
+${usedSubjectsText}
+
+CRITICAL FOR VARIATION ${variationNumber}: 
+- Change ONLY the subject - keep ALL style parameters identical
+- Generate a DIFFERENT, UNIQUE subject that fits the "${primarySubject}" theme
+- DO NOT use any subject from previous variations
+- Think creatively about what subjects fit "${primarySubject}" while maintaining the exact same style!`
+        : `Generate a prompt for variation ${variationNumber} that expands on the PRIMARY SUBJECT while maintaining the detected style/vibe.
 
 PRIMARY SUBJECT (THEME): ${primarySubject}
 
@@ -1583,7 +1669,8 @@ Create a DISTINCT and UNIQUE design with specific visual details, colors, mood, 
       masterSubjectList,
       usedSubjects,
       nextSubject,
-      recursionDepth + 1
+      recursionDepth + 1,
+      imageClusterData // Pass imageClusterData to recursive call
     );
   }
 

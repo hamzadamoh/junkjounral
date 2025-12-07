@@ -613,6 +613,11 @@ const App: React.FC = () => {
           : settings.primarySubject?.trim() || undefined;
         console.log(`[${serviceName} Request ${i + 1}] primarySubjectToUse: "${primarySubjectToUse}", isImageThemeModeForRequest: ${isImageThemeModeForRequest}`);
         
+        // For Image Theme Expansion: pass full image cluster data to enable base prompt generation
+        const imageClusterData = isImageThemeModeForRequest && singleImageForTheme?.fullAnalysis 
+          ? singleImageForTheme.fullAnalysis 
+          : undefined;
+        
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
@@ -627,7 +632,9 @@ const App: React.FC = () => {
           settings.promptService || 'openai',
           imageSubjectList, // Use image-specific subject list
           usedSubjects,
-          primarySubjectToUse // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
+          primarySubjectToUse, // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
+          0, // recursionDepth
+          imageClusterData // Pass full image cluster data for Image Theme Expansion
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -829,6 +836,11 @@ const App: React.FC = () => {
           }
         }
         
+        // For Image Theme Expansion: pass full image cluster data to enable base prompt generation
+        const imageClusterDataForPoll = isImageThemeMode && singleImageForTheme?.fullAnalysis 
+          ? singleImageForTheme.fullAnalysis 
+          : undefined;
+        
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
@@ -844,7 +856,8 @@ const App: React.FC = () => {
           imageSubjectList, // Use image-specific subject list (empty for Image Theme Expansion)
           usedSubjects,
           primarySubjectForExpansion, // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
-          0
+          0, // recursionDepth
+          imageClusterDataForPoll // Pass full image cluster data for Image Theme Expansion
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for variation ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
