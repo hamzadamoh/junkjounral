@@ -1961,38 +1961,59 @@ export function formatMJFlags(
   
   // Add --sref if URL is provided
   if (sref_url) {
-    flags.push(`--sref ${sref_url} --sref-weight ${sref_weight}`);
+    // Ensure sref_weight is formatted consistently (avoid floating point precision issues)
+    const formattedWeight = parseFloat(sref_weight.toFixed(1));
+    flags.push(`--sref ${sref_url} --sref-weight ${formattedWeight}`);
   }
   
-  // Add seed
-  flags.push(`--seed ${seed}`);
+  // Add seed (ensure it's an integer)
+  flags.push(`--seed ${Math.floor(seed)}`);
   
-  // Add stylize
-  flags.push(`--stylize ${stylize}`);
+  // Add stylize (ensure it's an integer)
+  flags.push(`--stylize ${Math.floor(stylize)}`);
   
-  // Add chaos
-  flags.push(`--chaos ${chaos}`);
+  // Add chaos (ensure it's an integer)
+  flags.push(`--chaos ${Math.floor(chaos)}`);
   
   return flags.join(' ');
 }
 
 /**
+ * Normalizes a string for comparison: lowercase, trim, normalize & to 'and', remove extra punctuation
+ * @param str - String to normalize
+ * @returns Normalized string
+ */
+function normalizeForComparison(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/&/g, 'and')  // Normalize & to 'and'
+    .replace(/[^\w\s]/g, ' ')  // Replace punctuation with spaces
+    .replace(/\s+/g, ' ')  // Normalize whitespace
+    .trim();
+}
+
+/**
  * Validates that mj_prompt contains no style tokens
  * Uses word boundaries to avoid false positives on short/common words
- * Handles symbols (e.g., &) and multi-word phrases correctly
+ * Handles symbols (e.g., &), hyphens, plurals, and multi-word phrases correctly
  * @param mj_prompt - The prompt to validate
  * @param style_tokens - Style tokens to check against
  * @throws Error if style tokens are found in prompt
  */
 function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
-  const styleWords = style_tokens.toLowerCase().split(',').map(s => s.trim());
-  const promptLower = mj_prompt.toLowerCase();
+  // Normalize style_tokens: split on comma, trim, remove empties, normalize each token
+  const normalizedStyleTokens = style_tokens
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(normalizeForComparison);
   
-  for (const token of styleWords) {
-    // Handle multi-word phrases and symbols (e.g., "ink & watercolor", "hand-drawn")
-    // Split by common separators: spaces, &, -, and other punctuation
-    // Keep words that are meaningful (length > 2 to avoid false positives on "a", "in", "on", etc.)
-    const words = token.split(/[\s&\-]+/).filter(w => w.length > 2);
+  const normalizedPrompt = normalizeForComparison(mj_prompt);
+  
+  // Check each normalized style token
+  for (const normalizedToken of normalizedStyleTokens) {
+    // Split token into words (handle multi-word phrases)
+    const words = normalizedToken.split(/\s+/).filter(w => w.length > 2);
     
     // Check if any style word appears as a whole word in the prompt
     for (const word of words) {
@@ -2002,7 +2023,7 @@ function validateMJPrompt(mj_prompt: string, style_tokens: string): void {
       // Use word boundary regex to match whole words only
       // \b matches word boundaries (between word and non-word characters)
       const wordBoundaryRegex = new RegExp(`\\b${escapedWord}\\b`, 'i');
-      if (wordBoundaryRegex.test(promptLower)) {
+      if (wordBoundaryRegex.test(normalizedPrompt)) {
         throw new Error('mj_prompt contains style token');
       }
     }
@@ -2025,6 +2046,11 @@ export async function generateMJPackage(
   sref_url: string | null,
   promptService?: 'openai' | 'openrouter'
 ): Promise<MJPackage> {
+  // Validate variation_index is numeric and >= 0
+  if (typeof variation_index !== 'number' || variation_index < 0 || !Number.isInteger(variation_index)) {
+    throw new Error('variation_index must be a non-negative integer');
+  }
+  
   // Generate batch_seed if null (random positive integer > 0)
   const finalBatchSeed = batch_seed !== null ? batch_seed : Math.floor(Math.random() * 1000000) + 1;
   
@@ -2107,32 +2133,79 @@ Generate the JSON package with:
 - mj_prompt: Subject only (8-12 words), NO style descriptors`;
   }
   
-  try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        ...(useOpenRouter ? { 'HTTP-Referer': window.location.origin } : {})
-      },
-      body: JSON.stringify({
-        model: useOpenRouter ? 'openai/gpt-4o-mini' : 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.2,
-        max_tokens: 200
-      })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+  // Retry logic with exponential backoff for network/API errors
+  const maxRetries = 3;
+  let data: ChatGPTResponse | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, attempt - 1) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          ...(useOpenRouter ? { 'HTTP-Referer': window.location.origin } : {})
+        },
+        body: JSON.stringify({
+          model: useOpenRouter ? 'openai/gpt-4o-mini' : 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2,
+          max_tokens: 200
+        })
+      });
+      
+      if (!response.ok) {
+        // Handle specific HTTP errors
+        if (response.status === 401) {
+          throw new Error('API key is invalid or expired');
+        } else if (response.status === 429) {
+          // Rate limited - retry if attempts remain
+          if (attempt < maxRetries) {
+            continue;
+          }
+          throw new Error('Rate limit exceeded');
+        } else if (response.status >= 500) {
+          // Server error - retry if attempts remain
+          if (attempt < maxRetries) {
+            continue;
+          }
+          throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      }
+      
+      // Success - parse response and break
+      data = await response.json();
+      break;
+    } catch (error: any) {
+      // Don't retry on non-retryable errors (401, validation errors, parse errors)
+      if (error.message?.includes('invalid') || error.message?.includes('expired') || error.message?.includes('parse') || error.message?.includes('Failed to parse')) {
+        throw error;
+      }
+      
+      // If this was the last attempt, throw the error
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Otherwise continue to retry
+      continue;
     }
-    
-    const data: ChatGPTResponse = await response.json();
-    if (!data.choices || data.choices.length === 0) {
+  }
+  
+  try {
+    if (!data || !data.choices || data.choices.length === 0) {
       throw new Error('No response from API');
     }
     
@@ -2150,20 +2223,33 @@ Generate the JSON package with:
       throw new Error('Failed to parse image analysis response');
     }
     
-    // Validate mj_prompt doesn't contain style tokens
-    validateMJPrompt(llmOutput.mj_prompt, llmOutput.style_tokens);
+    // Normalize and clean style_tokens and palette_tokens (remove extra spaces, trailing commas)
+    const normalizedStyleTokens = llmOutput.style_tokens
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0)
+      .join(', ');
     
-    // Build mj_ref (style_tokens + palette_tokens)
-    const mj_ref = `${llmOutput.style_tokens}, ${llmOutput.palette_tokens}`;
+    const normalizedPaletteTokens = llmOutput.palette_tokens
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0)
+      .join(', ');
+    
+    // Validate mj_prompt doesn't contain style tokens (use normalized version)
+    validateMJPrompt(llmOutput.mj_prompt, normalizedStyleTokens);
+    
+    // Build mj_ref (normalized style_tokens + palette_tokens)
+    const mj_ref = `${normalizedStyleTokens}, ${normalizedPaletteTokens}`;
     
     // Build mj_flags with defaults: stylize=50, sref_weight=0.7, chaos=10
     const mj_flags = formatMJFlags(mj_ref, sref_url, finalSeed, 50, 0.7, 10);
     
-    // Construct final package
+    // Construct final package (use normalized tokens)
     const package_: MJPackage = {
       subject_suggestion: llmOutput.subject_suggestion.trim(),
-      style_tokens: llmOutput.style_tokens.trim(),
-      palette_tokens: llmOutput.palette_tokens.trim(),
+      style_tokens: normalizedStyleTokens,
+      palette_tokens: normalizedPaletteTokens,
       sref_url: sref_url,
       batch_seed: finalBatchSeed,
       variation_index: variation_index,
