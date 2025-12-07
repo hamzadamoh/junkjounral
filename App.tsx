@@ -638,9 +638,6 @@ const App: React.FC = () => {
           ? singleImageForTheme.fullAnalysis 
           : undefined;
         
-        // Check if SREF mode is active
-        const isSrefModeForRequest = selectedTheme?.id === 'sref-style-match' || isSrefMode;
-        
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
