@@ -502,7 +502,59 @@ const App: React.FC = () => {
         let imageStyle = settings.customArtStyle || '';
         let imageSubjectList: string[] = [];
         
-        if (uploadedImages.length > 0 && requestsPerImage > 0) {
+        // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
+        const isImageThemeModeForRequest = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
+        
+        // For Image Theme Expansion mode: use the single image's theme and style for all variations
+        if (isImageThemeModeForRequest && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
+          imageTheme = singleImageForTheme?.theme || selectedTheme?.basePrompt || imageTheme;
+          console.log(`[${serviceName} Request ${i + 1}] Image Theme Expansion mode - imageTheme: "${imageTheme}"`);
+          
+          // Build style description from single image analysis or use settings.customArtStyle
+          if (singleImageForTheme?.style) {
+            // Build style description from single image analysis
+            if (singleImageForTheme.fullAnalysis?.clusters?.[0]) {
+              const cluster = singleImageForTheme.fullAnalysis.clusters[0];
+              imageStyle = cluster.style || '';
+              
+              if (cluster.technique) {
+                imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
+              }
+              
+              if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
+                imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
+              }
+              
+              if (cluster.palette && Array.isArray(cluster.palette)) {
+                const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
+                imageStyle = `${imageStyle} Color palette: ${colorList}.`;
+              }
+              
+              if (cluster.vibe) {
+                imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
+              }
+            } else {
+              imageStyle = singleImageForTheme.style;
+              if (singleImageForTheme.vibe) {
+                imageStyle = `${imageStyle} Vibe/Atmosphere: ${singleImageForTheme.vibe}.`;
+              }
+              if (singleImageForTheme.colors) {
+                imageStyle = `${imageStyle} Color palette: ${singleImageForTheme.colors}.`;
+              }
+            }
+          } else if (settings.customArtStyle && settings.customArtStyle.trim()) {
+            // Fallback: use customArtStyle from settings (set when image was uploaded)
+            imageStyle = settings.customArtStyle;
+            console.log(`[${serviceName} Request ${i + 1}] Using customArtStyle from settings: "${imageStyle}"`);
+          }
+          
+          // For Image Theme Expansion, we don't need a subject list - ChatGPT will generate different subjects
+          imageSubjectList = [];
+          
+          if (i === 0) {
+            addLog(`[${serviceName} Request ${i + 1}] Image Theme Expansion mode - Using PRIMARY SUBJECT: "${imageTheme}" - ChatGPT will generate different subjects for each variation`, 'success');
+          }
+        } else if (uploadedImages.length > 0 && requestsPerImage > 0) {
           imageIndex = Math.floor(i / requestsPerImage) % uploadedImages.length;
           const uploadedImage = uploadedImages[imageIndex];
           
@@ -555,6 +607,12 @@ const App: React.FC = () => {
           }
         }
         
+        // Determine primary subject: use primarySubjectForExpansion for Image Theme Expansion, otherwise use settings.primarySubject
+        const primarySubjectToUse = isImageThemeModeForRequest 
+          ? primarySubjectForExpansion 
+          : settings.primarySubject?.trim() || undefined;
+        console.log(`[${serviceName} Request ${i + 1}] primarySubjectToUse: "${primarySubjectToUse}", isImageThemeModeForRequest: ${isImageThemeModeForRequest}`);
+        
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
@@ -569,7 +627,7 @@ const App: React.FC = () => {
           settings.promptService || 'openai',
           imageSubjectList, // Use image-specific subject list
           usedSubjects,
-          settings.primarySubject?.trim() || undefined // User-specified primary subject (if provided)
+          primarySubjectToUse // For Image Theme Expansion: use PRIMARY SUBJECT from image; otherwise user-specified
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
