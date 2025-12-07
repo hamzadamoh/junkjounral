@@ -1067,173 +1067,82 @@ CRITICAL: Do NOT repeat subjects from previous prompts. Each image must explore 
       const cluster = hasFullClusterData ? imageClusterData.clusters[0] : null;
       
       // Extract style parameters from cluster or customArtStyle
-      const basePromptExample = cluster?.recommended_prompt_example || '';
       const colorPalette = cluster?.palette ? cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ') : '';
-      const technique = cluster?.technique || '';
-      const vibe = cluster?.vibe || '';
-      const textures = cluster?.dominant_textures ? cluster.dominant_textures.join(', ') : '';
-      const originalStyle = cluster?.style || customArtStyle || '';
       
-      // User provided PRIMARY SUBJECT + detected style → Expand on PRIMARY SUBJECT while maintaining style
-      const systemPrompt = hasFullClusterData 
-        ? `You are a prompt generator that creates variations of an image while maintaining EXACT style parameters.
+      // 1. Define the Style Translation Layer - Vintage Junk Journal Techniques
+      const vintageTechniques = [
+        {
+          name: "Botanical Engraving",
+          desc: "Detailed black ink line work, cross-hatching, scientific illustration style, antique biology textbook aesthetic.",
+          texture: "aged parchment"
+        },
+        {
+          name: "Mixed Media Collage",
+          desc: "Layered composition with torn paper edges, vintage newspaper clippings, tape marks, and ephemera elements.",
+          texture: "distressed grunge overlay"
+        },
+        {
+          name: "Faded Watercolor",
+          desc: "Soft, washed-out paint, pigment bleeds, water stains, wet-on-wet technique, dreamy and ethereal.",
+          texture: "tea-stained paper"
+        },
+        {
+          name: "Antique Lithograph",
+          desc: "Grainy texture, noise, slight print misalignment, muted ink, posterized vintage print look.",
+          texture: "worn edges and noise"
+        }
+      ];
+      
+      // Select technique deterministically based on variation number (modulo 4)
+      const selectedTech = vintageTechniques[(variationNumber - 1) % vintageTechniques.length];
+      
+      // 2. Construct the prompts with Style Translation Layer
+      const systemPrompt = `You are a "Style Translator" for a Vintage Junk Journal Kit. 
 
-YOUR TASK:
-1. You have a BASE PROMPT that recreates the original image with all its style parameters (colors, technique, vibe, textures, composition, lighting)
-2. For EACH variation, generate a prompt that:
-   - Uses a DIFFERENT subject than the original and previous variations
-   - Maintains EXACTLY the same style parameters (colors, technique, vibe, textures, composition style, lighting)
-   - Follows the same prompt structure and format as the base prompt
-3. The style parameters are FIXED - you can ONLY change the subject/content, everything else must stay identical
+INPUT: A subject and color palette from a reference image (which might be modern/digital).
+OUTPUT: A prompt for a specific VINTAGE ARTISTIC INTERPRETATION of that subject.
 
-BASE PROMPT (recreates original image):
-${basePromptExample}
+YOUR GOAL: 
+1. Take the PRIMARY SUBJECT (e.g., Castle, Fox) and the COLORS.
+2. DISCARD the modern style (ignore 3D, glowing, digital, smooth, pixar-style).
+3. RE-IMAGINE the subject using this specific artistic technique: "${selectedTech.name}".
+4. FORCE these textures: "${selectedTech.texture}, vintage, distressed, grunge".
 
-FIXED STYLE PARAMETERS (MUST be preserved in ALL variations):
-- Technique: ${technique}
-- Color Palette: ${colorPalette}
-- Vibe/Atmosphere: ${vibe}
-- Textures: ${textures}
-- Style Description: ${originalStyle}
+Output format: "PRIMARY SUBJECT: [Subject]. [Detailed description using the specific vintage technique and textures]."`;
 
-RULES:
-1. Extract the SUBJECT from the base prompt and replace it with a DIFFERENT subject that fits the theme
-2. Keep ALL style parameters EXACTLY the same (colors, technique, vibe, textures, composition, lighting)
-3. Maintain the same prompt structure and format
-4. NEVER repeat subjects across variations
-5. The prompt should be detailed enough to recreate the exact same style with the new subject
+      const userPrompt = hasFullClusterData 
+        ? `Translate this subject into a Vintage Junk Journal design.
 
-OUTPUT FORMAT:
-Line 1: PRIMARY SUBJECT: ${primarySubject}
-Line 2: A detailed prompt (20-30 words) that:
-   - Describes a DIFFERENT subject than the original
-   - Includes ALL the fixed style parameters (technique, colors, vibe, textures)
-   - Follows the same structure as the base prompt`
-        : `You are a prompt generator that expands on a PRIMARY SUBJECT (theme) while maintaining a specific detected style/vibe from a reference image.
+SOURCE ANALYSIS:
+- Subject: ${primarySubject} (Theme: ${primarySubject})
+- Detected Colors: ${colorPalette} (Use these colors, but make them muted/vintage/ink-based)
 
-YOUR TASK:
-1. PRIMARY SUBJECT is the THEME (e.g., "Farmhouse Christmas", "Enchanted Garden Fantasy", "Winter Scene") - analyze it to understand what subjects fit this theme
-2. For EACH variation, DYNAMICALLY generate a DIFFERENT, UNIQUE specific subject that naturally fits the theme
-3. Maintain the EXACT detected style/vibe from the reference image
-4. NEVER repeat the same specific subject across variations
-5. Generate subjects based on the THEME and DETECTED STYLE - don't use hardcoded lists, think creatively about what fits
-
-DETECTED STYLE/VIBE FROM REFERENCE IMAGE:
-${customArtStyle}
-
-RULES:
-1. PRIMARY SUBJECT is the THEME - analyze it deeply to determine what subjects naturally fit this theme
-2. Keep the SAME style/vibe (technique, colors, mood, composition from detected style)
-3. Each variation must have a DIFFERENT specific subject that fits the theme:
-   - Analyze the PRIMARY SUBJECT to understand the theme's essence, context, and aesthetic
-   - Think creatively about what subjects, objects, animals, scenes, or elements naturally belong to this theme
-   - Generate subjects DYNAMICALLY - do NOT use hardcoded lists
-   - NEVER repeat any subject across variations!
-4. **CRITICAL - STYLE PRESERVATION**: The prompt must be detailed enough to recreate the exact style even without the reference image. Include:
-   - Technique (watercolor, digital, illustration, etc.)
-   - Color palette (specific colors from detected style)
-   - Mood/atmosphere (cozy, festive, mystical, etc.)
-   - Composition style (centered, portrait, etc.)
-   - Lighting (soft, warm, moonlit, etc.)
-   - Textures (smooth, textured, brushstrokes, etc.)
-   - Any other style elements from the detected style
-5. Make it specific and visually distinct - the prompt should be comprehensive enough to maintain the original image's style
-6. Generate subjects DYNAMICALLY based on the theme - analyze the theme and think creatively
-
-EXAMPLES (showing dynamic subject generation):
-If PRIMARY SUBJECT = "Farmhouse Christmas" and detected style = "watercolor, winter, cozy":
-→ Variation 1: "PRIMARY SUBJECT: Farmhouse Christmas. Elegant deer standing in snow-covered garden, surrounded by soft watercolor winter hues, warm amber lighting, cozy atmosphere."
-→ Variation 2: "PRIMARY SUBJECT: Farmhouse Christmas. Cozy owl perched on snowy evergreen branch, with warm cottage lights in background, watercolor style, soft brushstrokes, festive mood."
-
-If PRIMARY SUBJECT = "Enchanted Garden Fantasy" and detected style = "watercolor, moonlit, wildflowers":
-→ Variation 1: "PRIMARY SUBJECT: Enchanted Garden Fantasy. Mystical owl perched on moonlit wildflower branch, gazing at warm golden moon, soft watercolor style, ethereal lighting, magical atmosphere."
-→ Variation 2: "PRIMARY SUBJECT: Enchanted Garden Fantasy. Ethereal deer standing in moonlit wildflower meadow, surrounded by soft pastel blooms, watercolor dreamscape, gentle shadows, enchanting mood."
-
-Note: These are examples showing the format. You must generate DIFFERENT subjects dynamically based on the actual theme provided.
-
-Output format: "PRIMARY SUBJECT: [theme]. [Expanded description with DIFFERENT specific subject (that fits the theme) AND style elements from detected style]"`;
-
-      const userPrompt = hasFullClusterData
-        ? `Generate a prompt for variation ${variationNumber} that uses a DIFFERENT subject but maintains EXACTLY the same style parameters.
-
-BASE PROMPT (original image):
-${basePromptExample}
-
-FIXED STYLE PARAMETERS (MUST be identical in your output):
-- Technique: ${technique}
-- Color Palette: ${colorPalette}
-- Vibe/Atmosphere: ${vibe}
-- Textures: ${textures}
-- Style: ${originalStyle}
+REQUIRED TARGET STYLE (Variation ${variationNumber}):
+- Technique: ${selectedTech.name} (${selectedTech.desc})
+- Mandatory Texture: ${selectedTech.texture}
+- Vibe: Ancient, mysterious, handcrafted, tactile.
 
 INSTRUCTIONS:
-1. **CRITICAL**: This is variation ${variationNumber} - use a DIFFERENT subject than the original image and variations 1-${variationNumber - 1}
-2. **EXTRACT THE SUBJECT** from the base prompt and replace it with a different subject that fits the "${primarySubject}" theme
-3. **KEEP ALL STYLE PARAMETERS IDENTICAL**: 
-   - Use the EXACT same technique: ${technique}
-   - Use the EXACT same colors: ${colorPalette}
-   - Use the EXACT same vibe: ${vibe}
-   - Use the EXACT same textures: ${textures}
-   - Maintain the same composition style, lighting, and overall structure
-4. **NEVER repeat subjects**: If previous variations used any subject, use a DIFFERENT subject that still fits the theme
-5. Follow the same prompt structure and format as the base prompt
+1. Ignore any "digital", "3D", or "smooth" aspects of the original image.
+2. Describe a ${selectedTech.name} of a DIFFERENT subject that fits the "${primarySubject}" theme.
+3. Ensure the result looks like it belongs in an old scrapbook or grimoire.
 
-OUTPUT FORMAT:
-Line 1: PRIMARY SUBJECT: ${primarySubject}
-Line 2: A detailed prompt (20-30 words) that:
-   - Describes a DIFFERENT subject than the original (extract and replace the subject from base prompt)
-   - Includes ALL the fixed style parameters EXACTLY as specified above
-   - Follows the same structure and format as the base prompt
-
-${usedSubjectsText}
-
-CRITICAL FOR VARIATION ${variationNumber}: 
-- Change ONLY the subject - keep ALL style parameters identical
-- Generate a DIFFERENT, UNIQUE subject that fits the "${primarySubject}" theme
-- DO NOT use any subject from previous variations
-- Think creatively about what subjects fit "${primarySubject}" while maintaining the exact same style!`
-        : `Generate a prompt for variation ${variationNumber} that expands on the PRIMARY SUBJECT while maintaining the detected style/vibe.
+Output ONLY: "PRIMARY SUBJECT: [Theme]. [Your prompt]"`
+        : `Translate this subject into a Vintage Junk Journal design.
 
 PRIMARY SUBJECT (THEME): ${primarySubject}
+SOURCE COLORS/VIBE: ${customArtStyle} (Interpret this loosely, force it into a vintage aesthetic)
 
-DETECTED STYLE/VIBE FROM REFERENCE IMAGE:
-${customArtStyle}
+REQUIRED TARGET STYLE (Variation ${variationNumber}):
+- Technique: ${selectedTech.name} (${selectedTech.desc})
+- Mandatory Texture: ${selectedTech.texture}
 
 INSTRUCTIONS:
-1. "${primarySubject}" is the THEME - analyze it deeply to understand what subjects naturally fit this theme
-2. **CRITICAL**: This is variation ${variationNumber} - use a DIFFERENT subject than variations 1-${variationNumber - 1}
-3. **GENERATE SUBJECT DYNAMICALLY**: 
-   - Analyze "${primarySubject}" to understand the theme's essence, mood, and context
-   - Think creatively about what subjects, objects, animals, scenes, or elements naturally belong to this theme
-   - Generate a subject that fits the theme's aesthetic, mood, and context
-   - **DO NOT use hardcoded lists - think dynamically based on the theme**
-4. **NEVER repeat subjects**: If previous variations used any subject, use a DIFFERENT subject that still fits the theme
-5. **MAINTAIN EXACT STYLE**: The prompt must be detailed enough to recreate the exact style even without the reference image. Include:
-   - Technique (${customArtStyle.includes('watercolor') ? 'watercolor' : customArtStyle.includes('digital') ? 'digital' : customArtStyle.includes('illustration') ? 'illustration' : 'artistic'})
-   - Color palette (extract from detected style: ${customArtStyle.includes('color') ? 'include specific colors' : 'include color descriptions'})
-   - Mood/atmosphere (${customArtStyle.includes('cozy') ? 'cozy' : customArtStyle.includes('festive') ? 'festive' : customArtStyle.includes('mystical') ? 'mystical' : 'atmospheric'})
-   - Composition style (centered, portrait, etc.)
-   - Lighting (soft, warm, moonlit, etc.)
-   - Textures (smooth, textured, brushstrokes, etc.)
-6. Include ALL style elements from detected style naturally in the description
-7. Make it specific and visually distinct - the prompt should be detailed enough to maintain the original image's style
+1. Ignore "digital", "shiny", or "modern" descriptors.
+2. Generate a unique subject fitting the theme, rendered as a ${selectedTech.name}.
+3. Focus on texture, age, and imperfection.
 
-OUTPUT FORMAT:
-Line 1: PRIMARY SUBJECT: ${primarySubject}
-Line 2: Expanded description (20-30 words) that includes:
-   - A SPECIFIC, UNIQUE subject that fits "${primarySubject}" theme
-   - ALL style elements from detected style (technique, colors, mood, composition, lighting, textures)
-   - The description must be detailed enough to recreate the exact style even without the reference image
-
-Theme: ${themeDescription}
-Composition type: ${randomFocus}
-${usedSubjectsText}
-
-CRITICAL FOR VARIATION ${variationNumber}: 
-- Keep the SAME style/vibe from detected style
-- Generate a DIFFERENT, UNIQUE subject that fits the "${primarySubject}" theme
-- DO NOT use "rabbit" or any subject from previous variations
-- Think creatively about what subjects fit "${primarySubject}" - there are many options beyond "rabbit"!`;
+Output ONLY: "PRIMARY SUBJECT: [Theme]. [Your prompt]"`;
       
       // Use retry wrapper with header enforcement
       const result = await callPromptWithHeaderEnforcement(
