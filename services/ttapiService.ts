@@ -953,32 +953,27 @@ export const generateJournalPage = async (
     
     // CRITICAL: Extract --ar parameter if it exists in the middle of the prompt
     // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
-    // Remove --ar and everything after it (except valid Midjourney parameters)
+    // SIMPLE APPROACH: If --ar is found, extract it and remove EVERYTHING after it
     let extractedAspectRatio: string | null = null;
     const arMatch = prompt.match(/--ar\s+([^\s]+)/i);
     if (arMatch) {
       extractedAspectRatio = arMatch[1];
-      // Find the position of --ar
-      const arIndex = prompt.search(/--ar\s+[^\s]+/i);
+      console.log(`[Ttapi] Found --ar ${extractedAspectRatio} in middle of prompt, extracting it`);
+      // Find the position where --ar starts
+      const arIndex = prompt.indexOf('--ar');
       if (arIndex !== -1) {
-        // Get everything before --ar
-        const beforeAr = prompt.substring(0, arIndex).trim();
-        // Get everything after --ar (including the aspect ratio value)
-        const afterAr = prompt.substring(arIndex + arMatch[0].length).trim();
-        // Check if there are valid Midjourney parameters after --ar (--sref, --sw, etc.)
-        const validParamsMatch = afterAr.match(/^\s*(--sref|--sw|--relax|--turbo|--fast|--v\s+\d+|--style\s+\w+)/i);
-        if (validParamsMatch) {
-          // Keep only valid parameters, remove all other text
-          prompt = (beforeAr + ' ' + afterAr.substring(afterAr.search(validParamsMatch[0]))).trim();
-        } else {
-          // Remove everything after --ar (no valid parameters found)
-          prompt = beforeAr;
-        }
+        // Get everything before --ar and trim it
+        prompt = prompt.substring(0, arIndex).trim();
+        console.log(`[Ttapi] Removed --ar and everything after it. New prompt: "${prompt}"`);
       }
     }
     
-    // Clean the prompt FIRST to remove problematic phrases that Midjourney interprets as parameters
+    // Clean the prompt to remove problematic phrases that Midjourney interprets as parameters
+    const promptBeforeCleaning = prompt;
     prompt = cleanPromptForMidjourney(prompt);
+    if (promptBeforeCleaning !== prompt) {
+      console.log(`[Ttapi] Prompt cleaned: "${promptBeforeCleaning}" -> "${prompt}"`);
+    }
     
     // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, only add aspect ratio
     if (settings.colorIntensity === 'Custom / Override') {
