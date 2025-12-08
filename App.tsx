@@ -86,6 +86,9 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
+  const [wordPressUrls, setWordPressUrls] = useState<Map<string, string>>(new Map()); // Map of image ID to WordPress URL
+  const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false);
+  const [copiedLinks, setCopiedLinks] = useState<boolean>(false);
   
   // --- Refs ---
   const hasCheckedAuth = useRef<boolean>(false);
@@ -1616,6 +1619,28 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper function to convert image URL to base64
+  const urlToBase64 = async (url: string): Promise<string> => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to convert image to base64'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to fetch image: ${error.message}`);
+    }
+  };
+
   const exportToGoogleSheets = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
     
@@ -1627,33 +1652,67 @@ const App: React.FC = () => {
     try {
       addLog(`[Google Sheets] Preparing to export ${completedImages.length} images...`, 'log');
       
-      // Generate and download CSV directly (client-side only - no API call needed)
-      const csvContent = generateCSVForGoogleSheets(completedImages);
+      // Upload all images to WordPress
+      setIsUploadingToWordPress(true);
+      setCopiedLinks(false);
+      const newWordPressUrls = new Map<string, string>();
+      
+      addLog(`[Google Sheets] Uploading ${completedImages.length} images to WordPress...`, 'log');
+      
+      for (let i = 0; i < completedImages.length; i++) {
+        const img = completedImages[i];
+        try {
+          addLog(`[Google Sheets] Uploading image ${i + 1}/${completedImages.length}...`, 'log');
+          
+          // Convert image URL to base64
+          const base64Image = await urlToBase64(img.url!);
+          
+          // Upload to WordPress
+          const wordPressUrl = await uploadImageToWordPress(base64Image);
+          newWordPressUrls.set(img.id, wordPressUrl);
+          
+          addLog(`[Google Sheets] ✅ Image ${i + 1} uploaded: ${wordPressUrl}`, 'success');
+        } catch (error: any) {
+          console.error(`[Google Sheets] Failed to upload image ${i + 1}:`, error);
+          addLog(`[Google Sheets] ⚠️ Failed to upload image ${i + 1}: ${error.message}`, 'error');
+          // Continue with other images even if one fails
+        }
+      }
+      
+      // Update state with WordPress URLs
+      setWordPressUrls(newWordPressUrls);
+      setIsUploadingToWordPress(false);
+      
+      // Generate CSV with WordPress URLs
+      const csvContent = generateCSVForGoogleSheets(completedImages, newWordPressUrls);
       const filename = `Generated_Images_${selectedTheme?.name || 'Custom'}_${new Date().toISOString().split('T')[0]}.csv`;
       downloadCSV(csvContent, filename);
       
       addLog(`[Google Sheets] ✅ CSV file generated and downloaded successfully!`, 'success');
       
-      // Show instructions
-      const instructions = `CSV file downloaded!\n\nNext steps:\n1. Open Google Sheets\n2. File → Import → Upload the CSV file\n3. Use the Google Apps Script (provided in documentation) to insert images\n\nOr manually:\n- Column D ("inserted") will have checkboxes\n- Column E ("image preview") will show images after running the script`;
+      // Show success message with copy button info
+      const instructions = `✅ All images uploaded to WordPress!\n✅ CSV file downloaded!\n\nNext steps:\n1. Click "Copy All WordPress Links" button to copy all image URLs\n2. Open Google Sheets\n3. File → Import → Upload the CSV file\n4. Paste the WordPress URLs into the "Image for Canva" column\n5. Use the Google Apps Script (provided in documentation) to insert images\n\nOr manually:\n- Column D ("inserted") will have checkboxes\n- Column E ("image preview") will show images after running the script`;
       alert(instructions);
     } catch (error: any) {
       console.error('Error exporting to Google Sheets:', error);
       addLog(`[Google Sheets] ❌ Error: ${error.message}`, 'error');
+      setIsUploadingToWordPress(false);
       alert(`Failed to export to Google Sheets: ${error.message}`);
     }
   };
 
-  const generateCSVForGoogleSheets = (images: GeneratedImage[]): string => {
+  const generateCSVForGoogleSheets = (images: GeneratedImage[], wpUrls: Map<string, string> = new Map()): string => {
     // Headers matching the Google Apps Script format
     const headers = ['Title for Canva', 'Ingredients for Canva', 'Image for Canva', 'inserted', 'image preview'];
     const rows = [headers];
 
     images.forEach((img, index) => {
+      // Use WordPress URL if available, otherwise fall back to original URL
+      const imageUrl = wpUrls.get(img.id) || img.url || '';
       rows.push([
         `Image ${index + 1}`,
         img.prompt || 'No prompt available',
-        img.url || '',
+        imageUrl,
         'FALSE', // Checkbox column
         '' // Image preview column (will be populated by script)
       ]);
@@ -1670,6 +1729,38 @@ const App: React.FC = () => {
         return cellStr;
       }).join(',')
     ).join('\n');
+  };
+
+  const copyAllWordPressLinks = async () => {
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    const links: string[] = [];
+    
+    completedImages.forEach((img, index) => {
+      const wpUrl = wordPressUrls.get(img.id);
+      if (wpUrl) {
+        links.push(wpUrl);
+      } else {
+        // If WordPress URL not available, use original URL
+        links.push(img.url || '');
+      }
+    });
+    
+    if (links.length === 0) {
+      alert('No image links available. Please export to Google Sheets first to upload images to WordPress.');
+      return;
+    }
+    
+    try {
+      const linksText = links.join('\n');
+      await navigator.clipboard.writeText(linksText);
+      setCopiedLinks(true);
+      addLog(`[Google Sheets] ✅ Copied ${links.length} image links to clipboard!`, 'success');
+      setTimeout(() => setCopiedLinks(false), 3000);
+    } catch (error: any) {
+      console.error('Failed to copy links:', error);
+      addLog(`[Google Sheets] ❌ Failed to copy links: ${error.message}`, 'error');
+      alert(`Failed to copy links: ${error.message}`);
+    }
   };
 
   const downloadCSV = (content: string, filename: string) => {
@@ -2837,11 +2928,37 @@ const App: React.FC = () => {
                 </button>
                 <button 
                   onClick={exportToGoogleSheets}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-                  title="Export to Google Sheets"
+                  disabled={isUploadingToWordPress}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                  title="Export to Google Sheets (uploads images to WordPress)"
                 >
-                  <Table size={18} /> Export to Sheets ({completedCount})
+                  {isUploadingToWordPress ? (
+                    <>
+                      <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
+                    </>
+                  ) : (
+                    <>
+                      <Table size={18} /> Export to Sheets ({completedCount})
+                    </>
+                  )}
                 </button>
+                {wordPressUrls.size > 0 && (
+                  <button 
+                    onClick={copyAllWordPressLinks}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                    title="Copy all WordPress image links to clipboard"
+                  >
+                    {copiedLinks ? (
+                      <>
+                        <Check size={18} /> Copied! ({wordPressUrls.size})
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={18} /> Copy WordPress Links ({wordPressUrls.size})
+                      </>
+                    )}
+                  </button>
+                )}
               </>
             )}
            <button 
