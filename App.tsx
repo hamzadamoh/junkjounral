@@ -17,7 +17,8 @@ import {
   Check,
   Terminal,
   ChevronRight,
-  Link
+  Link,
+  Table
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -1630,6 +1631,99 @@ const App: React.FC = () => {
     }
   };
 
+  const exportToGoogleSheets = async () => {
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    
+    if (completedImages.length === 0) {
+      alert('No completed images to export');
+      return;
+    }
+
+    try {
+      addLog(`[Google Sheets] Preparing to export ${completedImages.length} images...`, 'log');
+      
+      // Prepare data for Google Sheets
+      const sheetData = {
+        images: completedImages.map((img, index) => ({
+          title: `Image ${index + 1}`,
+          prompt: img.prompt || 'No prompt available',
+          url: img.url || '',
+          variationNumber: img.variationNumber || index + 1
+        })),
+        themeName: selectedTheme?.name || 'Custom Theme'
+      };
+
+      // Call the API endpoint to create Google Sheet
+      const response = await fetch('/api/google-sheets/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sheetData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        addLog(`[Google Sheets] ✅ Data prepared successfully!`, 'success');
+        // Generate and download CSV
+        const csvContent = generateCSVForGoogleSheets(completedImages);
+        const filename = `Generated_Images_${selectedTheme?.name || 'Custom'}_${new Date().toISOString().split('T')[0]}.csv`;
+        downloadCSV(csvContent, filename);
+        
+        // Show instructions
+        const instructions = `CSV file downloaded!\n\nNext steps:\n1. Open Google Sheets\n2. File → Import → Upload the CSV file\n3. Use the Google Apps Script (provided in documentation) to insert images\n\nOr manually:\n- Column D ("inserted") will have checkboxes\n- Column E ("image preview") will show images after running the script`;
+        alert(instructions);
+      } else {
+        throw new Error(result.error || 'Failed to prepare Google Sheets data');
+      }
+    } catch (error: any) {
+      console.error('Error exporting to Google Sheets:', error);
+      addLog(`[Google Sheets] ❌ Error: ${error.message}`, 'error');
+      alert(`Failed to export to Google Sheets: ${error.message}`);
+    }
+  };
+
+  const generateCSVForGoogleSheets = (images: GeneratedImage[]): string => {
+    // Headers matching the Google Apps Script format
+    const headers = ['Title for Canva', 'Ingredients for Canva', 'Image for Canva', 'inserted', 'image preview'];
+    const rows = [headers];
+
+    images.forEach((img, index) => {
+      rows.push([
+        `Image ${index + 1}`,
+        img.prompt || 'No prompt available',
+        img.url || '',
+        'FALSE', // Checkbox column
+        '' // Image preview column (will be populated by script)
+      ]);
+    });
+
+    // Convert to CSV format
+    return rows.map(row => 
+      row.map(cell => {
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(',')
+    ).join('\n');
+  };
+
+  const downloadCSV = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const downloadAllAsPdf = async () => {
     try {
       const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
@@ -1732,7 +1826,7 @@ const App: React.FC = () => {
     if (isImageThemeExpansion) {
       return (
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
-          <div className="text-center space-y-4">
+      <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-4 mb-4">
               <button 
                 onClick={() => {
@@ -1747,9 +1841,9 @@ const App: React.FC = () => {
             </div>
             <p className="text-slate-400">
               Upload ONE image. ChatGPT will extract the theme (PRIMARY SUBJECT) and generate multiple prompts with DIFFERENT subjects but the SAME theme and style.
-            </p>
-          </div>
-
+        </p>
+      </div>
+      
           <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
             {/* Single Image Upload Section */}
             <div>
@@ -1874,7 +1968,7 @@ const App: React.FC = () => {
                             </div>
                           )}
                         </div>
-                        <button
+          <button
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -2101,7 +2195,7 @@ const App: React.FC = () => {
                               alt={`Reference ${idx + 1}`}
                               className="w-full h-full object-cover"
                             />
-                          </div>
+            </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-gothic-gold font-medium">Image {idx + 1}</div>
                             {img.theme && (
@@ -2134,7 +2228,7 @@ const App: React.FC = () => {
                             className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/20 flex-shrink-0"
                           >
                             <X size={14} />
-                          </button>
+          </button>
                         </div>
                       ))}
                       <button
@@ -2221,9 +2315,9 @@ const App: React.FC = () => {
               <Sparkles className="animate-pulse" size={20} />
               Continue with Custom Theme
             </button>
-          </div>
-        </div>
-      );
+      </div>
+    </div>
+  );
     }
 
     // Default theme selection view
@@ -2784,6 +2878,13 @@ const App: React.FC = () => {
                 >
                   <FileText size={18} /> Download PDF ({completedCount})
                 </button>
+                <button 
+                  onClick={exportToGoogleSheets}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                  title="Export to Google Sheets"
+                >
+                  <Table size={18} /> Export to Sheets ({completedCount})
+                </button>
               </>
             )}
            <button 
@@ -2957,7 +3058,7 @@ const App: React.FC = () => {
             <h1 className="text-xl font-serif font-bold text-slate-100 tracking-wide">{APP_NAME}</h1>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-xs text-slate-500 font-mono hidden md:block">
+          <div className="text-xs text-slate-500 font-mono hidden md:block">
               AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'MIDJOURNEY'}
             </div>
             {APP_PASSWORD && (
