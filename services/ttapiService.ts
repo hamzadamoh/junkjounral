@@ -1040,11 +1040,17 @@ export const generateJournalPage = async (
     // Same as GoAPI implementation
     // Add style reference BEFORE aspect ratio (parameters should be at the end)
     // Skip style reference if skipStyleReference flag is set (e.g., Image Theme Expansion mode - rely on detailed prompt only)
-    if (!settings.skipStyleReference && settings.styleRefUrl && settings.styleRefUrl.trim()) {
-      prompt += ` --sref ${settings.styleRefUrl.trim()} --sw 1000`;
-      console.log(`[Ttapi] Added MAXIMUM style reference (--sw 1000) for variation ${variationIndex ?? 0}: ${settings.styleRefUrl}`);
+    // Only add --sref and --sw if we have a valid SREF code/URL (not empty, not just whitespace)
+    const trimmedStyleRef = settings.styleRefUrl?.trim();
+    const hasValidStyleRef = trimmedStyleRef && trimmedStyleRef.length > 0;
+    
+    if (!settings.skipStyleReference && hasValidStyleRef) {
+      prompt += ` --sref ${trimmedStyleRef} --sw 1000`;
+      console.log(`[Ttapi] Added MAXIMUM style reference (--sw 1000) for variation ${variationIndex ?? 0}: ${trimmedStyleRef}`);
     } else if (settings.skipStyleReference) {
       console.log(`[Ttapi] Skipping style reference URL - relying on detailed prompt only for variation ${variationIndex ?? 0}`);
+    } else if (!hasValidStyleRef) {
+      console.log(`[Ttapi] No valid style reference URL/code provided - skipping --sref and --sw for variation ${variationIndex ?? 0}`);
     }
 
     // Add aspect ratio LAST (after style reference if present)
