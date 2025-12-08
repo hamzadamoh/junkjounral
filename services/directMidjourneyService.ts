@@ -93,6 +93,10 @@ const sendImagineCommand = async (
   prompt: string,
   styleRefUrl?: string
 ): Promise<string> => {
+  // DISABLED: Discord API endpoints removed to stay within Vercel Hobby plan limit (12 functions)
+  throw new Error('Direct Discord integration is not available. Discord API endpoints were removed to stay within Vercel function limits. Please use Ttapi, GoAPI, or Legnext instead.');
+  
+  /* DISABLED CODE - Discord endpoints removed
   const token = getDiscordToken();
   const serverId = getDiscordServerId();
   const channelId = getDiscordChannelId();
@@ -141,9 +145,9 @@ const sendImagineCommand = async (
       }
     };
 
-    console.log(`[DirectMJ] ⚠️ Attempting Interaction API (may not work for other bots' commands)...`);
-    
-    // This will likely fail, but we'll try it
+    // DISABLED: Discord API endpoints removed to stay within Vercel Hobby plan limit (12 functions)
+    throw new Error('Direct Discord integration is not available. Discord API endpoints were removed to stay within Vercel function limits. Please use Ttapi, GoAPI, or Legnext instead.');
+    /*
     try {
       const interactionResponse = await fetch('/api/discord/interaction', {
         method: 'POST',
@@ -176,6 +180,9 @@ const sendImagineCommand = async (
     console.warn(`[DirectMJ] ⚠️ WARNING: Sending as text message - Midjourney bot will NOT respond to this!`);
     console.warn(`[DirectMJ] Discord does not allow programmatic slash commands. This will fail.`);
     
+    // DISABLED: Discord API endpoint removed
+    throw new Error('Direct Discord integration is not available. Please use Ttapi, GoAPI, or Legnext instead.');
+    /*
     const response = await fetch('/api/discord/message', {
       method: 'POST',
       headers: {
@@ -221,6 +228,10 @@ const pollForMidjourneyResponse = async (
   maxAttempts: number = 180,
   pollInterval: number = 5000
 ): Promise<string[]> => {
+  // DISABLED: Discord API endpoints removed to stay within Vercel Hobby plan limit (12 functions)
+  throw new Error('Direct Discord integration is not available. Discord API endpoints were removed to stay within Vercel function limits. Please use Ttapi, GoAPI, or Legnext instead.');
+  
+  /* DISABLED CODE - Discord endpoints removed
   const token = getDiscordToken();
   const channelId = getDiscordChannelId();
   const messagesUrl = `${DISCORD_API_BASE}/channels/${channelId}/messages?limit=50`;
