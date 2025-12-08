@@ -937,34 +937,29 @@ export const generatePromptWithChatGPT = async (
     const systemPrompt = `You are a Subject Expansion Generator for Midjourney SREF Mode.
 
 YOUR GOAL:
-The user has provided a THEME (e.g., "Woodland Animals") and a Style Reference (--sref).
+The user has provided a THEME (e.g., "Woodland Animals") and a Style Reference.
 Your job is to generate a UNIQUE SUBJECT that fits this theme.
 
 CRITICAL RULES:
-1. **EXPAND THE THEME:** If the theme is "Woodland Animals", generate a "Fox" for variation 1, a "Badger" for variation 2, a "Deer" for variation 3, etc. Do NOT just repeat the theme name. Pick a SPECIFIC subject that fits the theme.
+1. **EXPAND THE THEME:** If the theme is "Woodland Animals", generate a "Fox" for variation 1, a "Badger" for variation 2, etc.
 2. **SUBJECT ONLY:** Describe WHAT is in the image (Action, Pose, Setting).
-3. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge", "illustration", "camera", "lighting", "texture", "aesthetic", "mood", "atmosphere", "vibe", "colors", "palette", "shadows", "background". The --sref handles all of that.
-4. **BE BRIEF:** 10-15 words max.
-5. **NO PHOTOGRAPHY TERMS:** Do NOT use "photo", "photorealistic", "DSLR", "bokeh", "depth of field", "cinematic", "lens", "shutter", "f/1.8", "hyper-realistic", "ultra-realistic", or "photographic".
+3. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge". The --sref handles that.
+4. **NO THEME REPETITION:** Do NOT include the main theme name in the output. Just the unique subject description.
+5. **BE BRIEF:** 10-15 words max.
 
-EXAMPLES:
-- Theme: "Woodland Animals" → Variation 1: "A fox reading a book", Variation 2: "A badger foraging", Variation 3: "A deer standing"
-- Theme: "Gothic Architecture" → Variation 1: "A cathedral spire", Variation 2: "A castle tower", Variation 3: "A gothic archway"
+Output format: "PRIMARY SUBJECT: [Specific unique subject & action ONLY]. --v 6.1"`;
 
-Output format: "PRIMARY SUBJECT: ${primarySubject}. [Specific Subject & Action]."`;
-
-    const userPrompt = `Generate Variation #${variationNumber} for the THEME: "${primarySubject}".
+    const userPrompt = `Generate Variation #${variationNumber} based on the THEME: "${primarySubject}".
 
 INSTRUCTIONS:
-1. Pick a SPECIFIC subject that fits the theme "${primarySubject}".
-2. Ensure this subject is DIFFERENT from a generic "${primarySubject}" - it should be a concrete example (e.g., if theme is "Woodland Animals", generate "A Badger reading" not "Woodland Animals").
-3. Describe a unique scenario/pose for this specific subject.
-4. NO style descriptors - the --sref parameter will handle all styling.
-5. Focus on: specific subject, action, pose, setting.
+1. Pick a SPECIFIC subject that fits the theme.
+2. Ensure this subject is DIFFERENT from previous variations.
+3. Describe a unique scenario/pose.
+4. DO NOT repeat the phrase "${primarySubject}" in your output.
 
-Theme: ${themeDescription}${variationControl}
+${variationControl}
 
-Output ONLY: "PRIMARY SUBJECT: ${primarySubject}. [Your unique prompt]"`;
+Output ONLY: "PRIMARY SUBJECT: [Your unique prompt]"`;
 
     // Use retry wrapper with header enforcement
     const result = await callPromptWithHeaderEnforcement(
@@ -993,12 +988,19 @@ Output ONLY: "PRIMARY SUBJECT: ${primarySubject}. [Your unique prompt]"`;
         const regex = new RegExp(`\\b${word}\\b`, 'gi');
         cleaned = cleaned.replace(regex, '');
       });
+      
+      // Remove theme name repetition if it appears after "PRIMARY SUBJECT:"
+      // Example: "PRIMARY SUBJECT: Woodland Animals. A fox..." → "PRIMARY SUBJECT: A fox..."
+      const escapedTheme = primarySubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const themeRegex = new RegExp(`PRIMARY SUBJECT:\\s*${escapedTheme}\\s*[.,]?\\s*`, 'gi');
+      cleaned = cleaned.replace(themeRegex, 'PRIMARY SUBJECT: ');
+      
       // Clean up extra spaces
       cleaned = cleaned.replace(/\s+/g, ' ').trim();
       
-      // Ensure it starts with PRIMARY SUBJECT
+      // Ensure it starts with PRIMARY SUBJECT (without theme name)
       if (!cleaned.toLowerCase().includes('primary subject:')) {
-        cleaned = `PRIMARY SUBJECT: ${primarySubject}. ${cleaned}`;
+        cleaned = `PRIMARY SUBJECT: ${cleaned}`;
       }
       
       return cleaned;
