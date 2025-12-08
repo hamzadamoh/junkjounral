@@ -963,57 +963,106 @@ ${variationControl}
 
 Output ONLY: "[Your specific nano-subject description]"`;
 
-    // Use retry wrapper with header enforcement
-    const result = await callPromptWithHeaderEnforcement(
-      primarySubject,
-      systemPrompt,
-      userPrompt,
-      apiKey,
-      apiUrl,
-      useOpenRouter,
-      4, // maxAttempts
-      0.2, // temperature (low for deterministic, subject-focused output)
-      150 // max_tokens (enough for brief subject descriptions)
-    );
+    // SREF mode: Direct API call without header enforcement (no "PRIMARY SUBJECT:" required)
+    const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+    let cleaned: string | null = null;
+    
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        };
+        
+        if (useOpenRouter) {
+          headers['HTTP-Referer'] = window.location.origin;
+          headers['X-Title'] = 'Junk Journal Generator';
+        }
 
-    if (!result.text) {
-      console.warn(`[PromptGen] Failed to generate SREF mode prompt for "${primarySubject}" after ${result.attempt} attempts`);
-      return null;
-    }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-    // Validate and clean the output
-    if (result.text) {
-      // Remove any style words that might have slipped through
-      const styleWords = ['watercolor', 'vintage', 'grunge', 'illustration', 'camera', 'lighting', 'texture', 'aesthetic', 'mood', 'atmosphere', 'vibe', 'colors', 'palette', 'shadows', 'background', 'photorealistic', 'digital', '3D', 'smooth', 'shiny', 'modern'];
-      let cleaned = result.text;
-      styleWords.forEach(word => {
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
-        cleaned = cleaned.replace(regex, '');
-      });
-      
-      // Remove "PRIMARY SUBJECT:" header if present (new format doesn't use it)
-      cleaned = cleaned.replace(/^PRIMARY\s+SUBJECT:\s*/i, '');
-      
-      // Remove theme name repetition if it appears at the start
-      // Example: "Nature. A red fox..." → "A red fox..."
-      const escapedTheme = primarySubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const themeRegex = new RegExp(`^${escapedTheme}\\s*[.,]?\\s*`, 'gi');
-      cleaned = cleaned.replace(themeRegex, '');
-      
-      // Clean up extra spaces and trim
-      cleaned = cleaned.replace(/\s+/g, ' ').trim();
-      
-      // Ensure we have actual content (not just empty after cleaning)
-      if (!cleaned || cleaned.length === 0) {
-        console.warn(`[PromptGen] SREF mode prompt became empty after cleaning. Original: "${result.text}"`);
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers,
+          signal: controller.signal,
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.2,
+            max_tokens: useOpenRouter ? 4000 : 150,
+            stream: false
+          })
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data: ChatGPTResponse = await response.json();
+        if (!data.choices || data.choices.length === 0) {
+          throw new Error('No response from API');
+        }
+
+        let rawText = data.choices[0].message.content;
+        
+        // Clean DeepSeek R1 reasoning tags if using OpenRouter
+        if (useOpenRouter) {
+          rawText = cleanDeepSeekOutput(rawText);
+        }
+        
+        let text = rawText.trim();
+
+        // Remove any surrounding quotes (single or double) that the LLM might add
+        text = text.replace(/^["']|["']$/g, '');
+        
+        // Remove any style words that might have slipped through
+        const styleWords = ['watercolor', 'vintage', 'grunge', 'illustration', 'camera', 'lighting', 'texture', 'aesthetic', 'mood', 'atmosphere', 'vibe', 'colors', 'palette', 'shadows', 'background', 'photorealistic', 'digital', '3D', 'smooth', 'shiny', 'modern'];
+        styleWords.forEach(word => {
+          const regex = new RegExp(`\\b${word}\\b`, 'gi');
+          text = text.replace(regex, '');
+        });
+        
+        // Remove "PRIMARY SUBJECT:" header if present (new format doesn't use it)
+        text = text.replace(/^PRIMARY\s+SUBJECT:\s*/i, '');
+        
+        // Remove theme name repetition if it appears at the start
+        // Example: "Nature. A red fox..." → "A red fox..."
+        const escapedTheme = primarySubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const themeRegex = new RegExp(`^${escapedTheme}\\s*[.,]?\\s*`, 'gi');
+        text = text.replace(themeRegex, '');
+        
+        // Clean up extra spaces and trim
+        text = text.replace(/\s+/g, ' ').trim();
+        
+        // Ensure we have actual content (not just empty after cleaning)
+        if (!text || text.length === 0) {
+          console.warn(`[PromptGen] SREF mode prompt became empty after cleaning (attempt ${attempt}/4). Original: "${rawText}"`);
+          if (attempt < 4) continue;
+          return null;
+        }
+        
+        cleaned = text;
+        break; // Success - exit retry loop
+      } catch (error: any) {
+        console.error(`[PromptGen] SREF mode error on attempt ${attempt}/4 for "${primarySubject}":`, error);
+        if (attempt < 4) continue;
         return null;
       }
-      
-      // Return just the description (no header needed for SREF mode)
-      return cleaned;
     }
 
-    return result.text;
+    if (!cleaned) {
+      console.warn(`[PromptGen] Failed to generate SREF mode prompt for "${primarySubject}" after 4 attempts`);
+      return null;
+    }
+    
+    // Return just the description (no header needed for SREF mode)
+    return cleaned;
   }
 
   // ============================================
