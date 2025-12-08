@@ -80,7 +80,6 @@ const App: React.FC = () => {
     }
 
     // Check password
-    const appPassword = APP_PASSWORD;
     if (password === appPassword) {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_authenticated', 'true');
