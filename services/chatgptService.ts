@@ -18,6 +18,7 @@ const failedSubjects = new Set<string>();
 
 // Used categories tracking (module-level) - ensures no category repetition
 const usedCategories = new Set<number>();
+let currentBatchStartTime: number | null = null; // Track batch start time to detect new batches
 
 /**
  * Logs current metrics for debugging/monitoring
@@ -237,15 +238,31 @@ function getBatchStyleSeed(): number {
 
 /**
  * Resets batch state when starting a new batch
- * Detects new batch by checking if variationNumber decreased or reset to 1
+ * Detects new batch by checking if variationNumber decreased (indicating a new batch)
+ * Uses timestamp tracking to detect new generation sessions (gaps > 5 minutes)
  */
 function resetBatchIfNeeded(variationNumber: number): void {
-  if (variationNumber === 1 || variationNumber < lastVariationNumber) {
+  const now = Date.now();
+  
+  // New batch detected if:
+  // 1. variationNumber decreased (e.g., 5 -> 1, or 3 -> 0) - most reliable indicator
+  // 2. variationNumber is 1 AND lastVariationNumber was > 1 (indicating a reset)
+  // 3. More than 5 minutes since last variation (new generation session)
+  const timeSinceLastVariation = currentBatchStartTime ? (now - currentBatchStartTime) : Infinity;
+  const isNewBatch = variationNumber < lastVariationNumber || 
+                     (variationNumber === 1 && lastVariationNumber > 1) ||
+                     (timeSinceLastVariation > 5 * 60 * 1000); // 5 minutes
+  
+  if (isNewBatch) {
     // New batch detected - reset state
     usedCombinations.clear();
     usedCategories.clear();
     currentBatchStyleSeed = null;
-    console.log(`[Randomization] New batch detected (variation ${variationNumber}). Resetting state.`);
+    currentBatchStartTime = now;
+    console.log(`[Randomization] New batch detected (variation ${variationNumber}, previous: ${lastVariationNumber}). Resetting state.`);
+  } else if (currentBatchStartTime === null) {
+    // First call in a session - set start time but don't reset (preserve state if any)
+    currentBatchStartTime = now;
   }
   lastVariationNumber = variationNumber;
 }
@@ -882,7 +899,8 @@ export const generatePromptWithChatGPT = async (
   recursionDepth: number = 0, // NEW: explicit recursion depth counter
   imageClusterData?: any, // Optional: full image cluster data from analysis (for Image Theme Expansion)
   isSrefMode: boolean = false, // NEW: SREF Style Match mode flag
-  srefCode: string = '' // NEW: Midjourney SREF code/URL
+  srefCode: string = '', // NEW: Midjourney SREF code/URL
+  selectedCategory?: string // NEW: User-selected category type (optional)
 ): Promise<string | null> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
@@ -1023,7 +1041,7 @@ export const generatePromptWithChatGPT = async (
   
   /**
    * Finds relevant categories based on primary subject using keyword matching
-   * Returns top 20 most relevant categories
+   * Returns ALL categories with scores (not just top 20) to ensure maximum variety
    */
   function findRelevantCategories(primarySubject: string, allCategories: Array<{ name: string; keywords: string[]; examples: string[]; forbidden: string[] }>): Array<{ index: number; category: { name: string; keywords: string[]; examples: string[]; forbidden: string[] }; score: number }> {
     const subjectLower = primarySubject.toLowerCase();
@@ -1054,12 +1072,12 @@ export const generatePromptWithChatGPT = async (
       return { index, category, score };
     });
     
-    // Sort by score (highest first) and return top 20
-    return scored.sort((a, b) => b.score - a.score).slice(0, 20);
+    // Return ALL categories with scores (not just top 20) to allow variety across all types
+    return scored.sort((a, b) => b.score - a.score);
   }
   
   /**
-   * Selects a unique category from relevant categories, ensuring no repetition
+   * Selects a unique category from relevant categories, ensuring no repetition and variety across types
    */
   function selectUniqueCategory(
     variationNumber: number,
@@ -1069,10 +1087,51 @@ export const generatePromptWithChatGPT = async (
     const available = relevantCategories.filter(cat => !usedCategories.has(cat.index));
     
     // If all relevant categories are used, allow reuse but prefer unused ones
-    const candidates = available.length > 0 ? available : relevantCategories;
+    let candidates = available.length > 0 ? available : relevantCategories;
     
     if (candidates.length === 0) {
       return null;
+    }
+    
+    // Group categories by type to ensure variety (only if candidates span multiple groups):
+    // 0-9: Botanical, 10-24: Creatures, 25-39: Artifacts, 40-54: Architecture, 55-69: Celestial, 70-84: Ephemera, 85-99: Dwellings
+    const categoryGroups = [
+      { start: 0, end: 9, name: 'Botanical' },
+      { start: 10, end: 24, name: 'Creatures' },
+      { start: 25, end: 39, name: 'Artifacts' },
+      { start: 40, end: 54, name: 'Architecture' },
+      { start: 55, end: 69, name: 'Celestial' },
+      { start: 70, end: 84, name: 'Ephemera' },
+      { start: 85, end: 99, name: 'Dwellings' }
+    ];
+    
+    // Check if all candidates are from the same group (user selected a specific category type)
+    const candidateGroups = categoryGroups.filter(group => 
+      candidates.some(cat => cat.index >= group.start && cat.index <= group.end)
+    );
+    
+    // Only cycle through groups if candidates span multiple groups (auto-select mode)
+    if (candidateGroups.length > 1) {
+      // Determine which group to target for this variation (cycle through groups)
+      const targetGroupIndex = variationNumber % categoryGroups.length;
+      const targetGroup = categoryGroups[targetGroupIndex];
+      
+      // Find candidates in the target group
+      const groupCandidates = candidates.filter(cat => 
+        cat.index >= targetGroup.start && cat.index <= targetGroup.end
+      );
+      
+      // If we have candidates in the target group, use them; otherwise use all available
+      if (groupCandidates.length > 0) {
+        candidates = groupCandidates;
+        console.log(`[PromptGen] Targeting ${targetGroup.name} group (indices ${targetGroup.start}-${targetGroup.end}) for variation ${variationNumber}`);
+      } else {
+        // No candidates in target group, but log for debugging
+        console.log(`[PromptGen] No candidates in ${targetGroup.name} group, using all available for variation ${variationNumber}`);
+      }
+    } else if (candidateGroups.length === 1) {
+      // All candidates are from the same group (user selected a category type)
+      console.log(`[PromptGen] All candidates from ${candidateGroups[0].name} group (user-selected category type) for variation ${variationNumber}`);
     }
     
     // Use hash32 to deterministically select from available categories
@@ -1084,6 +1143,12 @@ export const generatePromptWithChatGPT = async (
     
     return { index: selected.index, category: selected.category };
   }
+
+  // ============================================
+  // BATCH STATE MANAGEMENT (MUST BE BEFORE SREF MODE)
+  // ============================================
+  // Reset batch state if starting a new batch (detect by variationNumber decreasing)
+  resetBatchIfNeeded(variationNumber);
 
   // ============================================
   // SREF STYLE MATCH MODE (100 Categories with Intelligent Selection)
@@ -1116,10 +1181,46 @@ export const generatePromptWithChatGPT = async (
     const allCategories = generateAllCategories();
     
     // Find relevant categories based on primary subject (intelligent keyword matching)
+    // But use ALL categories to ensure variety, not just the top 20
     const relevantCategories = findRelevantCategories(primarySubject, allCategories);
     
-    // Select a unique category from relevant ones (ensures no repetition)
-    const selectedCategoryData = selectUniqueCategory(variationNumber, relevantCategories);
+    // For variety, we'll select from ALL categories, but prioritize relevant ones
+    // This ensures we get diverse subjects (nature, objects, structures, etc.) not just nature
+    const allCategoriesWithScores = allCategories.map((category, index) => {
+      const relevant = relevantCategories.find(rc => rc.index === index);
+      return {
+        index,
+        category,
+        score: relevant ? relevant.score : 0 // Use relevance score if available, otherwise 0
+      };
+    });
+    
+    // Select a unique category from ALL categories (ensures maximum variety)
+    // If user selected a specific category type, filter to that type first
+    let categoriesToSelectFrom = allCategoriesWithScores;
+    if (selectedCategory && selectedCategory.trim()) {
+      // Map category names to index ranges
+      const categoryRanges: Record<string, { start: number; end: number }> = {
+        'Botanical': { start: 0, end: 9 },
+        'Creatures': { start: 10, end: 24 },
+        'Artifacts': { start: 25, end: 39 },
+        'Architecture': { start: 40, end: 54 },
+        'Celestial': { start: 55, end: 69 },
+        'Ephemera': { start: 70, end: 84 },
+        'Dwellings': { start: 85, end: 99 }
+      };
+      
+      const range = categoryRanges[selectedCategory.trim()];
+      if (range) {
+        categoriesToSelectFrom = allCategoriesWithScores.filter(cat => 
+          cat.index >= range.start && cat.index <= range.end
+        );
+        console.log(`[PromptGen] User selected category type "${selectedCategory}", filtering to indices ${range.start}-${range.end} (${categoriesToSelectFrom.length} categories)`);
+      }
+    }
+    
+    // Select a unique category from filtered categories
+    const selectedCategoryData = selectUniqueCategory(variationNumber, categoriesToSelectFrom);
     
     const targetCategory = selectedCategoryData ? {
       name: selectedCategoryData.category.name,
@@ -1293,12 +1394,6 @@ Output ONLY: "[Your specific subject description]"`;
     // Return just the description (no header needed for SREF mode)
     return cleaned;
   }
-
-  // ============================================
-  // BATCH STATE MANAGEMENT
-  // ============================================
-  // Reset batch state if starting a new batch
-  resetBatchIfNeeded(variationNumber);
 
   // ============================================
   // PRIMARY SUBJECT SELECTION (From Master List or User-Specified)

@@ -55,6 +55,7 @@ const App: React.FC = () => {
   const [isSrefMode, setIsSrefMode] = useState<boolean>(false);
   const [srefCode, setSrefCode] = useState<string>('');
   const [srefSubject, setSrefSubject] = useState<string>('');
+  const [srefCategory, setSrefCategory] = useState<string>(''); // Selected category for SREF mode
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -793,7 +794,8 @@ const App: React.FC = () => {
           0, // recursionDepth
           imageClusterData, // Pass full image cluster data for Image Theme Expansion
           isSrefModeForRequest, // SREF mode flag
-          srefCode // SREF code/URL
+          srefCode, // SREF code/URL
+          srefCategory || undefined // Selected category (optional)
         ).catch((error) => {
           console.warn(`ChatGPT prompt generation failed for request ${i + 1}, using fallback:`, error?.message || error);
           console.warn(`Full error details:`, error);
@@ -2122,6 +2124,7 @@ const App: React.FC = () => {
                   setIsSrefMode(false);
                   setSrefCode('');
                   setSrefSubject('');
+                  setSrefCategory('');
                 }}
                 className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
               >
@@ -2149,6 +2152,30 @@ const App: React.FC = () => {
               />
               <p className="text-xs text-slate-500 mt-2">
                 Enter the main subject or theme. ChatGPT will generate different variations of this subject.
+              </p>
+            </div>
+
+            {/* Category Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Category Type (Optional)
+              </label>
+              <select
+                value={srefCategory}
+                onChange={(e) => setSrefCategory(e.target.value)}
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+              >
+                <option value="">Auto-select (variety across all types)</option>
+                <option value="Botanical">Botanical (Plants, Flowers, Mushrooms)</option>
+                <option value="Creatures">Creatures (Animals, Insects, Small Wildlife)</option>
+                <option value="Artifacts">Artifacts (Keys, Potions, Crystals, Magical Items)</option>
+                <option value="Architecture">Architecture (Arches, Doors, Bridges, Structures)</option>
+                <option value="Celestial">Celestial (Moon, Stars, Comets, Cosmic Elements)</option>
+                <option value="Ephemera">Ephemera (Letters, Quills, Stamps, Vintage Items)</option>
+                <option value="Dwellings">Dwellings (Treehouses, Cabins, Nests, Shelters)</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-2">
+                Select a category type to focus on. Leave as "Auto-select" for variety across all types.
               </p>
             </div>
 
