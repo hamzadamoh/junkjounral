@@ -1000,12 +1000,27 @@ export const generateJournalPage = async (
       }
     } else if (customPrompt) {
       // For other modes with custom prompts: Add minimal flat design constraints
-      if (settings.aspectRatio && settings.aspectRatio !== '1:1' && !prompt.includes('--ar')) {
-        prompt += ` --ar ${settings.aspectRatio}`;
-      }
-      // Add minimal flat design constraints if not already present
-      if (!prompt.toLowerCase().includes('flat printable page')) {
-        prompt += ` flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+      // BUT skip for SREF mode - the SREF handles all styling, and we should only have subject description
+      const isSrefMode = theme?.id === 'sref-style-match';
+      
+      // For SREF mode: Only add aspect ratio at the end (before --sref will be added)
+      // For other modes: Add aspect ratio and flat design constraints
+      if (isSrefMode) {
+        // SREF mode: Use extracted aspect ratio if found, otherwise use provided aspectRatio
+        const finalAspectRatio = extractedAspectRatio || (aspectRatio && aspectRatio !== '1:1' ? aspectRatio : null);
+        if (finalAspectRatio) {
+          prompt += ` --ar ${finalAspectRatio}`;
+        }
+        console.log(`[Ttapi] SREF mode detected - skipping flat design constraints, relying on --sref for styling`);
+      } else {
+        // Non-SREF mode: Add aspect ratio and flat design constraints
+        if (settings.aspectRatio && settings.aspectRatio !== '1:1' && !prompt.includes('--ar')) {
+          prompt += ` --ar ${settings.aspectRatio}`;
+        }
+        // Add minimal flat design constraints if not already present
+        if (!prompt.toLowerCase().includes('flat printable page')) {
+          prompt += ` flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page.`;
+        }
       }
     } else {
       // Constructed prompt - add full constraints based on color intensity
