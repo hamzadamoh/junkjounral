@@ -30,34 +30,34 @@ import { generateJournalPage as generateWithTtapi } from './services/ttapiServic
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 
+// Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
+const APP_PASSWORD = typeof window !== 'undefined' ? (import.meta.env.VITE_APP_PASSWORD || '') : '';
+
 const App: React.FC = () => {
   // --- Password Protection State ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Initialize from sessionStorage only once
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('app_authenticated') === 'true';
+    }
+    return false;
+  });
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
 
-  // Get password from environment variable (constant, doesn't change)
-  const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
-
   // Check authentication on mount (only once)
   useEffect(() => {
-    // Check if user was previously authenticated (stored in sessionStorage)
-    if (typeof window !== 'undefined') {
-      const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
-      const appPassword = import.meta.env.VITE_APP_PASSWORD || '';
-      
-      // If no password is set in env, allow access (for development)
-      if (!appPassword) {
-        console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
-        setIsAuthenticated(true);
-        setIsCheckingAuth(false);
-        return;
-      }
-      
-      setIsAuthenticated(wasAuthenticated);
+    // If no password is set in env, allow access (for development)
+    if (!APP_PASSWORD) {
+      console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
+      setIsAuthenticated(true);
+      setIsCheckingAuth(false);
+      return;
     }
+    
+    // Authentication state is already initialized from useState initializer
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
 
@@ -68,7 +68,8 @@ const App: React.FC = () => {
     setIsCheckingPassword(true);
 
     // If no password is set in env, allow access (for development)
-    if (!APP_PASSWORD) {
+    const appPassword = APP_PASSWORD;
+    if (!appPassword) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_authenticated', 'true');
@@ -79,7 +80,8 @@ const App: React.FC = () => {
     }
 
     // Check password
-    if (password === APP_PASSWORD) {
+    const appPassword = APP_PASSWORD;
+    if (password === appPassword) {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_authenticated', 'true');
       }
