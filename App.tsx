@@ -1213,10 +1213,16 @@ const App: React.FC = () => {
           // Check if we're in SREF mode
           const isSrefModeForGeneration = selectedTheme?.id === 'sref-style-match' || isSrefMode;
           
-          if (isSrefModeForGeneration && srefCode.trim()) {
-            // SREF mode: use the SREF code/URL as style reference
-            imageStyleRefUrl = srefCode.trim();
-            console.log(`[Midjourney Request ${requestIdx + 1}] Using SREF Style Match mode - SREF code: ${srefCode.substring(0, 50)}...`);
+          if (isSrefModeForGeneration) {
+            // SREF mode: use the SREF code/URL as style reference ONLY if provided
+            if (srefCode.trim()) {
+              imageStyleRefUrl = srefCode.trim();
+              console.log(`[Midjourney Request ${requestIdx + 1}] Using SREF Style Match mode - SREF code: ${srefCode.substring(0, 50)}...`);
+            } else {
+              // No SREF code provided - explicitly set to undefined
+              imageStyleRefUrl = undefined;
+              console.log(`[Midjourney Request ${requestIdx + 1}] SREF mode active but no SREF code provided - skipping style reference`);
+            }
           } else if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
             // Image Theme Expansion mode: use single image's style reference
             // First try singleImageForTheme.styleRefUrl, then fallback to settings.styleRefUrl
@@ -1256,9 +1262,20 @@ const App: React.FC = () => {
           // Create modified settings with image-specific styleRefUrl
           // For Image Theme Expansion mode: skip style reference URL, rely on detailed prompt only
           // For SREF mode: use the SREF code as style reference (don't skip)
+          // IMPORTANT: In SREF mode, if no SREF code is provided, don't fall back to settings.styleRefUrl
+          // Only use fallback in non-SREF modes
+          let finalStyleRefUrl: string | undefined;
+          if (isSrefModeForGeneration) {
+            // SREF mode: only use the SREF code if provided, don't fall back
+            finalStyleRefUrl = imageStyleRefUrl || undefined;
+          } else {
+            // Non-SREF mode: use image-specific URL or fall back to settings
+            finalStyleRefUrl = imageStyleRefUrl || settings.styleRefUrl;
+          }
+          
           const imageSpecificSettings = {
             ...settings,
-            styleRefUrl: imageStyleRefUrl || settings.styleRefUrl,
+            styleRefUrl: finalStyleRefUrl,
             skipStyleReference: isImageThemeMode ? true : false // SREF mode should NOT skip style reference
           };
           
