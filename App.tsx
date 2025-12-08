@@ -31,7 +31,8 @@ import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecific
 import { uploadImageToWordPress } from './services/imageHostingService';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
-const APP_PASSWORD = typeof window !== 'undefined' ? (import.meta.env.VITE_APP_PASSWORD || '') : '';
+// Note: import.meta.env is replaced at build time by Vite, so this is safe
+const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
 
 const App: React.FC = () => {
   // --- Password Protection State ---
@@ -43,6 +44,11 @@ const App: React.FC = () => {
 
   // Check authentication on mount (only once)
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     // If no password is set in env, allow access (for development)
     if (!APP_PASSWORD) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
@@ -52,11 +58,8 @@ const App: React.FC = () => {
     }
     
     // Check if user was previously authenticated (stored in sessionStorage)
-    if (typeof window !== 'undefined') {
-      const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
-      setIsAuthenticated(wasAuthenticated);
-    }
-    
+    const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
+    setIsAuthenticated(wasAuthenticated);
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
 
