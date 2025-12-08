@@ -16,6 +16,9 @@ const metrics = {
 // Failed subjects tracking (module-level)
 const failedSubjects = new Set<string>();
 
+// Used categories tracking (module-level) - ensures no category repetition
+const usedCategories = new Set<number>();
+
 /**
  * Logs current metrics for debugging/monitoring
  */
@@ -240,6 +243,7 @@ function resetBatchIfNeeded(variationNumber: number): void {
   if (variationNumber === 1 || variationNumber < lastVariationNumber) {
     // New batch detected - reset state
     usedCombinations.clear();
+    usedCategories.clear();
     currentBatchStyleSeed = null;
     console.log(`[Randomization] New batch detected (variation ${variationNumber}). Resetting state.`);
   }
@@ -893,7 +897,196 @@ export const generatePromptWithChatGPT = async (
   }
 
   // ============================================
-  // SREF STYLE MATCH MODE (Final Fix: Hard-Coded Category Injection)
+  // 100 CATEGORY SYSTEM WITH INTELLIGENT SELECTION
+  // ============================================
+  
+  /**
+   * Generates all 100 categories with keywords for intelligent matching
+   */
+  function generateAllCategories(): Array<{ name: string; keywords: string[]; examples: string[]; forbidden: string[] }> {
+    return [
+      // Botanical/Flora (1-10)
+      { name: "Glowing Mushroom", keywords: ["mushroom", "fungus", "glow", "bioluminescent", "forest floor"], examples: ["Glowing Mushroom", "Fairy Ring", "Luminous Fungus"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Fern", keywords: ["fern", "frond", "foliage", "green", "plant"], examples: ["Fern", "Maidenhair Fern", "Bracken"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Exotic Flower", keywords: ["flower", "blossom", "petal", "bloom", "exotic"], examples: ["Exotic Flower", "Orchid", "Tropical Bloom"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Moss", keywords: ["moss", "lichen", "green", "soft", "ground"], examples: ["Moss", "Velvet Moss", "Forest Moss"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Leaf", keywords: ["leaf", "foliage", "autumn", "maple", "oak"], examples: ["Leaf", "Maple Leaf", "Autumn Leaf"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Berry", keywords: ["berry", "fruit", "red", "blue", "wild"], examples: ["Berry", "Wild Berry", "Elderberry"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Seed", keywords: ["seed", "pod", "acorn", "nut", "sprout"], examples: ["Seed", "Acorn", "Seed Pod"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Root", keywords: ["root", "underground", "twisted", "ancient", "tree"], examples: ["Root", "Gnarled Root", "Ancient Root"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Bark", keywords: ["bark", "tree", "textured", "rough", "wood"], examples: ["Bark", "Tree Bark", "Textured Bark"], forbidden: ["animal", "creature", "structure"] },
+      { name: "Twig", keywords: ["twig", "branch", "small", "delicate", "winter"], examples: ["Twig", "Winter Twig", "Delicate Branch"], forbidden: ["animal", "creature", "structure"] },
+      
+      // Small Creatures (11-25)
+      { name: "Frog", keywords: ["frog", "amphibian", "pond", "green", "small"], examples: ["Frog", "Tree Frog", "Pond Frog"], forbidden: ["plant", "structure", "large"] },
+      { name: "Mouse", keywords: ["mouse", "rodent", "small", "cute", "field"], examples: ["Mouse", "Field Mouse", "Wood Mouse"], forbidden: ["plant", "structure", "large"] },
+      { name: "Moth", keywords: ["moth", "insect", "wings", "nocturnal", "delicate"], examples: ["Moth", "Luna Moth", "Silk Moth"], forbidden: ["plant", "structure", "large"] },
+      { name: "Beetle", keywords: ["beetle", "insect", "shell", "iridescent", "small"], examples: ["Beetle", "Jewel Beetle", "Scarab"], forbidden: ["plant", "structure", "large"] },
+      { name: "Snail", keywords: ["snail", "shell", "slow", "garden", "spiral"], examples: ["Snail", "Garden Snail", "Shell"], forbidden: ["plant", "structure", "large"] },
+      { name: "Spider", keywords: ["spider", "web", "eight", "legs", "arachnid"], examples: ["Spider", "Orb Weaver", "Jumping Spider"], forbidden: ["plant", "structure", "large"] },
+      { name: "Cricket", keywords: ["cricket", "insect", "chirp", "grass", "small"], examples: ["Cricket", "Field Cricket", "House Cricket"], forbidden: ["plant", "structure", "large"] },
+      { name: "Caterpillar", keywords: ["caterpillar", "larva", "striped", "leaf", "small"], examples: ["Caterpillar", "Monarch Caterpillar", "Woolly Bear"], forbidden: ["plant", "structure", "large"] },
+      { name: "Dragonfly", keywords: ["dragonfly", "wings", "iridescent", "pond", "delicate"], examples: ["Dragonfly", "Blue Dragonfly", "Damselfly"], forbidden: ["plant", "structure", "large"] },
+      { name: "Firefly", keywords: ["firefly", "lightning", "bug", "glow", "night"], examples: ["Firefly", "Glowing Firefly", "Lightning Bug"], forbidden: ["plant", "structure", "large"] },
+      { name: "Bee", keywords: ["bee", "honey", "buzz", "yellow", "black"], examples: ["Bee", "Honeybee", "Bumblebee"], forbidden: ["plant", "structure", "large"] },
+      { name: "Butterfly", keywords: ["butterfly", "wings", "colorful", "delicate", "flower"], examples: ["Butterfly", "Monarch", "Swallowtail"], forbidden: ["plant", "structure", "large"] },
+      { name: "Ladybug", keywords: ["ladybug", "red", "spots", "small", "garden"], examples: ["Ladybug", "Red Ladybug", "Spotted Beetle"], forbidden: ["plant", "structure", "large"] },
+      { name: "Grasshopper", keywords: ["grasshopper", "jump", "green", "field", "insect"], examples: ["Grasshopper", "Green Grasshopper", "Field Hopper"], forbidden: ["plant", "structure", "large"] },
+      { name: "Ant", keywords: ["ant", "small", "colony", "worker", "insect"], examples: ["Ant", "Worker Ant", "Red Ant"], forbidden: ["plant", "structure", "large"] },
+      
+      // Magical Artifacts (26-40)
+      { name: "Key", keywords: ["key", "lock", "metal", "ancient", "magical"], examples: ["Key", "Ancient Key", "Ornate Key"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Potion Bottle", keywords: ["potion", "bottle", "glass", "liquid", "magical"], examples: ["Potion Bottle", "Elixir Vial", "Magic Potion"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Amulet", keywords: ["amulet", "talisman", "pendant", "protective", "magical"], examples: ["Amulet", "Protective Amulet", "Ancient Talisman"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Crystal", keywords: ["crystal", "gem", "shimmer", "magical", "glowing"], examples: ["Crystal", "Quartz Crystal", "Glowing Gem"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Lantern", keywords: ["lantern", "light", "glow", "metal", "hanging"], examples: ["Lantern", "Glowing Lantern", "Hanging Light"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Scroll", keywords: ["scroll", "parchment", "ancient", "writing", "rolled"], examples: ["Scroll", "Ancient Scroll", "Parchment"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Wand", keywords: ["wand", "magic", "wood", "spell", "wizard"], examples: ["Wand", "Magic Wand", "Enchanted Stick"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Orb", keywords: ["orb", "sphere", "crystal", "glowing", "magical"], examples: ["Orb", "Crystal Orb", "Glowing Sphere"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Vial", keywords: ["vial", "bottle", "small", "glass", "liquid"], examples: ["Vial", "Glass Vial", "Small Bottle"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Talisman", keywords: ["talisman", "charm", "protective", "ancient", "magical"], examples: ["Talisman", "Protective Charm", "Ancient Talisman"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Grimoire", keywords: ["grimoire", "book", "spell", "ancient", "magical"], examples: ["Grimoire", "Spell Book", "Ancient Tome"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Hourglass", keywords: ["hourglass", "time", "sand", "glass", "ancient"], examples: ["Hourglass", "Time Glass", "Sand Timer"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Compass", keywords: ["compass", "navigation", "metal", "needle", "ancient"], examples: ["Compass", "Navigation Compass", "Ancient Compass"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Seal", keywords: ["seal", "wax", "stamp", "official", "ancient"], examples: ["Seal", "Wax Seal", "Official Stamp"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Charm", keywords: ["charm", "small", "magical", "protective", "jewelry"], examples: ["Charm", "Protective Charm", "Magic Charm"], forbidden: ["animal", "plant", "structure"] },
+      
+      // Architectural Elements (41-55)
+      { name: "Stone Arch", keywords: ["arch", "stone", "ancient", "gateway", "structure"], examples: ["Stone Arch", "Ancient Archway", "Stone Gateway"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Tiny Door", keywords: ["door", "small", "wooden", "mysterious", "entrance"], examples: ["Tiny Door", "Small Door", "Mysterious Entrance"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Gate", keywords: ["gate", "entrance", "metal", "wrought", "iron"], examples: ["Gate", "Wrought Iron Gate", "Garden Gate"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Bridge", keywords: ["bridge", "stone", "wooden", "crossing", "arch"], examples: ["Bridge", "Stone Bridge", "Wooden Crossing"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Window", keywords: ["window", "glass", "frame", "light", "opening"], examples: ["Window", "Stained Glass", "Arched Window"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Staircase", keywords: ["staircase", "stairs", "spiral", "stone", "ascending"], examples: ["Staircase", "Spiral Stairs", "Stone Steps"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Fence", keywords: ["fence", "wooden", "picket", "boundary", "garden"], examples: ["Fence", "Picket Fence", "Garden Boundary"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Portal", keywords: ["portal", "magical", "gateway", "opening", "mystical"], examples: ["Portal", "Magic Gateway", "Mystical Opening"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Arch", keywords: ["arch", "curved", "stone", "support", "ancient"], examples: ["Arch", "Curved Arch", "Ancient Support"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Gatepost", keywords: ["gatepost", "pillar", "stone", "entrance", "marker"], examples: ["Gatepost", "Stone Pillar", "Entrance Marker"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Threshold", keywords: ["threshold", "doorway", "entrance", "boundary", "stone"], examples: ["Threshold", "Doorway", "Entrance Stone"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Entryway", keywords: ["entryway", "entrance", "door", "hall", "opening"], examples: ["Entryway", "Entrance Hall", "Door Opening"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Gateway", keywords: ["gateway", "entrance", "arch", "passage", "ancient"], examples: ["Gateway", "Ancient Passage", "Stone Entrance"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Passage", keywords: ["passage", "corridor", "narrow", "stone", "tunnel"], examples: ["Passage", "Narrow Corridor", "Stone Tunnel"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Column", keywords: ["column", "pillar", "stone", "support", "ancient"], examples: ["Column", "Stone Pillar", "Ancient Support"], forbidden: ["animal", "plant", "artifact"] },
+      
+      // Celestial/Cosmic (56-70)
+      { name: "Moon Phase", keywords: ["moon", "phase", "lunar", "crescent", "full"], examples: ["Moon Phase", "Crescent Moon", "Full Moon"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Star Map", keywords: ["star", "map", "constellation", "chart", "celestial"], examples: ["Star Map", "Constellation Chart", "Celestial Map"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Constellation", keywords: ["constellation", "stars", "pattern", "sky", "night"], examples: ["Constellation", "Star Pattern", "Night Sky"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Nebula", keywords: ["nebula", "cloud", "cosmic", "colorful", "space"], examples: ["Nebula", "Cosmic Cloud", "Colorful Nebula"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Comet", keywords: ["comet", "tail", "streak", "cosmic", "bright"], examples: ["Comet", "Bright Comet", "Cosmic Streak"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Aurora", keywords: ["aurora", "northern", "lights", "green", "dancing"], examples: ["Aurora", "Northern Lights", "Dancing Lights"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Solar Eclipse", keywords: ["eclipse", "solar", "sun", "moon", "dark"], examples: ["Solar Eclipse", "Eclipse", "Sun Moon"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Stardust", keywords: ["stardust", "sparkle", "cosmic", "glitter", "magical"], examples: ["Stardust", "Cosmic Sparkle", "Magical Glitter"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Galaxy", keywords: ["galaxy", "spiral", "stars", "cosmic", "vast"], examples: ["Galaxy", "Spiral Galaxy", "Cosmic Spiral"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Planet", keywords: ["planet", "orb", "cosmic", "round", "space"], examples: ["Planet", "Distant Planet", "Cosmic Orb"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Asteroid", keywords: ["asteroid", "rock", "space", "cosmic", "floating"], examples: ["Asteroid", "Space Rock", "Cosmic Stone"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Meteor", keywords: ["meteor", "shooting", "star", "streak", "bright"], examples: ["Meteor", "Shooting Star", "Bright Streak"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Cosmic Dust", keywords: ["dust", "cosmic", "particles", "space", "glitter"], examples: ["Cosmic Dust", "Space Particles", "Stellar Dust"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Star Cluster", keywords: ["cluster", "stars", "group", "bright", "cosmic"], examples: ["Star Cluster", "Bright Stars", "Cosmic Group"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Lunar Surface", keywords: ["lunar", "moon", "surface", "crater", "gray"], examples: ["Lunar Surface", "Moon Crater", "Gray Surface"], forbidden: ["animal", "plant", "structure"] },
+      
+      // Ephemera/Stationery (71-85)
+      { name: "Old Letter", keywords: ["letter", "old", "paper", "writing", "vintage"], examples: ["Old Letter", "Vintage Letter", "Handwritten Note"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Quill", keywords: ["quill", "pen", "feather", "writing", "ink"], examples: ["Quill", "Feather Pen", "Writing Quill"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Ink Pot", keywords: ["ink", "pot", "bottle", "writing", "black"], examples: ["Ink Pot", "Ink Bottle", "Writing Ink"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Tag", keywords: ["tag", "label", "paper", "string", "vintage"], examples: ["Tag", "Paper Tag", "Vintage Label"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Envelope", keywords: ["envelope", "letter", "paper", "sealed", "vintage"], examples: ["Envelope", "Sealed Letter", "Vintage Envelope"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Wax Seal", keywords: ["seal", "wax", "stamp", "red", "official"], examples: ["Wax Seal", "Red Seal", "Official Stamp"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Postage Stamp", keywords: ["stamp", "postage", "vintage", "small", "colored"], examples: ["Postage Stamp", "Vintage Stamp", "Colored Stamp"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Ticket", keywords: ["ticket", "paper", "vintage", "old", "admission"], examples: ["Ticket", "Vintage Ticket", "Old Admission"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Label", keywords: ["label", "tag", "paper", "vintage", "written"], examples: ["Label", "Paper Label", "Vintage Tag"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Bookmark", keywords: ["bookmark", "ribbon", "paper", "tassel", "reading"], examples: ["Bookmark", "Ribbon Marker", "Tassel Bookmark"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Note", keywords: ["note", "paper", "handwritten", "small", "message"], examples: ["Note", "Handwritten Note", "Small Message"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Manuscript", keywords: ["manuscript", "ancient", "parchment", "writing", "old"], examples: ["Manuscript", "Ancient Text", "Old Parchment"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Parchment", keywords: ["parchment", "paper", "aged", "ancient", "scroll"], examples: ["Parchment", "Aged Paper", "Ancient Scroll"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Scroll", keywords: ["scroll", "rolled", "parchment", "ancient", "writing"], examples: ["Scroll", "Rolled Parchment", "Ancient Document"], forbidden: ["animal", "plant", "structure"] },
+      { name: "Certificate", keywords: ["certificate", "paper", "official", "seal", "vintage"], examples: ["Certificate", "Official Document", "Vintage Certificate"], forbidden: ["animal", "plant", "structure"] },
+      
+      // Forest Dwellings (86-100)
+      { name: "Treehouse", keywords: ["treehouse", "tree", "house", "wooden", "elevated"], examples: ["Treehouse", "Wooden Treehouse", "Elevated House"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Hollow Log", keywords: ["log", "hollow", "tree", "opening", "natural"], examples: ["Hollow Log", "Tree Hollow", "Natural Opening"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Birdhouse", keywords: ["birdhouse", "small", "wooden", "nest", "garden"], examples: ["Birdhouse", "Wooden Nest", "Garden House"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Nest", keywords: ["nest", "bird", "twigs", "round", "natural"], examples: ["Nest", "Bird Nest", "Twig Nest"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Burrow", keywords: ["burrow", "hole", "ground", "animal", "tunnel"], examples: ["Burrow", "Ground Hole", "Animal Tunnel"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Den", keywords: ["den", "shelter", "animal", "cave", "hidden"], examples: ["Den", "Animal Shelter", "Hidden Cave"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Cabin", keywords: ["cabin", "wooden", "small", "forest", "rustic"], examples: ["Cabin", "Wooden Cabin", "Forest Hut"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Hut", keywords: ["hut", "small", "simple", "wooden", "shelter"], examples: ["Hut", "Simple Hut", "Wooden Shelter"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Shelter", keywords: ["shelter", "protection", "cover", "simple", "natural"], examples: ["Shelter", "Natural Cover", "Simple Protection"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Hideaway", keywords: ["hideaway", "secret", "hidden", "shelter", "cozy"], examples: ["Hideaway", "Secret Shelter", "Hidden Place"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Refuge", keywords: ["refuge", "safe", "shelter", "protection", "sanctuary"], examples: ["Refuge", "Safe Place", "Protection"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Sanctuary", keywords: ["sanctuary", "sacred", "peaceful", "shelter", "holy"], examples: ["Sanctuary", "Sacred Place", "Peaceful Shelter"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Retreat", keywords: ["retreat", "quiet", "peaceful", "shelter", "secluded"], examples: ["Retreat", "Quiet Place", "Secluded Shelter"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Cottage", keywords: ["cottage", "small", "cozy", "house", "garden"], examples: ["Cottage", "Cozy House", "Garden Cottage"], forbidden: ["animal", "plant", "artifact"] },
+      { name: "Shack", keywords: ["shack", "small", "simple", "wooden", "rustic"], examples: ["Shack", "Simple Shack", "Rustic Hut"], forbidden: ["animal", "plant", "artifact"] }
+    ];
+  }
+  
+  /**
+   * Finds relevant categories based on primary subject using keyword matching
+   * Returns top 20 most relevant categories
+   */
+  function findRelevantCategories(primarySubject: string, allCategories: Array<{ name: string; keywords: string[]; examples: string[]; forbidden: string[] }>): Array<{ index: number; category: { name: string; keywords: string[]; examples: string[]; forbidden: string[] }; score: number }> {
+    const subjectLower = primarySubject.toLowerCase();
+    const subjectWords = subjectLower.split(/\s+/);
+    
+    const scored = allCategories.map((category, index) => {
+      let score = 0;
+      
+      // Check keyword matches
+      for (const keyword of category.keywords) {
+        if (subjectLower.includes(keyword.toLowerCase())) {
+          score += 3; // Strong match
+        }
+        for (const word of subjectWords) {
+          if (word === keyword.toLowerCase() || word.includes(keyword.toLowerCase()) || keyword.toLowerCase().includes(word)) {
+            score += 2; // Partial match
+          }
+        }
+      }
+      
+      // Check example matches
+      for (const example of category.examples) {
+        if (subjectLower.includes(example.toLowerCase())) {
+          score += 1;
+        }
+      }
+      
+      return { index, category, score };
+    });
+    
+    // Sort by score (highest first) and return top 20
+    return scored.sort((a, b) => b.score - a.score).slice(0, 20);
+  }
+  
+  /**
+   * Selects a unique category from relevant categories, ensuring no repetition
+   */
+  function selectUniqueCategory(
+    variationNumber: number,
+    relevantCategories: Array<{ index: number; category: { name: string; keywords: string[]; examples: string[]; forbidden: string[] }; score: number }>
+  ): { index: number; category: { name: string; keywords: string[]; examples: string[]; forbidden: string[] } } | null {
+    // Filter out already used categories
+    const available = relevantCategories.filter(cat => !usedCategories.has(cat.index));
+    
+    // If all relevant categories are used, allow reuse but prefer unused ones
+    const candidates = available.length > 0 ? available : relevantCategories;
+    
+    if (candidates.length === 0) {
+      return null;
+    }
+    
+    // Use hash32 to deterministically select from available categories
+    const selectedIndex = hash32(variationNumber * 7, candidates.length);
+    const selected = candidates[selectedIndex];
+    
+    // Mark as used
+    usedCategories.add(selected.index);
+    
+    return { index: selected.index, category: selected.category };
+  }
+
+  // ============================================
+  // SREF STYLE MATCH MODE (100 Categories with Intelligent Selection)
   // ============================================
   if (isSrefMode) {
     // Determine primary subject for SREF mode
@@ -919,74 +1112,27 @@ export const generatePromptWithChatGPT = async (
       primarySubject = `${theme} element ${variationNumber}`;
     }
 
-    // Define 12 distinct categories to prevent repetition (ensures 48 unique images before category repeats)
-    // Use hash32 to ensure each variation gets a unique category (not just modulo rotation)
-    const categoryConfigs = [
-      {
-        name: "Botanical/Flora",
-        examples: ["Glowing Mushroom", "Fern", "Exotic Flower", "Moss", "Leaf", "Berry", "Seed", "Root", "Bark", "Twig", "Ivy", "Thorn", "Petal", "Stem", "Blossom"],
-        forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Small Creature",
-        examples: ["Frog", "Mouse", "Moth", "Beetle", "Snail", "Spider", "Cricket", "Caterpillar", "Dragonfly", "Firefly", "Bee", "Butterfly", "Ladybug", "Grasshopper", "Ant"],
-        forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal", "larger", "fox", "owl", "deer"]
-      },
-      {
-        name: "Magical Artifact",
-        examples: ["Key", "Potion Bottle", "Amulet", "Crystal", "Lantern", "Scroll", "Wand", "Orb", "Vial", "Talisman", "Grimoire", "Hourglass", "Compass", "Seal", "Charm"],
-        forbidden: ["animal", "creature", "plant", "nature", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Architectural Element",
-        examples: ["Stone Arch", "Tiny Door", "Gate", "Bridge", "Window", "Staircase", "Fence", "Portal", "Arch", "Gatepost", "Threshold", "Entryway", "Gateway", "Passage", "Column"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "potion", "lantern", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Celestial/Cosmic",
-        examples: ["Moon Phase", "Star Map", "Constellation", "Nebula", "Comet", "Aurora", "Solar Eclipse", "Stardust", "Galaxy", "Planet", "Asteroid", "Meteor", "Cosmic Dust", "Star Cluster", "Lunar Surface"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Ephemera/Stationery",
-        examples: ["Old Letter", "Quill", "Ink Pot", "Tag", "Envelope", "Wax Seal", "Postage Stamp", "Ticket", "Label", "Bookmark", "Note", "Manuscript", "Parchment", "Scroll", "Certificate"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Forest Dwelling",
-        examples: ["Treehouse", "Hollow Log", "Birdhouse", "Nest", "Burrow", "Den", "Cabin", "Hut", "Shelter", "Hideaway", "Refuge", "Sanctuary", "Retreat", "Cottage", "Shack"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "water", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Larger Animal",
-        examples: ["Fox", "Owl", "Deer", "Badger", "Raven", "Wolf", "Bear", "Hawk", "Swan", "Crow", "Eagle", "Stag", "Hawk", "Falcon", "Raccoon"],
-        forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal", "small", "frog", "mouse", "moth"]
-      },
-      {
-        name: "Water Feature",
-        examples: ["Puddle", "Stream", "Reflection", "Dew Drop", "Pond", "Fountain", "Waterfall", "Spring", "Well", "Creek", "Brook", "Ripple", "Wave", "Mist", "Raindrop"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "food", "cozy", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Food/Cozy Item",
-        examples: ["Tea Cup", "Berries", "Basket", "Candle", "Cookie", "Apple", "Bread", "Honey", "Jam", "Muffin", "Pie", "Cake", "Mug", "Pot", "Jar"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "abstract", "magical", "seasonal"]
-      },
-      {
-        name: "Abstract/Magical",
-        examples: ["Swirling Mist", "Spell Sparkles", "Rune", "Energy Orb", "Magic Circle", "Aura", "Glow", "Shimmer", "Ethereal Light", "Mystical Energy", "Enchanted Glow", "Magical Aura", "Spell Effect", "Mystical Mist", "Ethereal Essence"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "seasonal"]
-      },
-      {
-        name: "Seasonal Element",
-        examples: ["Falling Leaf", "Snowflake", "Acorn", "Pinecone", "Icicle", "Flower Petal", "Maple Leaf", "Cherry Blossom", "Autumn Leaf", "Winter Branch", "Spring Bud", "Summer Bloom", "Frost", "Dew", "Hailstone"],
-        forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical"]
-      }
-    ];
-
-    // Use hash32 to select category deterministically but uniquely for each variation
-    const categoryIndex = hash32(variationNumber * 7, categoryConfigs.length);
-    const targetCategory = categoryConfigs[categoryIndex];
+    // Generate all 100 categories
+    const allCategories = generateAllCategories();
+    
+    // Find relevant categories based on primary subject (intelligent keyword matching)
+    const relevantCategories = findRelevantCategories(primarySubject, allCategories);
+    
+    // Select a unique category from relevant ones (ensures no repetition)
+    const selectedCategoryData = selectUniqueCategory(variationNumber, relevantCategories);
+    
+    const targetCategory = selectedCategoryData ? {
+      name: selectedCategoryData.category.name,
+      examples: selectedCategoryData.category.examples,
+      forbidden: selectedCategoryData.category.forbidden
+    } : {
+      name: allCategories[0].name,
+      examples: allCategories[0].examples,
+      forbidden: allCategories[0].forbidden
+    };
+    
+    const categoryIndex = selectedCategoryData?.index ?? 0;
+    console.log(`[PromptGen] Selected category "${targetCategory.name}" (index ${categoryIndex}) for variation ${variationNumber} (from ${relevantCategories.length} relevant categories, score: ${relevantCategories.find(c => c.index === categoryIndex)?.score || 0})`);
     
     // Use hash32 to select a unique example from the category for this variation
     const exampleIndex = hash32(variationNumber * 13 + categoryIndex * 17, targetCategory.examples.length);
