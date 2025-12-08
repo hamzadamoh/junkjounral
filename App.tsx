@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   ArrowRight, 
   Sparkles, 
@@ -43,9 +43,6 @@ const App: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
   
-  // Memoize password check to avoid re-evaluation
-  const hasPassword = useMemo(() => Boolean(APP_PASSWORD), []);
-  
   // Use a ref to ensure auth check only runs once (even in React Strict Mode)
   const hasCheckedAuth = useRef<boolean>(false);
 
@@ -65,7 +62,8 @@ const App: React.FC = () => {
     }
 
     // If no password is set in env, allow access (for development)
-    if (!hasPassword) {
+    // Check APP_PASSWORD directly (it's a constant, won't change)
+    if (!APP_PASSWORD) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
       setIsAuthenticated(true);
       setIsCheckingAuth(false);
@@ -90,7 +88,7 @@ const App: React.FC = () => {
     setIsCheckingPassword(true);
 
     // If no password is set in env, allow access (for development)
-    if (!hasPassword) {
+    if (!APP_PASSWORD) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_authenticated', 'true');
@@ -179,7 +177,7 @@ const App: React.FC = () => {
             </button>
           </form>
 
-          {!hasPassword && (
+          {!APP_PASSWORD && (
             <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs text-yellow-400">
               ⚠️ Password protection is disabled. Set VITE_APP_PASSWORD in environment variables to enable it.
             </div>
@@ -3065,7 +3063,7 @@ const App: React.FC = () => {
           <div className="text-xs text-slate-500 font-mono hidden md:block">
               AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'TTAPI'}
             </div>
-            {hasPassword && (
+            {APP_PASSWORD && (
               <button
                 onClick={handleLogout}
                 className="px-3 py-1.5 text-xs text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg border border-slate-700 hover:border-red-700 transition-all"
