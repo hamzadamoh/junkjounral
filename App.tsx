@@ -40,17 +40,18 @@ const App: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
 
-  // Get password from environment variable
+  // Get password from environment variable (constant, doesn't change)
   const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
 
-  // Check authentication on mount
+  // Check authentication on mount (only once)
   useEffect(() => {
     // Check if user was previously authenticated (stored in sessionStorage)
     if (typeof window !== 'undefined') {
       const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
+      const appPassword = import.meta.env.VITE_APP_PASSWORD || '';
       
       // If no password is set in env, allow access (for development)
-      if (!APP_PASSWORD) {
+      if (!appPassword) {
         console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
         setIsAuthenticated(true);
         setIsCheckingAuth(false);
@@ -60,7 +61,7 @@ const App: React.FC = () => {
       setIsAuthenticated(wasAuthenticated);
     }
     setIsCheckingAuth(false);
-  }, [APP_PASSWORD]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Handle password authentication
   const handlePasswordSubmit = (e: React.FormEvent) => {
