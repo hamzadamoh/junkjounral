@@ -919,16 +919,34 @@ export const generatePromptWithChatGPT = async (
       primarySubject = `${theme} element ${variationNumber}`;
     }
 
-    // Define 4 distinct categories to rotate through
-    const categories = [
-      "Botanical/Nature Element (e.g., Mushroom, Flower, Fern)",
-      "Magical Object/Artifact (e.g., Lantern, Potion, Key)",
-      "Creature/Animal (e.g., Fox, Owl, Frog, Moth)",
-      "Structural/Scenic Element (e.g., Tiny Door, Archway, Path)"
+    // Define 4 distinct categories with specific examples
+    const categoryIndex = variationNumber % 4;
+    const categoryConfigs = [
+      {
+        name: "Botanical/Nature Element",
+        examples: ["Mushroom", "Flower", "Fern", "Moss", "Leaf", "Berry", "Seed", "Root", "Bark", "Twig"],
+        forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway"]
+      },
+      {
+        name: "Magical Object/Artifact",
+        examples: ["Lantern", "Potion", "Key", "Crystal", "Amulet", "Scroll", "Wand", "Orb", "Vial", "Talisman"],
+        forbidden: ["animal", "creature", "plant", "nature", "structure", "path", "door", "archway"]
+      },
+      {
+        name: "Creature/Animal",
+        examples: ["Fox", "Owl", "Frog", "Moth", "Deer", "Rabbit", "Bird", "Butterfly", "Squirrel", "Hedgehog"],
+        forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway"]
+      },
+      {
+        name: "Structural/Scenic Element",
+        examples: ["Tiny Door", "Archway", "Path", "Bridge", "Gate", "Window", "Staircase", "Fence", "Gate", "Portal"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "potion", "lantern"]
+      }
     ];
 
-    // Select the category for this specific variation
-    const targetCategory = categories[variationNumber % categories.length];
+    const targetCategory = categoryConfigs[categoryIndex];
+    const exampleIndex = (variationNumber + categoryIndex * 10) % targetCategory.examples.length;
+    const exampleSubject = targetCategory.examples[exampleIndex];
 
     const systemPrompt = `You are a Subject Generator for Midjourney SREF Mode.
 
@@ -936,23 +954,47 @@ YOUR GOAL:
 The user has provided a MASTER THEME: "${primarySubject}".
 Your job is to generate a specific "Nano-Subject" that fits this theme, strictly within the assigned CATEGORY.
 
-CURRENT CATEGORY CONSTRAINT: **${targetCategory}**
+CURRENT CATEGORY CONSTRAINT: **${targetCategory.name}**
 
 CRITICAL RULES:
-1. **OBEY THE CATEGORY:** The subject MUST be a "${targetCategory}". Do not deviate.
-2. **BE SPECIFIC:** Drill down to a specific item. (e.g., Instead of "Bird", say "A Barn Owl perched on a branch").
-3. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge". The --sref handles that.
-4. **TEXT ONLY:** Output just the descriptive sentence.
+1. **OBEY THE CATEGORY:** The subject MUST be a "${targetCategory.name}". Do not deviate.
+2. **FORBIDDEN WORDS:** Do NOT use any of these words: ${targetCategory.forbidden.join(', ')}.
+3. **BE SPECIFIC:** Drill down to a specific item. Use the example "${exampleSubject}" as inspiration, but create a DIFFERENT specific subject.
+4. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge", "illustration", "painting". The --sref handles that.
+5. **TEXT ONLY:** Output just the descriptive sentence, no headers.
+
+EXAMPLES FOR THIS CATEGORY:
+- ${targetCategory.examples.slice(0, 5).join('\n- ')}
 
 Output format: "[Specific subject description & action ONLY]."`;
 
+    // Calculate a deterministic variation modifier to ensure uniqueness
+    // Use variation number to select different aspects/actions for the same category
+    const actionModifiers = [
+      "resting", "perched", "glowing", "hanging", "floating", "growing", "standing", "sitting", 
+      "illuminating", "sparkling", "shimmering", "twinkling", "dancing", "flying", "crawling", "leaping"
+    ];
+    const actionIndex = Math.floor(variationNumber / 4) % actionModifiers.length;
+    const suggestedAction = actionModifiers[actionIndex];
+
     // INJECT the category directly into the user prompt to force compliance
-    const userPrompt = `Generate a specific subject description for a **${targetCategory}** that fits the theme "${primarySubject}".
+    const userPrompt = `Generate Variation #${variationNumber} for theme "${primarySubject}".
+
+CATEGORY: **${targetCategory.name}**
+EXAMPLE INSPIRATION: "${exampleSubject}" (but create something DIFFERENT)
+
+VARIATION REQUIREMENTS:
+- This is variation #${variationNumber} of ${Math.ceil(variationNumber / 4) * 4} total variations
+- Category rotation: Variation ${variationNumber % 4 + 1} of 4 categories
+- Suggested action/state: "${suggestedAction}" (use this or a similar action)
 
 INSTRUCTIONS:
-1. Focus ONLY on the "${targetCategory}".
-2. Describe it clearly in 10-15 words.
-3. Ensure it is interesting and distinct.
+1. Generate a SPECIFIC ${targetCategory.name} that fits "${primarySubject}".
+2. Use "${exampleSubject}" as inspiration, but create a UNIQUE subject (not the same as the example).
+3. Include action/state: "${suggestedAction}" or similar (e.g., "A glowing mushroom", "A lantern illuminating", "A fox resting").
+4. Describe it clearly in 10-15 words with action/pose.
+5. DO NOT use: ${targetCategory.forbidden.join(', ')}.
+6. CRITICAL: This must be DIFFERENT from all previous variations. Think creatively about other ${targetCategory.name.toLowerCase()}s that fit the theme.
 
 Output ONLY: "[Your specific subject description]"`;
 
