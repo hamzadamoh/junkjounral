@@ -893,7 +893,7 @@ export const generatePromptWithChatGPT = async (
   }
 
   // ============================================
-  // SREF STYLE MATCH MODE (New - Check First)
+  // SREF STYLE MATCH MODE (Final Fix: Hard-Coded Category Injection)
   // ============================================
   if (isSrefMode) {
     // Determine primary subject for SREF mode
@@ -919,49 +919,42 @@ export const generatePromptWithChatGPT = async (
       primarySubject = `${theme} element ${variationNumber}`;
     }
 
-    // Get list of already used subjects to avoid duplicates
-    const usedSubjectsList = usedSubjects ? Array.from(usedSubjects).filter(s => !s.includes('##FAILED')).map(s => s.replace('##FAILED', '').toLowerCase()) : [];
-    const usedSubjectsText = usedSubjectsList.length > 0 ? `\n\n⚠️ ALREADY USED SUBJECTS (DO NOT REPEAT): ${usedSubjectsList.slice(-10).join(', ')}` : '';
+    // Define 4 distinct categories to rotate through
+    const categories = [
+      "Botanical/Nature Element (e.g., Mushroom, Flower, Fern)",
+      "Magical Object/Artifact (e.g., Lantern, Potion, Key)",
+      "Creature/Animal (e.g., Fox, Owl, Frog, Moth)",
+      "Structural/Scenic Element (e.g., Tiny Door, Archway, Path)"
+    ];
 
-    // Build variation control text
-    const themeDescription = customThemePrompt && customThemePrompt.trim() ? `${theme} with ${customThemePrompt.trim()}` : theme;
-    const variationControl = `\n\n🎯 VARIATION CONTROL (Variation #${variationNumber}):
-- CRITICAL: You MUST generate a DIFFERENT SPECIFIC SUBJECT that fits the theme "${primarySubject}".
-- If theme is "Woodland Animals", generate different animals (fox, badger, deer, owl, etc.) - NOT the same animal with different poses.
-- If theme is "Gothic Architecture", generate different structures (cathedral, castle, archway, etc.) - NOT the same structure from different angles.
-- Switch between: different specific subjects within the theme, different actions/poses, different settings.
-- Avoid repeating the same specific subject or visual elements.
-- GOAL: Each image must feature a DISTINCT subject that fits the theme, not just a variation of the same subject.
-- REMEMBER: The theme "${primarySubject}" is a CATEGORY. Generate a SPECIFIC EXAMPLE from that category for each variation.${usedSubjectsText}`;
+    // Select the category for this specific variation
+    const targetCategory = categories[variationNumber % categories.length];
 
     const systemPrompt = `You are a Subject Generator for Midjourney SREF Mode.
 
-YOUR INPUT: A Master Theme (e.g., "Nature", "Space", "Christmas").
+YOUR GOAL:
+The user has provided a MASTER THEME: "${primarySubject}".
+Your job is to generate a specific "Nano-Subject" that fits this theme, strictly within the assigned CATEGORY.
 
-YOUR JOB: 
-Drill down 3 levels to find a specific "Nano-Subject":
-Level 1 (Theme): Nature
-Level 2 (Category): Animals
-Level 3 (Nano-Subject): "A Red Fox sleeping in a hollow log"
+CURRENT CATEGORY CONSTRAINT: **${targetCategory}**
 
 CRITICAL RULES:
-1. **SPECIFICITY IS KING:** Never write a generic prompt like "A nature scene." Always pick a specific object, animal, or element.
-2. **VARIETY:** If Variation 1 was an Animal, make Variation 2 a Plant, Variation 3 an Object. Mix it up!
+1. **OBEY THE CATEGORY:** The subject MUST be a "${targetCategory}". Do not deviate.
+2. **BE SPECIFIC:** Drill down to a specific item. (e.g., Instead of "Bird", say "A Barn Owl perched on a branch").
 3. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge". The --sref handles that.
-4. **OUTPUT TEXT ONLY:** Just the description. No headers.
+4. **TEXT ONLY:** Output just the descriptive sentence.
 
-Output format: "[Specific Nano-Subject description & Action only]."`;
+Output format: "[Specific subject description & action ONLY]."`;
 
-    const userPrompt = `Generate Variation #${variationNumber} for the Master Theme: "${primarySubject}".
+    // INJECT the category directly into the user prompt to force compliance
+    const userPrompt = `Generate a specific subject description for a **${targetCategory}** that fits the theme "${primarySubject}".
 
 INSTRUCTIONS:
-1. Identify a specific "Nano-Subject" within the theme "${primarySubject}".
-2. Ensure it is DIFFERENT from previous variations (switch categories if possible).
-3. Describe it clearly in 10-15 words.
+1. Focus ONLY on the "${targetCategory}".
+2. Describe it clearly in 10-15 words.
+3. Ensure it is interesting and distinct.
 
-${variationControl}
-
-Output ONLY: "[Your specific nano-subject description]"`;
+Output ONLY: "[Your specific subject description]"`;
 
     // SREF mode: Direct API call without header enforcement (no "PRIMARY SUBJECT:" required)
     const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
