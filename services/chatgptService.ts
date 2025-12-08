@@ -938,29 +938,29 @@ export const generatePromptWithChatGPT = async (
 
 YOUR GOAL:
 The user has provided a THEME (e.g., "Woodland Animals") and a Style Reference.
-Your job is to generate a UNIQUE SUBJECT that fits this theme.
+Your job is to generate a UNIQUE SUBJECT DESCRIPTION that fits this theme.
 
 CRITICAL RULES:
-1. **EXPAND THE THEME:** If the theme is "Woodland Animals", generate a "Fox" for variation 1, a "Badger" for variation 2, etc.
+1. **EXPAND THE THEME:** Generate specific, varied subjects fit for the theme. (e.g., Theme "Fruit" -> Var 1 "A sliced strawberry", Var 2 "A bunch of grapes").
 2. **SUBJECT ONLY:** Describe WHAT is in the image (Action, Pose, Setting).
 3. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge". The --sref handles that.
-4. **NO THEME REPETITION:** Do NOT include the main theme name in the output. Just the unique subject description.
+4. **MANDATORY DESCRIPTION:** You MUST provide a descriptive sentence. Do not leave it blank.
 5. **BE BRIEF:** 10-15 words max.
 
-Output format: "PRIMARY SUBJECT: [Specific unique subject & action ONLY]. --v 6.1"`;
+// CORRECT OUTPUT FORMAT (Text only, no parameters):
+Output format: "PRIMARY SUBJECT: [Specific unique subject & action description ONLY]."`;
 
     const userPrompt = `Generate Variation #${variationNumber} based on the THEME: "${primarySubject}".
 
 INSTRUCTIONS:
-1. Use the theme to invent the subject, but DON'T repeat the theme name in the final output.
-2. Pick a SPECIFIC subject that fits the theme.
-3. Ensure this subject is DIFFERENT from previous variations.
-4. Describe a unique scenario/pose.
-5. DO NOT repeat the phrase "${primarySubject}" in your output.
+1. Pick a SPECIFIC subject that fits the theme.
+2. Ensure this subject is DIFFERENT from previous variations.
+3. Describe a unique scenario/pose.
+4. Provide ONLY the descriptive text. No style info.
 
 ${variationControl}
 
-Output ONLY: "PRIMARY SUBJECT: [Your unique prompt]"`;
+Output ONLY: "PRIMARY SUBJECT: [Your unique descriptive prompt]"`;
 
     // Use retry wrapper with header enforcement
     const result = await callPromptWithHeaderEnforcement(
