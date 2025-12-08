@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { 
   ArrowRight, 
   Sparkles, 
@@ -36,7 +36,20 @@ const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
 
 const App: React.FC = () => {
   // --- Password Protection State ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  // Use a ref to track if auth check has been completed to prevent re-renders
+  const authCheckCompleted = useRef<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Initialize state only once - check sessionStorage synchronously on mount
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    // If no password is required, allow access
+    if (!APP_PASSWORD) {
+      return true;
+    }
+    // Check sessionStorage for previous authentication
+    return sessionStorage.getItem('app_authenticated') === 'true';
+  });
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
@@ -44,10 +57,11 @@ const App: React.FC = () => {
 
   // Check authentication on mount (only once)
   useEffect(() => {
-    // Only run on client side
-    if (typeof window === 'undefined') {
+    // Prevent multiple runs
+    if (authCheckCompleted.current) {
       return;
     }
+    authCheckCompleted.current = true;
 
     // If no password is set in env, allow access (for development)
     if (!APP_PASSWORD) {
@@ -58,8 +72,7 @@ const App: React.FC = () => {
     }
     
     // Check if user was previously authenticated (stored in sessionStorage)
-    const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
-    setIsAuthenticated(wasAuthenticated);
+    // Note: We already checked this in useState initializer, but we set isCheckingAuth here
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
 
