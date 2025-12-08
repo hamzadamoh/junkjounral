@@ -34,16 +34,33 @@ import { uploadImageToWordPress } from './services/imageHostingService';
 
 const App: React.FC = () => {
   // --- Password Protection State ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    // Check if user was previously authenticated (stored in sessionStorage)
-    return sessionStorage.getItem('app_authenticated') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
 
   // Get password from environment variable
   const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
+
+  // Check authentication on mount
+  useEffect(() => {
+    // Check if user was previously authenticated (stored in sessionStorage)
+    if (typeof window !== 'undefined') {
+      const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
+      
+      // If no password is set in env, allow access (for development)
+      if (!APP_PASSWORD) {
+        console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
+        setIsAuthenticated(true);
+        setIsCheckingAuth(false);
+        return;
+      }
+      
+      setIsAuthenticated(wasAuthenticated);
+    }
+    setIsCheckingAuth(false);
+  }, [APP_PASSWORD]);
 
   // Handle password authentication
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -54,7 +71,9 @@ const App: React.FC = () => {
     // If no password is set in env, allow access (for development)
     if (!APP_PASSWORD) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
-      sessionStorage.setItem('app_authenticated', 'true');
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('app_authenticated', 'true');
+      }
       setIsAuthenticated(true);
       setIsCheckingPassword(false);
       return;
@@ -62,9 +81,12 @@ const App: React.FC = () => {
 
     // Check password
     if (password === APP_PASSWORD) {
-      sessionStorage.setItem('app_authenticated', 'true');
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('app_authenticated', 'true');
+      }
       setIsAuthenticated(true);
       setPassword('');
+      setIsCheckingPassword(false);
     } else {
       setPasswordError('Incorrect password. Please try again.');
       setPassword('');
@@ -74,11 +96,25 @@ const App: React.FC = () => {
 
   // Handle logout
   const handleLogout = () => {
-    sessionStorage.removeItem('app_authenticated');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('app_authenticated');
+    }
     setIsAuthenticated(false);
     setPassword('');
     setPasswordError('');
   };
+
+  // Show loading screen while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gothic-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-gothic-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show login screen if not authenticated
   if (!isAuthenticated) {
