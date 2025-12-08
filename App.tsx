@@ -35,16 +35,164 @@ import { uploadImageToWordPress } from './services/imageHostingService';
 const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
 
 const App: React.FC = () => {
+  // ============================================
+  // ALL HOOKS MUST BE DECLARED AT THE TOP LEVEL
+  // BEFORE ANY CONDITIONAL RETURNS
+  // ============================================
+  
   // --- Password Protection State ---
-  // Initialize all state with simple values (no functions, no side effects)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
   
-  // Use a ref to ensure auth check only runs once (even in React Strict Mode)
+  // --- Main App State ---
+  const [step, setStep] = useState<number>(1);
+  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
+  const [isCustomTheme, setIsCustomTheme] = useState<boolean>(false);
+  const [isImageThemeExpansion, setIsImageThemeExpansion] = useState<boolean>(false);
+  const [isSrefMode, setIsSrefMode] = useState<boolean>(false);
+  const [srefCode, setSrefCode] = useState<string>('');
+  const [srefSubject, setSrefSubject] = useState<string>('');
+  const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
+  const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
+  const [settings, setSettings] = useState<GenerationSettings>({
+    pageCount: 1,
+    textureIntensity: 'Medium',
+    colorIntensity: 'Muted',
+    pageStyle: 'Full Page',
+    elements: [],
+    includeFrames: false,
+    includeBorders: false,
+    aspectRatio: '1:1',
+    midjourneyMode: 'fast',
+    parametersForMJ: '',
+    imageService: 'ttapi',
+    replicateModel: 'black-forest-labs/flux-1.1-pro',
+    customThemePrompt: '',
+    customArtStyle: '',
+    promptService: 'openai',
+  });
+  const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [currentProgress, setCurrentProgress] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
+  const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
+  const [showSidebar, setShowSidebar] = useState<boolean>(false);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any }>>([]);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
+  const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
+  const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
+  
+  // --- Refs ---
   const hasCheckedAuth = useRef<boolean>(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // --- Callbacks ---
+  const addLog = useCallback((message: string, type: 'log' | 'error' | 'success' = 'log') => {
+    const logEntry = {
+      id: `${Date.now()}-${Math.random()}`,
+      message,
+      timestamp: Date.now(),
+      type
+    };
+    setConsoleLogs(prev => [...prev, logEntry]);
+    if (type === 'error') {
+      console.error(message);
+    } else if (type === 'success') {
+      console.log(`✅ ${message}`);
+    } else {
+      console.log(message);
+    }
+  }, []);
+  
+  const processImage = useCallback(async (base64Image: string, imageId?: string) => {
+    const id = imageId || crypto.randomUUID();
+    setIsAnalyzingImage(true);
+    setIsUploadingStyleRef(true);
+    setUploadedImages(prev => [...prev, { id, base64: base64Image }]);
+    try {
+      const [analysis, wordPressUrl] = await Promise.allSettled([
+        analyzeReferenceImage(base64Image),
+        uploadImageToWordPress(base64Image)
+      ]);
+      let theme = '';
+      let style = '';
+      let colors = '';
+      let vibe = '';
+      if (analysis.status === 'fulfilled') {
+        theme = analysis.value.theme || '';
+        style = analysis.value.style || '';
+        colors = analysis.value.colors || '';
+        vibe = analysis.value.vibe || '';
+        setUploadedImages(prev => prev.map(img => 
+          img.id === id 
+            ? { ...img, theme, style, colors, vibe, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined, fullAnalysis: analysis.value }
+            : img
+        ));
+        if (uploadedImages.length === 0) {
+          setCustomThemePrompt(theme);
+          let styleDescription = style;
+          if (analysis.status === 'fulfilled' && analysis.value.clusters && analysis.value.clusters[0]) {
+            const cluster = analysis.value.clusters[0];
+            if (cluster.technique && !styleDescription.includes(cluster.technique)) {
+              styleDescription = `${styleDescription} Technique: ${cluster.technique}.`;
+            }
+            if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
+              styleDescription += ` Textures: ${cluster.dominant_textures.join(', ')}.`;
+            }
+          }
+          if (vibe) {
+            styleDescription += ` Vibe/Atmosphere: ${vibe}.`;
+          }
+          if (colors) {
+            styleDescription += ` Color palette: ${colors}.`;
+          }
+          setSettings(prev => ({
+            ...prev,
+            customArtStyle: styleDescription,
+            colorIntensity: 'Custom / Override',
+            styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl
+          }));
+        }
+        const colorInfo = colors ? `, Colors="${colors}"` : '';
+        const vibeInfo = vibe ? `, Vibe="${vibe}"` : '';
+        addLog(`✅ Image ${uploadedImages.length + 1} analyzed: Theme="${theme}", Style="${style}"${colorInfo}${vibeInfo}`, 'success');
+      } else {
+        console.error('Image analysis error:', analysis.reason);
+        addLog(`❌ Failed to analyze image ${uploadedImages.length + 1}: ${analysis.reason?.message || 'Unknown error'}`, 'error');
+      }
+      if (wordPressUrl.status === 'fulfilled') {
+        setUploadedImages(prev => prev.map(img => 
+          img.id === id ? { ...img, styleRefUrl: wordPressUrl.value } : img
+        ));
+        if (uploadedImages.length === 0) {
+          setStyleRefUrl(wordPressUrl.value);
+        }
+        addLog(`✅ Style Reference ${uploadedImages.length + 1} uploaded: ${wordPressUrl.value}`, 'success');
+      } else {
+        console.error('WordPress upload error:', wordPressUrl.reason);
+        addLog(`⚠️ Failed to upload style reference ${uploadedImages.length + 1}: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
+      }
+    } catch (error: any) {
+      console.error('Unexpected error:', error);
+      addLog(`❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
+    } finally {
+      setIsAnalyzingImage(false);
+      setIsUploadingStyleRef(false);
+    }
+  }, [addLog, uploadedImages.length]);
+  
+  const handleRemoveImage = useCallback((imageId: string) => {
+    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+    addLog(`🗑️ Image removed.`, 'log');
+  }, [addLog]);
+  
+  // --- Effects ---
 
   // Check authentication on mount (only once)
   // All authentication logic is in useEffect to avoid render-time side effects
@@ -80,6 +228,74 @@ const App: React.FC = () => {
     }
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
+  
+  // Auto-scroll to bottom when new logs are added
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [consoleLogs]);
+
+  // Clear logs when generation starts
+  useEffect(() => {
+    if (status === GenerationStatus.GENERATING) {
+      setConsoleLogs([]);
+      setShowSidebar(true);
+    }
+  }, [status]);
+  
+  // Handle paste event for images
+  useEffect(() => {
+    const handlePaste = async (event: ClipboardEvent) => {
+      // Only handle paste when we're on the custom theme step (step 2)
+      if (step !== 2 || !isCustomTheme) return;
+
+      const items = event.clipboardData?.items;
+      if (!items) return;
+
+      // Find all images in clipboard
+      const imageFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            imageFiles.push(file);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        event.preventDefault();
+        
+        // Process all pasted images
+        for (const file of imageFiles) {
+          // Validate file size (max 20MB)
+          if (file.size > 20 * 1024 * 1024) {
+            alert(`Pasted image "${file.name}" is too large (max 20MB). Skipping...`);
+            continue;
+          }
+
+          // Convert to base64
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const base64Image = e.target?.result as string;
+            await processImage(base64Image);
+            addLog(`📋 Image "${file.name}" pasted from clipboard`, 'success');
+          };
+          reader.onerror = () => {
+            alert(`Failed to read pasted image "${file.name}"`);
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [step, isCustomTheme, processImage, addLog]);
 
   // Handle password authentication
   const handlePasswordSubmit = (e: React.FormEvent) => {
@@ -187,82 +403,6 @@ const App: React.FC = () => {
     );
   }
 
-  // --- State ---
-  const [step, setStep] = useState<number>(1);
-  const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
-  const [isCustomTheme, setIsCustomTheme] = useState<boolean>(false);
-  const [isImageThemeExpansion, setIsImageThemeExpansion] = useState<boolean>(false);
-  const [isSrefMode, setIsSrefMode] = useState<boolean>(false);
-  const [srefCode, setSrefCode] = useState<string>('');
-  const [srefSubject, setSrefSubject] = useState<string>('');
-  const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
-  const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
-  const [settings, setSettings] = useState<GenerationSettings>({
-    pageCount: 1, // Defaulting to 1 for demo purposes to save quota
-    textureIntensity: 'Medium',
-    colorIntensity: 'Muted',
-    pageStyle: 'Full Page',
-    elements: [],
-    includeFrames: false,
-    includeBorders: false,
-    aspectRatio: '1:1',
-    midjourneyMode: 'fast',
-    parametersForMJ: '',
-    imageService: 'ttapi', // Default to Ttapi
-    replicateModel: 'black-forest-labs/flux-1.1-pro',
-    customThemePrompt: '',
-    customArtStyle: '',
-    promptService: 'openai',
-  });
-  const [status, setStatus] = useState<GenerationStatus>(GenerationStatus.IDLE);
-  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
-  const [currentProgress, setCurrentProgress] = useState<number>(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
-  const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
-  const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
-  const [showSidebar, setShowSidebar] = useState<boolean>(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
-  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any }>>([]);
-  const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
-  const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
-  const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // --- Logging Function ---
-  const addLog = useCallback((message: string, type: 'log' | 'error' | 'success' = 'log') => {
-    const logEntry = {
-      id: `${Date.now()}-${Math.random()}`,
-      message,
-      timestamp: Date.now(),
-      type
-    };
-    setConsoleLogs(prev => [...prev, logEntry]);
-    // Also log to browser console
-    if (type === 'error') {
-      console.error(message);
-    } else if (type === 'success') {
-      console.log(`✅ ${message}`);
-    } else {
-      console.log(message);
-    }
-  }, []);
-
-  // Auto-scroll to bottom when new logs are added
-  useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [consoleLogs]);
-
-  // Clear logs when generation starts
-  useEffect(() => {
-    if (status === GenerationStatus.GENERATING) {
-      setConsoleLogs([]);
-      setShowSidebar(true);
-    }
-  }, [status]);
-
   // --- Handlers ---
 
   const handleThemeSelect = (theme: Theme) => {
@@ -322,109 +462,6 @@ const App: React.FC = () => {
     setSettings(prev => ({ ...prev, [field]: value }));
   };
 
-  // Handle image upload and analysis
-  // Process a single image (used by both file upload and paste)
-  const processImage = useCallback(async (base64Image: string, imageId?: string) => {
-    const id = imageId || crypto.randomUUID();
-    setIsAnalyzingImage(true);
-    setIsUploadingStyleRef(true);
-
-    // Add image to list immediately (before analysis)
-    setUploadedImages(prev => [...prev, { id, base64: base64Image }]);
-
-    // Run GPT vision analysis and WordPress upload in parallel
-    try {
-      const [analysis, wordPressUrl] = await Promise.allSettled([
-        analyzeReferenceImage(base64Image),
-        uploadImageToWordPress(base64Image)
-      ]);
-
-      // Handle GPT vision analysis result
-      let theme = '';
-      let style = '';
-      let colors = '';
-      let vibe = '';
-      if (analysis.status === 'fulfilled') {
-        theme = analysis.value.theme || '';
-        style = analysis.value.style || '';
-        colors = analysis.value.colors || '';
-        vibe = analysis.value.vibe || '';
-        
-        // Update the image in the list with analysis results
-        setUploadedImages(prev => prev.map(img => 
-          img.id === id 
-            ? { ...img, theme, style, colors, vibe, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined, fullAnalysis: analysis.value }
-            : img
-        ));
-
-        // If this is the first image, auto-fill the fields
-        if (uploadedImages.length === 0) {
-          setCustomThemePrompt(theme);
-          // Build style description with technique, vibe, colors, and textures
-          let styleDescription = style;
-          
-          // Add technique if available from structured response
-          if (analysis.status === 'fulfilled' && analysis.value.clusters && analysis.value.clusters[0]) {
-            const cluster = analysis.value.clusters[0];
-            if (cluster.technique && !styleDescription.includes(cluster.technique)) {
-              styleDescription = `${styleDescription} Technique: ${cluster.technique}.`;
-            }
-            if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
-              styleDescription += ` Textures: ${cluster.dominant_textures.join(', ')}.`;
-            }
-          }
-          
-          if (vibe) {
-            styleDescription += ` Vibe/Atmosphere: ${vibe}.`;
-          }
-          if (colors) {
-            styleDescription += ` Color palette: ${colors}.`;
-          }
-          setSettings(prev => ({
-            ...prev,
-            customArtStyle: styleDescription,
-            colorIntensity: 'Custom / Override', // Switch to Custom / Override mode
-            styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : prev.styleRefUrl
-          }));
-        }
-        
-        const colorInfo = colors ? `, Colors="${colors}"` : '';
-        const vibeInfo = vibe ? `, Vibe="${vibe}"` : '';
-        addLog(`✅ Image ${uploadedImages.length + 1} analyzed: Theme="${theme}", Style="${style}"${colorInfo}${vibeInfo}`, 'success');
-      } else {
-        console.error('Image analysis error:', analysis.reason);
-        addLog(`❌ Failed to analyze image ${uploadedImages.length + 1}: ${analysis.reason?.message || 'Unknown error'}`, 'error');
-      }
-
-      // Handle WordPress upload result
-      if (wordPressUrl.status === 'fulfilled') {
-        setUploadedImages(prev => prev.map(img => 
-          img.id === id ? { ...img, styleRefUrl: wordPressUrl.value } : img
-        ));
-        // Use the first uploaded image's styleRefUrl for Midjourney
-        if (uploadedImages.length === 0) {
-          setStyleRefUrl(wordPressUrl.value);
-        }
-        addLog(`✅ Style Reference ${uploadedImages.length + 1} uploaded: ${wordPressUrl.value}`, 'success');
-      } else {
-        console.error('WordPress upload error:', wordPressUrl.reason);
-        addLog(`⚠️ Failed to upload style reference ${uploadedImages.length + 1}: ${wordPressUrl.reason?.message || 'Unknown error'}`, 'error');
-      }
-    } catch (error: any) {
-      console.error('Unexpected error:', error);
-      addLog(`❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
-    } finally {
-      setIsAnalyzingImage(false);
-      setIsUploadingStyleRef(false);
-    }
-  }, [addLog, uploadedImages.length]);
-
-  // Handle removing an uploaded image
-  const handleRemoveImage = useCallback((imageId: string) => {
-    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
-    addLog(`🗑️ Image removed.`, 'log');
-  }, [addLog]);
-
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -458,63 +495,6 @@ const App: React.FC = () => {
       reader.readAsDataURL(file);
     }
   };
-
-  // Handle paste event for images
-  useEffect(() => {
-    const handlePaste = async (event: ClipboardEvent) => {
-      // Only handle paste when we're on the custom theme step (step 2)
-      if (step !== 2 || !isCustomTheme) return;
-
-      const items = event.clipboardData?.items;
-      if (!items) return;
-
-      // Find all images in clipboard
-      const imageFiles: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
-            imageFiles.push(file);
-          }
-        }
-      }
-
-      if (imageFiles.length > 0) {
-        event.preventDefault();
-        
-        // Process all pasted images
-        for (const file of imageFiles) {
-          // Validate file size (max 20MB)
-          if (file.size > 20 * 1024 * 1024) {
-            alert(`Pasted image "${file.name}" is too large (max 20MB). Skipping...`);
-            continue;
-          }
-
-          // Convert to base64
-          const reader = new FileReader();
-          reader.onload = async (e) => {
-            const base64Image = e.target?.result as string;
-            await processImage(base64Image);
-            addLog(`📋 Image "${file.name}" pasted from clipboard`, 'success');
-          };
-
-          reader.onerror = () => {
-            alert(`Failed to read pasted image "${file.name}"`);
-          };
-
-          reader.readAsDataURL(file);
-        }
-      }
-    };
-
-    // Add paste event listener
-    document.addEventListener('paste', handlePaste);
-    
-    return () => {
-      document.removeEventListener('paste', handlePaste);
-    };
-  }, [step, isCustomTheme, processImage, addLog]);
 
 
   const toggleElement = (element: string) => {
