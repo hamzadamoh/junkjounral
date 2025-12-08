@@ -919,28 +919,68 @@ export const generatePromptWithChatGPT = async (
       primarySubject = `${theme} element ${variationNumber}`;
     }
 
-    // Define 4 distinct categories with specific examples
+    // Define 12 distinct categories to prevent repetition (ensures 48 unique images before category repeats)
     // Use hash32 to ensure each variation gets a unique category (not just modulo rotation)
     const categoryConfigs = [
       {
-        name: "Botanical/Nature Element",
-        examples: ["Mushroom", "Flower", "Fern", "Moss", "Leaf", "Berry", "Seed", "Root", "Bark", "Twig", "Ivy", "Thorn", "Petal", "Stem", "Blossom"],
-        forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway"]
+        name: "Botanical/Flora",
+        examples: ["Glowing Mushroom", "Fern", "Exotic Flower", "Moss", "Leaf", "Berry", "Seed", "Root", "Bark", "Twig", "Ivy", "Thorn", "Petal", "Stem", "Blossom"],
+        forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
       },
       {
-        name: "Magical Object/Artifact",
-        examples: ["Lantern", "Potion", "Key", "Crystal", "Amulet", "Scroll", "Wand", "Orb", "Vial", "Talisman", "Grimoire", "Hourglass", "Compass", "Seal", "Charm"],
-        forbidden: ["animal", "creature", "plant", "nature", "structure", "path", "door", "archway"]
+        name: "Small Creature",
+        examples: ["Frog", "Mouse", "Moth", "Beetle", "Snail", "Spider", "Cricket", "Caterpillar", "Dragonfly", "Firefly", "Bee", "Butterfly", "Ladybug", "Grasshopper", "Ant"],
+        forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal", "larger", "fox", "owl", "deer"]
       },
       {
-        name: "Creature/Animal",
-        examples: ["Fox", "Owl", "Frog", "Moth", "Deer", "Rabbit", "Bird", "Butterfly", "Squirrel", "Hedgehog", "Badger", "Hawk", "Swan", "Crow", "Dragonfly"],
-        forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway"]
+        name: "Magical Artifact",
+        examples: ["Key", "Potion Bottle", "Amulet", "Crystal", "Lantern", "Scroll", "Wand", "Orb", "Vial", "Talisman", "Grimoire", "Hourglass", "Compass", "Seal", "Charm"],
+        forbidden: ["animal", "creature", "plant", "nature", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
       },
       {
-        name: "Structural/Scenic Element",
-        examples: ["Tiny Door", "Archway", "Path", "Bridge", "Gate", "Window", "Staircase", "Fence", "Portal", "Arch", "Gatepost", "Threshold", "Entryway", "Gateway", "Passage"],
-        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "potion", "lantern"]
+        name: "Architectural Element",
+        examples: ["Stone Arch", "Tiny Door", "Gate", "Bridge", "Window", "Staircase", "Fence", "Portal", "Arch", "Gatepost", "Threshold", "Entryway", "Gateway", "Passage", "Column"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "potion", "lantern", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
+      },
+      {
+        name: "Celestial/Cosmic",
+        examples: ["Moon Phase", "Star Map", "Constellation", "Nebula", "Comet", "Aurora", "Solar Eclipse", "Stardust", "Galaxy", "Planet", "Asteroid", "Meteor", "Cosmic Dust", "Star Cluster", "Lunar Surface"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
+      },
+      {
+        name: "Ephemera/Stationery",
+        examples: ["Old Letter", "Quill", "Ink Pot", "Tag", "Envelope", "Wax Seal", "Postage Stamp", "Ticket", "Label", "Bookmark", "Note", "Manuscript", "Parchment", "Scroll", "Certificate"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal"]
+      },
+      {
+        name: "Forest Dwelling",
+        examples: ["Treehouse", "Hollow Log", "Birdhouse", "Nest", "Burrow", "Den", "Cabin", "Hut", "Shelter", "Hideaway", "Refuge", "Sanctuary", "Retreat", "Cottage", "Shack"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "water", "food", "cozy", "abstract", "magical", "seasonal"]
+      },
+      {
+        name: "Larger Animal",
+        examples: ["Fox", "Owl", "Deer", "Badger", "Raven", "Wolf", "Bear", "Hawk", "Swan", "Crow", "Eagle", "Stag", "Hawk", "Falcon", "Raccoon"],
+        forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical", "seasonal", "small", "frog", "mouse", "moth"]
+      },
+      {
+        name: "Water Feature",
+        examples: ["Puddle", "Stream", "Reflection", "Dew Drop", "Pond", "Fountain", "Waterfall", "Spring", "Well", "Creek", "Brook", "Ripple", "Wave", "Mist", "Raindrop"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "food", "cozy", "abstract", "magical", "seasonal"]
+      },
+      {
+        name: "Food/Cozy Item",
+        examples: ["Tea Cup", "Berries", "Basket", "Candle", "Cookie", "Apple", "Bread", "Honey", "Jam", "Muffin", "Pie", "Cake", "Mug", "Pot", "Jar"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "abstract", "magical", "seasonal"]
+      },
+      {
+        name: "Abstract/Magical",
+        examples: ["Swirling Mist", "Spell Sparkles", "Rune", "Energy Orb", "Magic Circle", "Aura", "Glow", "Shimmer", "Ethereal Light", "Mystical Energy", "Enchanted Glow", "Magical Aura", "Spell Effect", "Mystical Mist", "Ethereal Essence"],
+        forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "seasonal"]
+      },
+      {
+        name: "Seasonal Element",
+        examples: ["Falling Leaf", "Snowflake", "Acorn", "Pinecone", "Icicle", "Flower Petal", "Maple Leaf", "Cherry Blossom", "Autumn Leaf", "Winter Branch", "Spring Bud", "Summer Bloom", "Frost", "Dew", "Hailstone"],
+        forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway", "celestial", "cosmic", "ephemera", "stationery", "dwelling", "water", "food", "cozy", "abstract", "magical"]
       }
     ];
 
