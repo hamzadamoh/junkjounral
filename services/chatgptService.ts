@@ -934,33 +934,34 @@ export const generatePromptWithChatGPT = async (
 - GOAL: Each image must feature a DISTINCT subject that fits the theme, not just a variation of the same subject.
 - REMEMBER: The theme "${primarySubject}" is a CATEGORY. Generate a SPECIFIC EXAMPLE from that category for each variation.${usedSubjectsText}`;
 
-    const systemPrompt = `You are a Subject Expansion Generator for Midjourney SREF Mode.
+    const systemPrompt = `You are a Subject Generator for Midjourney SREF Mode.
 
-YOUR GOAL:
-The user has provided a THEME (e.g., "Woodland Animals") and a Style Reference.
-Your job is to generate a UNIQUE SUBJECT DESCRIPTION that fits this theme.
+YOUR INPUT: A Master Theme (e.g., "Nature", "Space", "Christmas").
+
+YOUR JOB: 
+Drill down 3 levels to find a specific "Nano-Subject":
+Level 1 (Theme): Nature
+Level 2 (Category): Animals
+Level 3 (Nano-Subject): "A Red Fox sleeping in a hollow log"
 
 CRITICAL RULES:
-1. **EXPAND THE THEME:** Generate specific, varied subjects fit for the theme. (e.g., Theme "Fruit" -> Var 1 "A sliced strawberry", Var 2 "A bunch of grapes").
-2. **SUBJECT ONLY:** Describe WHAT is in the image (Action, Pose, Setting).
+1. **SPECIFICITY IS KING:** Never write a generic prompt like "A nature scene." Always pick a specific object, animal, or element.
+2. **VARIETY:** If Variation 1 was an Animal, make Variation 2 a Plant, Variation 3 an Object. Mix it up!
 3. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge". The --sref handles that.
-4. **MANDATORY DESCRIPTION:** You MUST provide a descriptive sentence. Do not leave it blank.
-5. **BE BRIEF:** 10-15 words max.
+4. **OUTPUT TEXT ONLY:** Just the description. No headers.
 
-// CORRECT OUTPUT FORMAT (Text only, no parameters):
-Output format: "PRIMARY SUBJECT: [Specific unique subject & action description ONLY]."`;
+Output format: "[Specific Nano-Subject description & Action only]."`;
 
-    const userPrompt = `Generate Variation #${variationNumber} based on the THEME: "${primarySubject}".
+    const userPrompt = `Generate Variation #${variationNumber} for the Master Theme: "${primarySubject}".
 
 INSTRUCTIONS:
-1. Pick a SPECIFIC subject that fits the theme.
-2. Ensure this subject is DIFFERENT from previous variations.
-3. Describe a unique scenario/pose.
-4. Provide ONLY the descriptive text. No style info.
+1. Identify a specific "Nano-Subject" within the theme "${primarySubject}".
+2. Ensure it is DIFFERENT from previous variations (switch categories if possible).
+3. Describe it clearly in 10-15 words.
 
 ${variationControl}
 
-Output ONLY: "PRIMARY SUBJECT: [Your unique descriptive prompt]"`;
+Output ONLY: "[Your specific nano-subject description]"`;
 
     // Use retry wrapper with header enforcement
     const result = await callPromptWithHeaderEnforcement(
@@ -990,20 +991,25 @@ Output ONLY: "PRIMARY SUBJECT: [Your unique descriptive prompt]"`;
         cleaned = cleaned.replace(regex, '');
       });
       
-      // Remove theme name repetition if it appears after "PRIMARY SUBJECT:"
-      // Example: "PRIMARY SUBJECT: Woodland Animals. A fox..." → "PRIMARY SUBJECT: A fox..."
-      const escapedTheme = primarySubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const themeRegex = new RegExp(`PRIMARY SUBJECT:\\s*${escapedTheme}\\s*[.,]?\\s*`, 'gi');
-      cleaned = cleaned.replace(themeRegex, 'PRIMARY SUBJECT: ');
+      // Remove "PRIMARY SUBJECT:" header if present (new format doesn't use it)
+      cleaned = cleaned.replace(/^PRIMARY\s+SUBJECT:\s*/i, '');
       
-      // Clean up extra spaces
+      // Remove theme name repetition if it appears at the start
+      // Example: "Nature. A red fox..." → "A red fox..."
+      const escapedTheme = primarySubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const themeRegex = new RegExp(`^${escapedTheme}\\s*[.,]?\\s*`, 'gi');
+      cleaned = cleaned.replace(themeRegex, '');
+      
+      // Clean up extra spaces and trim
       cleaned = cleaned.replace(/\s+/g, ' ').trim();
       
-      // Ensure it starts with PRIMARY SUBJECT (without theme name)
-      if (!cleaned.toLowerCase().includes('primary subject:')) {
-        cleaned = `PRIMARY SUBJECT: ${cleaned}`;
+      // Ensure we have actual content (not just empty after cleaning)
+      if (!cleaned || cleaned.length === 0) {
+        console.warn(`[PromptGen] SREF mode prompt became empty after cleaning. Original: "${result.text}"`);
+        return null;
       }
       
+      // Return just the description (no header needed for SREF mode)
       return cleaned;
     }
 
