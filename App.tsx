@@ -24,12 +24,9 @@ import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import { THEMES, OPTIONAL_ELEMENTS, APP_NAME } from './constants';
 import { Theme, GenerationSettings, GenerationStatus, GeneratedImage } from './types';
-import { generateJournalPage as generateWithMidjourney } from './services/midjourneyService';
 import { generateJournalPage as generateWithPollinations } from './services/pollinationsService';
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
-import { generateJournalPage as generateWithLegnext } from './services/legnextService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
-import { generateJournalPage as generateWithDirect } from './services/directMidjourneyService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 
@@ -191,7 +188,7 @@ const App: React.FC = () => {
     aspectRatio: '1:1',
     midjourneyMode: 'fast',
     parametersForMJ: '',
-    imageService: 'pollinations', // Default to Pollinations (free, no API key needed)
+    imageService: 'ttapi', // Default to Ttapi
     replicateModel: 'black-forest-labs/flux-1.1-pro',
     customThemePrompt: '',
     customArtStyle: '',
@@ -569,7 +566,7 @@ const App: React.FC = () => {
     // Note: customThemePrompt and customArtStyle fields have been removed from UI
     // They are kept in settings for backward compatibility but are no longer used
     
-    // For Midjourney/Legnext: Only generate prompts for the number of requests needed (1 prompt per 4 images)
+    // For Ttapi: Only generate prompts for the number of requests needed (1 prompt per 4 images)
     // For Pollinations/Replicate: Generate a prompt for each image
     let promptsToGenerate: number;
     let generatedPrompts: string[];
@@ -639,10 +636,10 @@ const App: React.FC = () => {
       }
     }
     
-    if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
+    if (settings.imageService === 'ttapi') {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
-      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : settings.imageService === 'direct' ? 'Direct' : 'Midjourney';
+      const serviceName = 'Ttapi';
       addLog(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
       
       // Calculate which image to use for each request
@@ -1045,13 +1042,7 @@ const App: React.FC = () => {
       ? generateWithPollinations 
       : settings.imageService === 'replicate'
       ? generateWithReplicate
-      : settings.imageService === 'legnext'
-      ? generateWithLegnext
-      : settings.imageService === 'ttapi'
-      ? generateWithTtapi
-      : settings.imageService === 'direct'
-      ? generateWithDirect
-      : generateWithMidjourney;
+      : generateWithTtapi; // Default to Ttapi
     
     addLog(`[${settings.imageService}] Selected generate function: ${generateFunction.name || 'anonymous'}`);
 
@@ -1175,10 +1166,10 @@ const App: React.FC = () => {
       
       // Wait for all requests to complete in parallel
       await Promise.allSettled(imagePromises);
-    } else if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
-      // For Midjourney (GoAPI, Legnext, Ttapi, or Direct), generate with rate limiting
+    } else if (settings.imageService === 'ttapi') {
+      // For Ttapi, generate with rate limiting
       // Note: Midjourney returns 4 images per request, so we need fewer requests
-      const serviceName = settings.imageService === 'legnext' ? 'Legnext' : settings.imageService === 'ttapi' ? 'Ttapi' : settings.imageService === 'direct' ? 'Direct' : 'Midjourney';
+      const serviceName = 'Ttapi';
       const requestsNeeded = Math.ceil(total / 4);
       
       // Rate limiting: Ttapi has strict limits, stagger requests
@@ -1294,7 +1285,7 @@ const App: React.FC = () => {
             }
           }
           
-          // Midjourney/Legnext returns an array of images (typically 4)
+          // Ttapi returns an array of images (typically 4)
           const base64Urls = await generateFunction(
             selectedTheme, 
             imageSpecificSettings,  // ✅ CHANGED: was "settings", now "imageSpecificSettings"
@@ -1510,16 +1501,10 @@ const App: React.FC = () => {
         ? generateWithPollinations 
         : settings.imageService === 'replicate'
         ? generateWithReplicate
-        : settings.imageService === 'legnext'
-        ? generateWithLegnext
-        : settings.imageService === 'ttapi'
-        ? generateWithTtapi
-        : settings.imageService === 'direct'
-        ? generateWithDirect
-        : generateWithMidjourney;
+        : generateWithTtapi; // Default to Ttapi
 
-      // For Midjourney/Legnext/Ttapi/Direct, we need to handle arrays
-      if (settings.imageService === 'midjourney' || settings.imageService === 'legnext' || settings.imageService === 'ttapi' || settings.imageService === 'direct') {
+      // For Ttapi, we need to handle arrays
+      if (settings.imageService === 'ttapi') {
         const base64Urls = await generateFunction(
           selectedTheme,
           settings,
@@ -2556,16 +2541,13 @@ const App: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-300 mb-2">Image Generation Service</label>
                 <div className="grid grid-cols-1 gap-2">
                   {[
-                    { value: 'pollinations', label: 'Pollinations (Free)', desc: 'Fast, free, no API key' },
+                    { value: 'ttapi', label: 'Midjourney (Ttapi)', desc: 'Premium quality via ttapi.io, requires API key (Default)' },
                     { value: 'replicate', label: 'Replicate', desc: 'Multiple models, works via Vercel proxy' },
-                    { value: 'midjourney', label: 'Midjourney (GoAPI)', desc: 'Premium quality via GoAPI, requires API key' },
-                    { value: 'legnext', label: 'Midjourney (Legnext)', desc: 'Premium quality via Legnext.ai, requires API key' },
-                    { value: 'ttapi', label: 'Midjourney (Ttapi)', desc: 'Premium quality via ttapi.io, requires API key' },
-                    { value: 'direct', label: 'Midjourney (Direct)', desc: 'Direct Discord connection, requires Discord token' }
+                    { value: 'pollinations', label: 'Pollinations (Free)', desc: 'Fast, free, no API key' }
                   ].map((service) => (
                     <button
                       key={service.value}
-                      onClick={() => handleSettingChange('imageService', service.value as 'midjourney' | 'pollinations' | 'replicate' | 'legnext' | 'ttapi' | 'direct')}
+                      onClick={() => handleSettingChange('imageService', service.value as 'pollinations' | 'replicate' | 'ttapi')}
                       className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
                         settings.imageService === service.value 
                           ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
@@ -2803,11 +2785,11 @@ const App: React.FC = () => {
       <p className="text-slate-400 mb-8 max-w-md">
         {settings.imageService === 'pollinations' 
           ? 'Pollinations.AI is crafting your' 
-          : settings.imageService === 'legnext' 
-          ? 'Legnext is crafting your'
           : settings.imageService === 'ttapi'
           ? 'Ttapi is crafting your'
-          : 'Midjourney is crafting your'} {selectedTheme?.name} journal pages. 
+          : settings.imageService === 'replicate'
+          ? 'Replicate is crafting your'
+          : 'Ttapi is crafting your'} {selectedTheme?.name} journal pages. 
         {settings.imageService === 'pollinations' 
           ? ' This should be quick!' 
           : ' This process may take a few minutes as we generate high-resolution images.'}
@@ -3059,7 +3041,7 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
           <div className="text-xs text-slate-500 font-mono hidden md:block">
-              AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'MIDJOURNEY'}
+              AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'TTAPI'}
             </div>
             {APP_PASSWORD && (
               <button
