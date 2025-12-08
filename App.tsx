@@ -42,10 +42,22 @@ const App: React.FC = () => {
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
+  
+  // Memoize password check to avoid re-evaluation
+  const hasPassword = useMemo(() => Boolean(APP_PASSWORD), []);
+  
+  // Use a ref to ensure auth check only runs once (even in React Strict Mode)
+  const hasCheckedAuth = useRef<boolean>(false);
 
   // Check authentication on mount (only once)
   // All authentication logic is in useEffect to avoid render-time side effects
   useEffect(() => {
+    // Prevent multiple executions (important for React Strict Mode)
+    if (hasCheckedAuth.current) {
+      return;
+    }
+    hasCheckedAuth.current = true;
+
     // Only run on client side
     if (typeof window === 'undefined') {
       setIsCheckingAuth(false);
@@ -53,7 +65,7 @@ const App: React.FC = () => {
     }
 
     // If no password is set in env, allow access (for development)
-    if (!APP_PASSWORD) {
+    if (!hasPassword) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
       setIsAuthenticated(true);
       setIsCheckingAuth(false);
@@ -61,8 +73,13 @@ const App: React.FC = () => {
     }
     
     // Check if user was previously authenticated (stored in sessionStorage)
-    const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
-    setIsAuthenticated(wasAuthenticated);
+    try {
+      const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
+      setIsAuthenticated(wasAuthenticated);
+    } catch (e) {
+      // sessionStorage might not be available
+      setIsAuthenticated(false);
+    }
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
 
@@ -73,8 +90,7 @@ const App: React.FC = () => {
     setIsCheckingPassword(true);
 
     // If no password is set in env, allow access (for development)
-    const appPassword = APP_PASSWORD;
-    if (!appPassword) {
+    if (!hasPassword) {
       console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_authenticated', 'true');
@@ -85,7 +101,7 @@ const App: React.FC = () => {
     }
 
     // Check password
-    if (password === appPassword) {
+    if (password === APP_PASSWORD) {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_authenticated', 'true');
       }
@@ -163,7 +179,7 @@ const App: React.FC = () => {
             </button>
           </form>
 
-          {!APP_PASSWORD && (
+          {!hasPassword && (
             <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs text-yellow-400">
               ⚠️ Password protection is disabled. Set VITE_APP_PASSWORD in environment variables to enable it.
             </div>
@@ -3049,7 +3065,7 @@ const App: React.FC = () => {
           <div className="text-xs text-slate-500 font-mono hidden md:block">
               AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'TTAPI'}
             </div>
-            {APP_PASSWORD && (
+            {hasPassword && (
               <button
                 onClick={handleLogout}
                 className="px-3 py-1.5 text-xs text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg border border-slate-700 hover:border-red-700 transition-all"
