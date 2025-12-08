@@ -33,6 +33,105 @@ import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecific
 import { uploadImageToWordPress } from './services/imageHostingService';
 
 const App: React.FC = () => {
+  // --- Password Protection State ---
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Check if user was previously authenticated (stored in sessionStorage)
+    return sessionStorage.getItem('app_authenticated') === 'true';
+  });
+  const [password, setPassword] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
+  const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
+
+  // Get password from environment variable
+  const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD || '';
+
+  // Handle password authentication
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setIsCheckingPassword(true);
+
+    // If no password is set in env, allow access (for development)
+    if (!APP_PASSWORD) {
+      console.warn('⚠️ VITE_APP_PASSWORD not set. Allowing access without password.');
+      sessionStorage.setItem('app_authenticated', 'true');
+      setIsAuthenticated(true);
+      setIsCheckingPassword(false);
+      return;
+    }
+
+    // Check password
+    if (password === APP_PASSWORD) {
+      sessionStorage.setItem('app_authenticated', 'true');
+      setIsAuthenticated(true);
+      setPassword('');
+    } else {
+      setPasswordError('Incorrect password. Please try again.');
+      setPassword('');
+      setIsCheckingPassword(false);
+    }
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    sessionStorage.removeItem('app_authenticated');
+    setIsAuthenticated(false);
+    setPassword('');
+    setPasswordError('');
+  };
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-gothic-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gothic-800/90 backdrop-blur-sm border-2 border-gothic-gold/30 rounded-xl p-8 shadow-2xl">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-serif text-gothic-gold mb-2">{APP_NAME}</h1>
+            <p className="text-slate-400">Enter password to access</p>
+          </div>
+
+          <form onSubmit={handlePasswordSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError('');
+                }}
+                placeholder="Enter password"
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+                autoFocus
+                disabled={isCheckingPassword}
+              />
+              {passwordError && (
+                <p className="mt-2 text-sm text-red-400">{passwordError}</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isCheckingPassword || !password.trim()}
+              className="w-full bg-gradient-to-r from-gothic-gold to-amber-600 hover:from-amber-500 hover:to-amber-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-black font-bold py-3 rounded-lg shadow-lg shadow-amber-900/20 transform hover:-translate-y-0.5 transition-all"
+            >
+              {isCheckingPassword ? 'Checking...' : 'Access App'}
+            </button>
+          </form>
+
+          {!APP_PASSWORD && (
+            <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs text-yellow-400">
+              ⚠️ Password protection is disabled. Set VITE_APP_PASSWORD in environment variables to enable it.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // --- State ---
   const [step, setStep] = useState<number>(1);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
@@ -2820,8 +2919,19 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-xl font-serif font-bold text-slate-100 tracking-wide">{APP_NAME}</h1>
           </div>
-          <div className="text-xs text-slate-500 font-mono hidden md:block">
-            AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'MIDJOURNEY'}
+          <div className="flex items-center gap-4">
+            <div className="text-xs text-slate-500 font-mono hidden md:block">
+              AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'MIDJOURNEY'}
+            </div>
+            {APP_PASSWORD && (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 text-xs text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg border border-slate-700 hover:border-red-700 transition-all"
+                title="Logout"
+              >
+                Logout
+              </button>
+            )}
           </div>
         </div>
       </header>
