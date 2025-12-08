@@ -1627,41 +1627,16 @@ const App: React.FC = () => {
     try {
       addLog(`[Google Sheets] Preparing to export ${completedImages.length} images...`, 'log');
       
-      // Prepare data for Google Sheets
-      const sheetData = {
-        images: completedImages.map((img, index) => ({
-          title: `Image ${index + 1}`,
-          prompt: img.prompt || 'No prompt available',
-          url: img.url || '',
-          variationNumber: img.variationNumber || index + 1
-        })),
-        themeName: selectedTheme?.name || 'Custom Theme'
-      };
-
-      // Call the API endpoint to create Google Sheet
-      const response = await fetch('/api/google-sheets/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(sheetData),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        addLog(`[Google Sheets] ✅ Data prepared successfully!`, 'success');
-        // Generate and download CSV
-        const csvContent = generateCSVForGoogleSheets(completedImages);
-        const filename = `Generated_Images_${selectedTheme?.name || 'Custom'}_${new Date().toISOString().split('T')[0]}.csv`;
-        downloadCSV(csvContent, filename);
-        
-        // Show instructions
-        const instructions = `CSV file downloaded!\n\nNext steps:\n1. Open Google Sheets\n2. File → Import → Upload the CSV file\n3. Use the Google Apps Script (provided in documentation) to insert images\n\nOr manually:\n- Column D ("inserted") will have checkboxes\n- Column E ("image preview") will show images after running the script`;
-        alert(instructions);
-      } else {
-        throw new Error(result.error || 'Failed to prepare Google Sheets data');
-      }
+      // Generate and download CSV directly (client-side only - no API call needed)
+      const csvContent = generateCSVForGoogleSheets(completedImages);
+      const filename = `Generated_Images_${selectedTheme?.name || 'Custom'}_${new Date().toISOString().split('T')[0]}.csv`;
+      downloadCSV(csvContent, filename);
+      
+      addLog(`[Google Sheets] ✅ CSV file generated and downloaded successfully!`, 'success');
+      
+      // Show instructions
+      const instructions = `CSV file downloaded!\n\nNext steps:\n1. Open Google Sheets\n2. File → Import → Upload the CSV file\n3. Use the Google Apps Script (provided in documentation) to insert images\n\nOr manually:\n- Column D ("inserted") will have checkboxes\n- Column E ("image preview") will show images after running the script`;
+      alert(instructions);
     } catch (error: any) {
       console.error('Error exporting to Google Sheets:', error);
       addLog(`[Google Sheets] ❌ Error: ${error.message}`, 'error');
