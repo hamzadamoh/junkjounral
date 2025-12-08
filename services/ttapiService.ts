@@ -975,6 +975,16 @@ export const generateJournalPage = async (
       console.log(`[Ttapi] Prompt cleaned: "${promptBeforeCleaning}" -> "${prompt}"`);
     }
     
+    // CRITICAL: Validate that prompt is not empty after cleaning
+    // Midjourney requires text before parameters (--ar, --sref, etc.)
+    // Also check if prompt is just "PRIMARY SUBJECT:" with no actual content
+    const isOnlyHeader = /^PRIMARY\s+SUBJECT:\s*$/i.test(prompt.trim());
+    if (!prompt || prompt.trim().length === 0 || isOnlyHeader) {
+      const errorMsg = `[Ttapi] ❌ ERROR: Prompt is empty or contains only header after cleaning. Cannot send empty prompt to Midjourney. Original prompt: "${promptBeforeCleaning}", Cleaned: "${prompt}"`;
+      console.error(errorMsg);
+      throw new Error('Generated prompt is empty or invalid. The prompt generation may have failed. Please check your prompt generation settings or try a different subject.');
+    }
+    
     // CRITICAL: Handle Custom / Override mode - trust ChatGPT prompt entirely, only add aspect ratio
     // Also skip adding problematic phrases for Image Theme Expansion mode (skipStyleReference = true)
     if (settings.colorIntensity === 'Custom / Override' || settings.skipStyleReference) {
