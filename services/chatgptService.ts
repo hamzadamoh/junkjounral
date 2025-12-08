@@ -952,10 +952,11 @@ Output format: "PRIMARY SUBJECT: [Specific unique subject & action ONLY]. --v 6.
     const userPrompt = `Generate Variation #${variationNumber} based on the THEME: "${primarySubject}".
 
 INSTRUCTIONS:
-1. Pick a SPECIFIC subject that fits the theme.
-2. Ensure this subject is DIFFERENT from previous variations.
-3. Describe a unique scenario/pose.
-4. DO NOT repeat the phrase "${primarySubject}" in your output.
+1. Use the theme to invent the subject, but DON'T repeat the theme name in the final output.
+2. Pick a SPECIFIC subject that fits the theme.
+3. Ensure this subject is DIFFERENT from previous variations.
+4. Describe a unique scenario/pose.
+5. DO NOT repeat the phrase "${primarySubject}" in your output.
 
 ${variationControl}
 
