@@ -35,13 +35,7 @@ const APP_PASSWORD = typeof window !== 'undefined' ? (import.meta.env.VITE_APP_P
 
 const App: React.FC = () => {
   // --- Password Protection State ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    // Initialize from sessionStorage only once
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('app_authenticated') === 'true';
-    }
-    return false;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
@@ -57,7 +51,12 @@ const App: React.FC = () => {
       return;
     }
     
-    // Authentication state is already initialized from useState initializer
+    // Check if user was previously authenticated (stored in sessionStorage)
+    if (typeof window !== 'undefined') {
+      const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
+      setIsAuthenticated(wasAuthenticated);
+    }
+    
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
 
