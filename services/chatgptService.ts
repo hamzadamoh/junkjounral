@@ -920,32 +920,36 @@ export const generatePromptWithChatGPT = async (
     }
 
     // Define 4 distinct categories with specific examples
-    const categoryIndex = variationNumber % 4;
+    // Use hash32 to ensure each variation gets a unique category (not just modulo rotation)
     const categoryConfigs = [
       {
         name: "Botanical/Nature Element",
-        examples: ["Mushroom", "Flower", "Fern", "Moss", "Leaf", "Berry", "Seed", "Root", "Bark", "Twig"],
+        examples: ["Mushroom", "Flower", "Fern", "Moss", "Leaf", "Berry", "Seed", "Root", "Bark", "Twig", "Ivy", "Thorn", "Petal", "Stem", "Blossom"],
         forbidden: ["animal", "creature", "object", "artifact", "structure", "path", "door", "archway"]
       },
       {
         name: "Magical Object/Artifact",
-        examples: ["Lantern", "Potion", "Key", "Crystal", "Amulet", "Scroll", "Wand", "Orb", "Vial", "Talisman"],
+        examples: ["Lantern", "Potion", "Key", "Crystal", "Amulet", "Scroll", "Wand", "Orb", "Vial", "Talisman", "Grimoire", "Hourglass", "Compass", "Seal", "Charm"],
         forbidden: ["animal", "creature", "plant", "nature", "structure", "path", "door", "archway"]
       },
       {
         name: "Creature/Animal",
-        examples: ["Fox", "Owl", "Frog", "Moth", "Deer", "Rabbit", "Bird", "Butterfly", "Squirrel", "Hedgehog"],
+        examples: ["Fox", "Owl", "Frog", "Moth", "Deer", "Rabbit", "Bird", "Butterfly", "Squirrel", "Hedgehog", "Badger", "Hawk", "Swan", "Crow", "Dragonfly"],
         forbidden: ["plant", "nature", "object", "artifact", "structure", "path", "door", "archway"]
       },
       {
         name: "Structural/Scenic Element",
-        examples: ["Tiny Door", "Archway", "Path", "Bridge", "Gate", "Window", "Staircase", "Fence", "Gate", "Portal"],
+        examples: ["Tiny Door", "Archway", "Path", "Bridge", "Gate", "Window", "Staircase", "Fence", "Portal", "Arch", "Gatepost", "Threshold", "Entryway", "Gateway", "Passage"],
         forbidden: ["animal", "creature", "plant", "nature", "object", "artifact", "potion", "lantern"]
       }
     ];
 
+    // Use hash32 to select category deterministically but uniquely for each variation
+    const categoryIndex = hash32(variationNumber * 7, categoryConfigs.length);
     const targetCategory = categoryConfigs[categoryIndex];
-    const exampleIndex = (variationNumber + categoryIndex * 10) % targetCategory.examples.length;
+    
+    // Use hash32 to select a unique example from the category for this variation
+    const exampleIndex = hash32(variationNumber * 13 + categoryIndex * 17, targetCategory.examples.length);
     const exampleSubject = targetCategory.examples[exampleIndex];
 
     const systemPrompt = `You are a Subject Generator for Midjourney SREF Mode.
@@ -955,46 +959,50 @@ The user has provided a MASTER THEME: "${primarySubject}".
 Your job is to generate a specific "Nano-Subject" that fits this theme, strictly within the assigned CATEGORY.
 
 CURRENT CATEGORY CONSTRAINT: **${targetCategory.name}**
+VARIATION NUMBER: #${variationNumber} (This variation must be UNIQUE - different from all other variations)
 
 CRITICAL RULES:
 1. **OBEY THE CATEGORY:** The subject MUST be a "${targetCategory.name}". Do not deviate.
 2. **FORBIDDEN WORDS:** Do NOT use any of these words: ${targetCategory.forbidden.join(', ')}.
-3. **BE SPECIFIC:** Drill down to a specific item. Use the example "${exampleSubject}" as inspiration, but create a DIFFERENT specific subject.
-4. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge", "illustration", "painting". The --sref handles that.
-5. **TEXT ONLY:** Output just the descriptive sentence, no headers.
+3. **BE SPECIFIC:** Drill down to a specific item. Use the example "${exampleSubject}" as inspiration, but create a COMPLETELY DIFFERENT specific subject.
+4. **UNIQUENESS:** This is variation #${variationNumber}. It must be COMPLETELY DIFFERENT from all other variations. Each variation gets a unique category, example, and action combination.
+5. **NO STYLE WORDS:** Do NOT use words like "watercolor", "vintage", "grunge", "illustration", "painting". The --sref handles that.
+6. **TEXT ONLY:** Output just the descriptive sentence, no headers.
 
-EXAMPLES FOR THIS CATEGORY:
+EXAMPLES FOR THIS CATEGORY (use as inspiration, but create something DIFFERENT):
 - ${targetCategory.examples.slice(0, 5).join('\n- ')}
 
 Output format: "[Specific subject description & action ONLY]."`;
 
     // Calculate a deterministic variation modifier to ensure uniqueness
-    // Use variation number to select different aspects/actions for the same category
+    // Use hash32 to select a unique action/state for each variation (not just rotating)
     const actionModifiers = [
       "resting", "perched", "glowing", "hanging", "floating", "growing", "standing", "sitting", 
-      "illuminating", "sparkling", "shimmering", "twinkling", "dancing", "flying", "crawling", "leaping"
+      "illuminating", "sparkling", "shimmering", "twinkling", "dancing", "flying", "crawling", "leaping",
+      "sleeping", "watching", "guarding", "blooming", "shining", "reflecting", "swaying", "nesting",
+      "foraging", "hunting", "playing", "exploring", "hiding", "emerging", "transforming", "evolving"
     ];
-    const actionIndex = Math.floor(variationNumber / 4) % actionModifiers.length;
+    const actionIndex = hash32(variationNumber * 23 + categoryIndex * 29, actionModifiers.length);
     const suggestedAction = actionModifiers[actionIndex];
 
     // INJECT the category directly into the user prompt to force compliance
     const userPrompt = `Generate Variation #${variationNumber} for theme "${primarySubject}".
 
 CATEGORY: **${targetCategory.name}**
-EXAMPLE INSPIRATION: "${exampleSubject}" (but create something DIFFERENT)
+EXAMPLE INSPIRATION: "${exampleSubject}" (but create something COMPLETELY DIFFERENT)
 
 VARIATION REQUIREMENTS:
-- This is variation #${variationNumber} of ${Math.ceil(variationNumber / 4) * 4} total variations
-- Category rotation: Variation ${variationNumber % 4 + 1} of 4 categories
+- This is variation #${variationNumber} (each variation must be UNIQUE)
+- Category: ${targetCategory.name} (selected uniquely for this variation)
 - Suggested action/state: "${suggestedAction}" (use this or a similar action)
 
 INSTRUCTIONS:
 1. Generate a SPECIFIC ${targetCategory.name} that fits "${primarySubject}".
-2. Use "${exampleSubject}" as inspiration, but create a UNIQUE subject (not the same as the example).
+2. Use "${exampleSubject}" as inspiration, but create a COMPLETELY UNIQUE subject (not the same as the example).
 3. Include action/state: "${suggestedAction}" or similar (e.g., "A glowing mushroom", "A lantern illuminating", "A fox resting").
 4. Describe it clearly in 10-15 words with action/pose.
 5. DO NOT use: ${targetCategory.forbidden.join(', ')}.
-6. CRITICAL: This must be DIFFERENT from all previous variations. Think creatively about other ${targetCategory.name.toLowerCase()}s that fit the theme.
+6. CRITICAL: This variation #${variationNumber} must be COMPLETELY DIFFERENT from ALL other variations. Each variation gets a unique category, example, and action. Think creatively about a DISTINCT ${targetCategory.name.toLowerCase()} that fits the theme.
 
 Output ONLY: "[Your specific subject description]"`;
 
