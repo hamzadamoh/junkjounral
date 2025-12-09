@@ -1068,6 +1068,16 @@ export const generateJournalPage = async (
       console.log(`[Ttapi] No valid style reference URL/code provided - skipping --sref and --sw for variation ${variationIndex ?? 0}`);
     }
 
+    // Add Midjourney moodboard (--p parameter) if provided
+    // Moodboard should be added after --sref but before --ar
+    const trimmedMoodboard = settings.moodboardId?.trim();
+    if (trimmedMoodboard && trimmedMoodboard.length > 0) {
+      // Ensure moodboard ID starts with 'm' if not already
+      const moodboardId = trimmedMoodboard.startsWith('m') ? trimmedMoodboard : `m${trimmedMoodboard}`;
+      prompt += ` --p ${moodboardId}`;
+      console.log(`[Ttapi] Added moodboard (--p) for variation ${variationIndex ?? 0}: ${moodboardId}`);
+    }
+
     // Add aspect ratio LAST (after style reference if present)
     // Only add if not already present and not in Custom / Override mode (which handles it above)
     if (settings.colorIntensity !== 'Custom / Override') {
@@ -1075,6 +1085,13 @@ export const generateJournalPage = async (
       if (finalAspectRatio && !prompt.includes('--ar')) {
         prompt += ` --ar ${finalAspectRatio}`;
       }
+    }
+
+    // Add other Midjourney parameters (e.g., --v 6.1, --niji 6) if provided
+    // These should be added at the very end, after --ar, --sref, and --p
+    if (parametersForMJ && parametersForMJ.trim()) {
+      prompt += ` ${parametersForMJ.trim()}`;
+      console.log(`[Ttapi] Added Midjourney parameters: ${parametersForMJ.trim()}`);
     }
 
     // Log the EXACT prompt being sent to Midjourney for debugging

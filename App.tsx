@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [srefCode, setSrefCode] = useState<string>('');
   const [srefSubject, setSrefSubject] = useState<string>('');
   const [srefCategory, setSrefCategory] = useState<string>(''); // Selected category for SREF mode
+  const [srefMoodboard, setSrefMoodboard] = useState<string>(''); // Midjourney moodboard ID (--p parameter)
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -1278,8 +1279,13 @@ const App: React.FC = () => {
           const imageSpecificSettings = {
             ...settings,
             styleRefUrl: finalStyleRefUrl,
+            moodboardId: isSrefModeForGeneration && srefMoodboard.trim() ? srefMoodboard.trim() : undefined, // Add moodboard ID for SREF mode
             skipStyleReference: isImageThemeMode ? true : false // SREF mode should NOT skip style reference
           };
+          
+          if (isSrefModeForGeneration && srefMoodboard.trim()) {
+            console.log(`[Midjourney Request ${requestIdx + 1}] Using moodboard: --p ${srefMoodboard.trim()}`);
+          }
           
           let imageTheme = 'Unknown';
           if (isImageThemeMode) {
@@ -1311,7 +1317,7 @@ const App: React.FC = () => {
           const base64Urls = await generateFunction(
             selectedTheme, 
             imageSpecificSettings,  // ✅ CHANGED: was "settings", now "imageSpecificSettings"
-            settings.parametersForMJ,
+            settings.parametersForMJ, // Use original parametersForMJ from settings
             settings.aspectRatio || '1:1',
             settings.midjourneyMode || 'fast',
             (status) => {
@@ -2125,6 +2131,7 @@ const App: React.FC = () => {
                   setSrefCode('');
                   setSrefSubject('');
                   setSrefCategory('');
+                  setSrefMoodboard('');
                 }}
                 className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
               >
@@ -2176,6 +2183,23 @@ const App: React.FC = () => {
               </select>
               <p className="text-xs text-slate-500 mt-2">
                 Select a category type to focus on. Leave as "Auto-select" for variety across all types.
+              </p>
+            </div>
+
+            {/* Midjourney Moodboard */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Midjourney Moodboard (Optional)
+              </label>
+              <input
+                type="text"
+                value={srefMoodboard}
+                onChange={(e) => setSrefMoodboard(e.target.value)}
+                placeholder="e.g., m7396698770005557263"
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Enter the Midjourney moodboard ID. This will be used as the --p parameter (e.g., --p m7396698770005557263).
               </p>
             </div>
 

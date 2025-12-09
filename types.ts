@@ -31,6 +31,7 @@ export interface GenerationSettings {
   customArtStyle?: string;
   promptService?: 'openai' | 'openrouter';
   styleRefUrl?: string; // WordPress URL for Midjourney --sref parameter
+  moodboardId?: string; // Midjourney moodboard ID for --p parameter (e.g., m7396698770005557263)
   primarySubject?: string; // Optional: user-specified primary subject for all variations
   skipStyleReference?: boolean; // If true, don't pass style reference URL to Midjourney (rely on detailed prompt only)
 }
