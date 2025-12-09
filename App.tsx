@@ -18,7 +18,8 @@ import {
   Terminal,
   ChevronRight,
   Link,
-  Table
+  Table,
+  Scissors
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -29,6 +30,7 @@ import { generateJournalPage as generateWithReplicate } from './services/replica
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
+import ArcaneSplitter from './components/ArcaneSplitter';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
 // Note: import.meta.env is replaced at build time by Vite, so this is safe
@@ -61,6 +63,7 @@ const App: React.FC = () => {
   const [bulkPrompts, setBulkPrompts] = useState<string>(''); // Bulk prompts text (each paragraph is a prompt)
   const [bulkMoodboard, setBulkMoodboard] = useState<string>(''); // Moodboard for all bulk prompts
   const [bulkSrefCode, setBulkSrefCode] = useState<string>(''); // SREF code for all bulk prompts
+  const [showArcaneSplitter, setShowArcaneSplitter] = useState<boolean>(false); // Show Arcane Splitter for grid image processing
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -2472,6 +2475,24 @@ const App: React.FC = () => {
 
       const detectedPrompts = parsePrompts(bulkPrompts);
       
+      // Handle prompts generated from Arcane Splitter
+      const handleArcaneSplitterPrompts = (prompts: string[]) => {
+        setBulkPrompts(prompts.join('\n\n'));
+        setShowArcaneSplitter(false);
+      };
+      
+      // If Arcane Splitter is open, show it
+      if (showArcaneSplitter) {
+        return (
+          <div className="animate-fade-in max-w-5xl mx-auto">
+            <ArcaneSplitter
+              onPromptsGenerated={handleArcaneSplitterPrompts}
+              onClose={() => setShowArcaneSplitter(false)}
+            />
+          </div>
+        );
+      }
+      
       return (
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
           <div className="text-center space-y-4">
@@ -2495,6 +2516,25 @@ const App: React.FC = () => {
           </div>
 
           <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
+            {/* Arcane Splitter Button */}
+            <div className="flex justify-center">
+              <button
+                onClick={() => setShowArcaneSplitter(true)}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-amber-600 hover:from-purple-500 hover:to-amber-500 rounded-lg font-medium text-white flex items-center gap-2 transition-all shadow-lg shadow-purple-900/30"
+              >
+                <Scissors className="w-5 h-5" />
+                Open Arcane Splitter
+                <span className="text-xs opacity-75">(Slice grids & generate prompts)</span>
+              </button>
+            </div>
+            
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-700"></div>
+              </div>
+              <span className="relative px-4 bg-gothic-800 text-sm text-slate-500">or paste prompts manually</span>
+            </div>
+            
             {/* Bulk Prompts Textarea */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-3">
