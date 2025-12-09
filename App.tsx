@@ -1839,10 +1839,22 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper function to shuffle array (Fisher-Yates algorithm)
+  const shuffleArray = <T>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   const downloadImage = (img: GeneratedImage, index: number) => {
     const link = document.createElement('a');
     link.href = img.url;
-    link.download = `${APP_NAME.replace(/\s+/g, '_')}_${selectedTheme?.name}_${index + 1}.png`;
+    // Use generic filename: image_001.png, image_002.png, etc.
+    const paddedIndex = String(index + 1).padStart(3, '0');
+    link.download = `image_${paddedIndex}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1862,13 +1874,19 @@ const App: React.FC = () => {
       const loadingMsg = `Preparing ${completedImages.length} images for download...`;
       alert(loadingMsg);
 
-      // Fetch all images and add to zip
-      for (let i = 0; i < completedImages.length; i++) {
-        const img = completedImages[i];
+      // Shuffle images to randomize order (so 4 images from each batch aren't grouped together)
+      const shuffledImages = shuffleArray(completedImages);
+      console.log(`[Download] Shuffled ${shuffledImages.length} images for random order`);
+
+      // Fetch all images and add to zip with generic filenames
+      for (let i = 0; i < shuffledImages.length; i++) {
+        const img = shuffledImages[i];
         try {
           const response = await fetch(img.url);
           const blob = await response.blob();
-          const fileName = `${APP_NAME.replace(/\s+/g, '_')}_${selectedTheme?.name || 'journal'}_variation_${img.variationNumber || i + 1}.png`;
+          // Use generic filename: image_001.png, image_002.png, etc.
+          const paddedIndex = String(i + 1).padStart(3, '0');
+          const fileName = `image_${paddedIndex}.png`;
           zip.file(fileName, blob);
         } catch (error) {
           console.error(`Failed to fetch image ${i + 1}:`, error);
@@ -1879,7 +1897,8 @@ const App: React.FC = () => {
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(zipBlob);
-      link.download = `${APP_NAME.replace(/\s+/g, '_')}_${selectedTheme?.name || 'journal'}_collection.zip`;
+      // Use generic ZIP filename
+      link.download = `images_${new Date().toISOString().split('T')[0]}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
