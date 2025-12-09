@@ -1224,7 +1224,7 @@ const App: React.FC = () => {
             } else {
               // No SREF code provided - explicitly set to undefined
               imageStyleRefUrl = undefined;
-              console.log(`[Midjourney Request ${requestIdx + 1}] SREF mode active but no SREF code provided - skipping style reference`);
+              console.log(`[Midjourney Request ${requestIdx + 1}] SREF mode active but no SREF code provided - will use moodboard if provided, or prompt only`);
             }
           } else if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
             // Image Theme Expansion mode: use single image's style reference
@@ -2140,7 +2140,7 @@ const App: React.FC = () => {
               <h2 className="text-3xl font-serif text-gothic-gold">SREF Style Match</h2>
             </div>
             <p className="text-slate-400">
-              Input a subject and Midjourney SREF code/URL. The system will generate subject variations while the SREF handles all styling.
+              Input a subject and optionally a Midjourney SREF code/URL and/or moodboard. The system will generate subject variations while the style references handle styling.
             </p>
           </div>
 
@@ -2199,7 +2199,7 @@ const App: React.FC = () => {
                 className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
               />
               <p className="text-xs text-slate-500 mt-2">
-                Enter the Midjourney moodboard ID. This will be used as the --p parameter (e.g., --p m7396698770005557263).
+                Enter the Midjourney moodboard ID. This will be used as the --p parameter (e.g., --p m7396698770005557263). Optional - you can use SREF instead, or both together.
               </p>
             </div>
 
@@ -2216,18 +2216,32 @@ const App: React.FC = () => {
                 className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
               />
               <p className="text-xs text-slate-500 mt-2">
-                Enter the Midjourney style reference code or URL. This will be used as the --sref parameter.
+                Enter the Midjourney style reference code or URL. This will be used as the --sref parameter. Optional - you can use moodboard instead, or both together.
               </p>
             </div>
 
             <button
               onClick={() => {
-                if (srefSubject.trim() && srefCode.trim()) {
+                if (srefSubject.trim()) {
                   // Create a custom theme object for SREF mode
+                  // SREF code and moodboard are optional - can use one, both, or neither
+                  const hasSref = srefCode.trim().length > 0;
+                  const hasMoodboard = srefMoodboard.trim().length > 0;
+                  let description = `Subject: ${srefSubject.trim()}`;
+                  if (hasSref) {
+                    description += `, SREF: ${srefCode.trim().substring(0, 50)}...`;
+                  }
+                  if (hasMoodboard) {
+                    description += `, Moodboard: ${srefMoodboard.trim()}`;
+                  }
+                  if (!hasSref && !hasMoodboard) {
+                    description += ` (No style reference - using prompt only)`;
+                  }
+                  
                   const customTheme: Theme = {
                     id: 'sref-style-match',
                     name: 'SREF Style Match',
-                    description: `Subject: ${srefSubject.trim()}, SREF: ${srefCode.trim().substring(0, 50)}...`,
+                    description,
                     thumbnail: '',
                     basePrompt: srefSubject.trim(),
                     styleKeywords: ['sref', 'style-match']
@@ -2236,10 +2250,10 @@ const App: React.FC = () => {
                   setIsSrefMode(false);
                   setStep(2);
                 } else {
-                  alert('Please enter both a subject and SREF code/URL.');
+                  alert('Please enter a subject. SREF code and moodboard are optional.');
                 }
               }}
-              disabled={!srefSubject.trim() || !srefCode.trim()}
+              disabled={!srefSubject.trim()}
               className="w-full bg-gradient-to-r from-gothic-gold to-amber-600 hover:from-amber-500 hover:to-amber-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-black font-bold py-4 rounded-lg shadow-lg shadow-amber-900/20 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
             >
               <Link className="animate-pulse" size={20} />
