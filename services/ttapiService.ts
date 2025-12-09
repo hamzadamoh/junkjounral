@@ -320,6 +320,12 @@ const sendTaskToTtapi = async (
         const errorJson = await response.json();
         console.error(`[Ttapi] HTTP ${response.status} error creating task:`, JSON.stringify(errorJson, null, 2));
         
+        // Extract error message
+        const apiMessage = errorJson.error?.message || errorJson.message || '';
+        const isQueueFull = apiMessage.toLowerCase().includes('queue is full') || 
+                           apiMessage.toLowerCase().includes('queue full') ||
+                           apiMessage.toLowerCase().includes('try again later');
+        
         // Handle specific error cases
         if (response.status === 402) {
           const quotaError = errorJson.error?.message || errorJson.message || 'insufficient quota';
@@ -327,10 +333,12 @@ const sendTaskToTtapi = async (
           errorDetail = `Please check your ttapi.io account balance and add credits if needed. Error details: ${quotaError}`;
         } else if (response.status === 401) {
           errorMessage = `Ttapi API error: Invalid API key. Please check that VITE_TTAPI_API_KEY is set correctly.`;
-        } else if (response.status === 429) {
-          errorMessage = `Ttapi API error: Rate limit exceeded. Will retry with new task.`;
-          // Rate limit - throw special error to trigger retry
-          throw new Error('RATE_LIMIT_RETRY');
+        } else if (response.status === 429 || isQueueFull) {
+          // Rate limit or queue full - throw special error to trigger retry
+          errorMessage = isQueueFull 
+            ? `Ttapi API error: Queue is full. Will retry with exponential backoff.`
+            : `Ttapi API error: Rate limit exceeded. Will retry with new task.`;
+          throw new Error('QUEUE_FULL_RETRY');
         } else {
           errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
           errorMessage = `Ttapi HTTP error: ${response.status} - ${errorDetail}`;
@@ -1126,21 +1134,27 @@ export const generateJournalPage = async (
         }
         break; // Success, exit retry loop
       } catch (error: any) {
-        // Check if it's a rate limit error
+        // Check if it's a rate limit or queue full error
         const isRateLimit = error.message?.includes('RATE_LIMIT_RETRY') || 
                            error.message?.toLowerCase().includes('rate limit') ||
                            error.message?.includes('429');
+        const isQueueFull = error.message?.includes('QUEUE_FULL_RETRY') ||
+                           error.message?.toLowerCase().includes('queue is full') ||
+                           error.message?.toLowerCase().includes('queue full') ||
+                           error.message?.toLowerCase().includes('try again later');
         
-        if (isRateLimit && retryCount < maxRetries) {
+        if ((isRateLimit || isQueueFull) && retryCount < maxRetries) {
           retryCount++;
-          // Exponential backoff: 5s, 10s, 20s
-          const retryDelay = baseRetryDelay * Math.pow(2, retryCount - 1);
-          console.warn(`[Ttapi] ⚠️ Rate limit detected during task creation (attempt ${retryCount}/${maxRetries}). Waiting ${retryDelay / 1000}s before resending as new task...`);
+          // Exponential backoff: 5s, 10s, 20s for rate limits, longer for queue full
+          const baseDelay = isQueueFull ? baseRetryDelay * 2 : baseRetryDelay; // 10s base for queue full
+          const retryDelay = baseDelay * Math.pow(2, retryCount - 1);
+          const errorType = isQueueFull ? 'queue full' : 'rate limit';
+          console.warn(`[Ttapi] ⚠️ ${errorType} detected during task creation (attempt ${retryCount}/${maxRetries}). Waiting ${retryDelay / 1000}s before resending as new task...`);
           await new Promise(resolve => setTimeout(resolve, retryDelay));
           console.log(`[Ttapi] 🔄 Retrying task creation (attempt ${retryCount}/${maxRetries})...`);
           continue; // Retry
         } else {
-          // Not a rate limit, or max retries reached - throw the error
+          // Not a retryable error, or max retries reached - throw the error
           throw error;
         }
       }

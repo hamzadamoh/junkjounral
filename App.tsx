@@ -594,8 +594,23 @@ const App: React.FC = () => {
       setGeneratedImages(updatedImages);
       
       // Generate images for each prompt
-      const imagePromises = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPrompt)).map(async (prompt, promptIndex) => {
-        try {
+      // For Ttapi: process sequentially with delays to avoid queue overflow
+      // For other services: process in parallel
+      const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPrompt));
+      
+      if (settings.imageService === 'ttapi') {
+        // Sequential processing for Ttapi to avoid queue overflow
+        for (let promptIndex = 0; promptIndex < promptsToProcess.length; promptIndex++) {
+          const prompt = promptsToProcess[promptIndex];
+          try {
+            // Add delay between submissions (except first one)
+            if (promptIndex > 0) {
+              // Wait 3 seconds between submissions, or 10 seconds every 5 submissions
+              const delay = (promptIndex % 5 === 0) ? 10000 : 3000;
+              console.log(`[Bulk Prompt ${promptIndex + 1}] ⏳ Waiting ${delay / 1000}s to avoid queue overflow...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          
           // Apply moodboard and SREF if provided
           let finalPrompt = prompt.trim();
           
@@ -614,58 +629,92 @@ const App: React.FC = () => {
             finalPrompt += ` --ar ${settings.aspectRatio}`;
           }
           
-          addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] Generating: "${prompt.substring(0, 60)}..."`);
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating: "${prompt.substring(0, 60)}..."`);
           
-          // Generate image based on service
-          if (settings.imageService === 'ttapi') {
-            // Ttapi generates 4 images per prompt
-            // Create a dummy theme for bulk prompt mode
-            const dummyTheme: Theme = {
-              id: 'bulk-prompt',
-              name: 'Bulk Prompt',
-              description: 'Bulk prompt import',
-              thumbnail: '',
-              basePrompt: prompt,
-              styleKeywords: []
-            };
+          // Ttapi generates 4 images per prompt
+          // Create a dummy theme for bulk prompt mode
+          const dummyTheme: Theme = {
+            id: 'bulk-prompt',
+            name: 'Bulk Prompt',
+            description: 'Bulk prompt import',
+            thumbnail: '',
+            basePrompt: prompt,
+            styleKeywords: []
+          };
+          
+          // Debug: Log the final prompt before sending
+          console.log(`[Bulk Prompt ${promptIndex + 1}] Final prompt length: ${finalPrompt.length}, preview: "${finalPrompt.substring(0, 100)}..."`);
+          
+          const result = await generateWithTtapi(
+            dummyTheme,
+            settings,
+            undefined, // parametersForMJ
+            settings.aspectRatio || '1:1', // aspectRatio
+            settings.midjourneyMode || 'fast', // processMode
+            undefined, // onProgress
+            promptIndex, // variationIndex
+            finalPrompt.trim() || undefined // customPrompt - ensure it's not empty string
+          );
+          
+          // Ttapi returns a single URL (grid image) or array of URLs
+          // Update all 4 placeholder images for this prompt
+          const startIndex = promptIndex * 4;
+          const endIndex = Math.min(startIndex + 4, actualTotal);
+          
+          if (Array.isArray(result)) {
+            // Multiple images returned
+            for (let i = 0; i < result.length && (startIndex + i) < actualTotal; i++) {
+              updatedImages[startIndex + i].url = result[i];
+              updatedImages[startIndex + i].status = 'completed';
+              updatedImages[startIndex + i].prompt = finalPrompt;
+            }
+          } else if (result) {
+            // Single image (grid) - update first placeholder
+            updatedImages[startIndex].url = result;
+            updatedImages[startIndex].status = 'completed';
+            updatedImages[startIndex].prompt = finalPrompt;
+          }
+          
+          setGeneratedImages([...updatedImages]);
+          setCurrentProgress(Math.min(endIndex, actualTotal));
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${endIndex - startIndex} images)`, 'success');
+        } catch (error: any) {
+          console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
+          const startIndex = promptIndex * 4;
+          const endIndex = Math.min(startIndex + 4, actualTotal);
+          
+          for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
+            updatedImages[i].status = 'error';
+            updatedImages[i].prompt = prompt;
+          }
+          setGeneratedImages([...updatedImages]);
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
+        }
+      }
+      } else {
+        // Parallel processing for Replicate/Pollinations
+        const imagePromises = promptsToProcess.map(async (prompt, promptIndex) => {
+          try {
+            // Apply moodboard and SREF if provided
+            let finalPrompt = prompt.trim();
             
-            // Debug: Log the final prompt before sending
-            console.log(`[Bulk Prompt ${promptIndex + 1}] Final prompt length: ${finalPrompt.length}, preview: "${finalPrompt.substring(0, 100)}..."`);
-            
-            const result = await generateWithTtapi(
-              dummyTheme,
-              settings,
-              undefined, // parametersForMJ
-              settings.aspectRatio || '1:1', // aspectRatio
-              settings.midjourneyMode || 'fast', // processMode
-              undefined, // onProgress
-              promptIndex, // variationIndex
-              finalPrompt.trim() || undefined // customPrompt - ensure it's not empty string
-            );
-            
-            // Ttapi returns a single URL (grid image) or array of URLs
-            // Update all 4 placeholder images for this prompt
-            const startIndex = promptIndex * 4;
-            const endIndex = Math.min(startIndex + 4, actualTotal);
-            
-            if (Array.isArray(result)) {
-              // Multiple images returned
-              for (let i = 0; i < result.length && (startIndex + i) < actualTotal; i++) {
-                updatedImages[startIndex + i].url = result[i];
-                updatedImages[startIndex + i].status = 'completed';
-                updatedImages[startIndex + i].prompt = finalPrompt;
-              }
-            } else if (result) {
-              // Single image (grid) - update first placeholder
-              updatedImages[startIndex].url = result;
-              updatedImages[startIndex].status = 'completed';
-              updatedImages[startIndex].prompt = finalPrompt;
+            // Add moodboard if provided
+            if (bulkMoodboard.trim()) {
+              finalPrompt += ` --p m${bulkMoodboard.trim()}`;
             }
             
-            setGeneratedImages([...updatedImages]);
-            setCurrentProgress(Math.min(endIndex, actualTotal));
-            addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] ✅ Completed (${endIndex - startIndex} images)`, 'success');
-          } else {
+            // Add SREF if provided
+            if (bulkSrefCode.trim()) {
+              finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
+            }
+            
+            // Add aspect ratio
+            if (settings.aspectRatio) {
+              finalPrompt += ` --ar ${settings.aspectRatio}`;
+            }
+            
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating: "${prompt.substring(0, 60)}..."`);
+            
             // Replicate/Pollinations: 1 image per prompt
             const imageIndex = promptIndex;
             if (imageIndex >= actualTotal) return;
@@ -711,26 +760,24 @@ const App: React.FC = () => {
               updatedImages[imageIndex].prompt = finalPrompt;
               setGeneratedImages([...updatedImages]);
               setCurrentProgress(imageIndex + 1);
-              addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] ✅ Completed`, 'success');
+              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed`, 'success');
             } else {
               throw new Error('No image URL returned');
             }
+          } catch (error: any) {
+            console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
+            const imageIndex = promptIndex;
+            if (imageIndex < actualTotal) {
+              updatedImages[imageIndex].status = 'error';
+              updatedImages[imageIndex].prompt = prompt;
+            }
+            setGeneratedImages([...updatedImages]);
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
           }
-        } catch (error: any) {
-          console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
-          const startIndex = settings.imageService === 'ttapi' ? promptIndex * 4 : promptIndex;
-          const endIndex = settings.imageService === 'ttapi' ? Math.min(startIndex + 4, actualTotal) : startIndex + 1;
-          
-          for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
-            updatedImages[i].status = 'error';
-            updatedImages[i].prompt = prompt;
-          }
-          setGeneratedImages([...updatedImages]);
-          addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
-        }
-      });
-      
-      await Promise.allSettled(imagePromises);
+        });
+        
+        await Promise.allSettled(imagePromises);
+      }
       
       const completed = updatedImages.filter(img => img.status === 'completed').length;
       const errored = updatedImages.filter(img => img.status === 'error').length;
