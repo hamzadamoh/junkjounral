@@ -235,9 +235,9 @@ const cleanPromptForMidjourney = (prompt: string): string => {
   // Remove sequences like "word, word, word" that might be interpreted as parameters
   cleaned = cleaned.replace(/,\s*(?:flat|printable|SINGLE|PAGE|ONLY|not|multiple|objects|still|life|composition|3D|shadows|depth|realistic|photography|lighting|illustration|style|top-down|view|scrapbook|digital|design|lay|high|resolution|journal|page)\b/gi, '');
   
-  // Replace commas with periods (commas can be interpreted as parameter separators)
-  // But only if they're not part of a URL or parameter
-  cleaned = cleaned.replace(/,(\s+)(?![a-z]+:)/gi, '.$1');
+  // REMOVED: Aggressive comma-to-period replacement breaks normal sentence structure
+  // Commas are generally safe in Midjourney prompts
+  // cleaned = cleaned.replace(/,(\s+)(?![a-z]+:)/gi, '.$1');
   
   // Replace multiple spaces with single space
   cleaned = cleaned.replace(/\s+/g, ' ');
@@ -709,17 +709,9 @@ const pollTaskUntilComplete = async (
         
         // Check if it's a rate limit error
         if (errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('rate limited')) {
-          consecutiveRateLimitErrors++;
-          console.warn(`[Ttapi] ⚠️ Rate limit detected (consecutive: ${consecutiveRateLimitErrors}). Applying exponential backoff...`);
-          
-          // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
-          const backoffDelay = Math.min(5000 * Math.pow(2, consecutiveRateLimitErrors - 1), 60000);
-          console.log(`[Ttapi] ⏳ Waiting ${backoffDelay / 1000}s before retrying...`);
-          await new Promise(resolve => setTimeout(resolve, backoffDelay));
-          
-          // Reset delay to initial after backoff
-          delay = initialDelay;
-          continue; // Retry polling
+          // Instead of retrying indefinitely, throw error to trigger resend as new task
+          console.warn(`[Ttapi] ⚠️ Rate limit detected during polling. Will resend as new task.`);
+          throw new Error(`RATE_LIMIT_RESEND_TASK: ${errorMsg}`);
         }
         
         throw new Error(`Ttapi task failed: ${errorMsg}`);
