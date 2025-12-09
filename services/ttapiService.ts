@@ -753,8 +753,8 @@ const pollTaskUntilComplete = async (
       // Exponential backoff, but cap at 10 seconds
       delay = Math.min(delay * 1.1, 10000);
     } catch (error: any) {
-      // If it's a task failure, throw immediately
-      if (error.message && error.message.includes('task failed')) {
+      // If it's a task failure or rate limit resend, throw immediately
+      if (error.message && (error.message.includes('task failed') || error.message.includes('RATE_LIMIT_RESEND_TASK'))) {
         throw error;
       }
       
