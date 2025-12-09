@@ -625,7 +625,8 @@ const App: React.FC = () => {
               usesPerImage,
               apiKey,
               apiUrl,
-              useOpenRouter
+              useOpenRouter,
+              useHuggingFace
             );
             imageSubjectLists.set(imgIdx, subjectList);
             addLog(`[Image ${imgIdx + 1}] Generated ${subjectList.length} nature-focused subjects`, 'success');
@@ -2715,11 +2716,12 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 gap-2">
                   {[
                     { value: 'openai', label: 'OpenAI (GPT-4o-mini)', desc: 'Default, fast and cost-efficient' },
-                    { value: 'openrouter', label: 'OpenRouter (DeepSeek R1)', desc: 'Free model via OpenRouter' }
+                    { value: 'openrouter', label: 'OpenRouter (DeepSeek R1)', desc: 'Free model via OpenRouter' },
+                    { value: 'huggingface', label: 'Hugging Face (DeepSeek V3.2)', desc: 'DeepSeek via Hugging Face API' }
                   ].map((service) => (
                     <button
                       key={service.value}
-                      onClick={() => handleSettingChange('promptService', service.value as 'openai' | 'openrouter')}
+                      onClick={() => handleSettingChange('promptService', service.value as 'openai' | 'openrouter' | 'huggingface')}
                       className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
                         (settings.promptService || 'openai') === service.value 
                           ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
@@ -2735,6 +2737,8 @@ const App: React.FC = () => {
                 <p className="text-xs text-slate-400 mt-1">
                   {settings.promptService === 'openrouter' 
                     ? '⚠️ Requires VITE_OPENROUTER_API_KEY environment variable'
+                    : settings.promptService === 'huggingface'
+                    ? '⚠️ Requires VITE_HUGGINGFACE_API_KEY environment variable'
                     : '✓ Requires VITE_OPENAI_API_KEY environment variable'}
                 </p>
               </div>

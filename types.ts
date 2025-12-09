@@ -29,7 +29,7 @@ export interface GenerationSettings {
   replicateModel?: string;
   customThemePrompt?: string;
   customArtStyle?: string;
-  promptService?: 'openai' | 'openrouter';
+  promptService?: 'openai' | 'openrouter' | 'huggingface';
   styleRefUrl?: string; // WordPress URL for Midjourney --sref parameter
   moodboardId?: string; // Midjourney moodboard ID for --p parameter (e.g., m7396698770005557263)
   primarySubject?: string; // Optional: user-specified primary subject for all variations

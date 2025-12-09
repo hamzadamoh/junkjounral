@@ -1,8 +1,9 @@
 // Import environment variable accessors
-import { getOpenAIApiKey, getOpenRouterApiKey } from './env';
+import { getOpenAIApiKey, getOpenRouterApiKey, getHuggingFaceApiKey } from './env';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const HUGGINGFACE_API_URL = 'https://api-inference.huggingface.co/models/deepseek-ai/DeepSeek-V3.2';
 
 // Metrics tracking (module-level)
 const metrics = {
@@ -285,9 +286,11 @@ export async function generateImageSpecificSubjectList(
   batchSize: number,
   apiKey: string,
   apiUrl: string,
-  useOpenRouter: boolean
+  useOpenRouter: boolean,
+  useHuggingFace: boolean = false
 ): Promise<string[]> {
-  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  const useHuggingFaceInternal = useHuggingFace || false;
+  const model = useHuggingFaceInternal ? 'deepseek-ai/DeepSeek-V3.2' : (useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini');
   const listSize = Math.max(batchSize, 36); // Generate at least 36 subjects
 
   // Extract image analysis data - let ChatGPT analyze the style dynamically
@@ -309,15 +312,8 @@ export async function generateImageSpecificSubjectList(
       headers['X-Title'] = 'Junk Journal Generator';
     }
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: `You are a sophisticated subject generator that analyzes reference images and creates subjects matching their exact aesthetic. 
+    // Build the prompt
+    const systemPrompt = `You are a sophisticated subject generator that analyzes reference images and creates subjects matching their exact aesthetic. 
 
 YOUR TASK:
 1. Analyze the image style, colors, vibe, and technique provided
@@ -349,11 +345,9 @@ SUBJECT REQUIREMENTS:
 - Must fit the color palette, vibe, and technique of the reference image
 - Examples of good subjects: "elegant deer portrait", "enchanted crystal heart", "glowing golden lantern", "mystical stairway", "dramatic fox silhouette", "fiery peacock display"
 
-OUTPUT FORMAT: Numbered list only, one subject per line. Each subject must be 2-4 words, specific, and visually distinct.`
-          },
-          {
-            role: 'user',
-            content: `Analyze this image and generate ${listSize} unique subjects that match its EXACT content and aesthetic:
+OUTPUT FORMAT: Numbered list only, one subject per line. Each subject must be 2-4 words, specific, and visually distinct.`;
+
+    const userPrompt = `Analyze this image and generate ${listSize} unique subjects that match its EXACT content and aesthetic:
 
 IMAGE ANALYSIS:
 Theme: "${imageTheme}"
@@ -389,27 +383,76 @@ CRITICAL INSTRUCTIONS:
 
 **REMEMBER: If PRIMARY SUBJECT = "Elf with fire" or "Elemental creature" or "Fire/flames", your subjects MUST include these elements!**
 
-Output ONLY a numbered list, one subject per line.`
-          }
+Output ONLY a numbered list, one subject per line.`;
+
+    // Handle different API formats
+    let requestBody: any;
+    if (useHuggingFaceInternal) {
+      // Hugging Face Inference API format
+      requestBody = {
+        inputs: `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`,
+        parameters: {
+          temperature: 0.4,
+          max_new_tokens: 1200,
+          return_full_text: false
+        }
+      };
+    } else {
+      // OpenAI/OpenRouter format
+      requestBody = {
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
         ],
-        temperature: 0.4, // Lower temperature for more deterministic, sophisticated results
+        temperature: 0.4,
         max_tokens: 1200,
         stream: false
-      })
+      };
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       throw new Error(`Failed to generate image-specific subject list: ${response.status}`);
     }
 
-    const data: ChatGPTResponse = await response.json();
-    if (data.choices && data.choices.length > 0) {
-      let content = data.choices[0].message.content;
+    const data: any = await response.json();
+    let content: string;
+    
+    if (useHuggingFaceInternal) {
+      // Hugging Face returns different format
+      if (Array.isArray(data) && data.length > 0) {
+        content = data[0].generated_text || '';
+      } else if (data.generated_text) {
+        content = data.generated_text;
+      } else if (data[0]?.generated_text) {
+        content = data[0].generated_text;
+      } else {
+        throw new Error('Unexpected Hugging Face response format');
+      }
+      // Remove the prompt part if it's included in generated_text
+      const promptPrefix = `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`;
+      if (content.startsWith(promptPrefix)) {
+        content = content.substring(promptPrefix.length).trim();
+      }
+    } else {
+      // OpenAI/OpenRouter format
+      const chatData = data as ChatGPTResponse;
+      if (!chatData.choices || chatData.choices.length === 0) {
+        throw new Error('No response from API');
+      }
+      content = chatData.choices[0].message.content;
       
       // Clean DeepSeek output if using OpenRouter
       if (useOpenRouter) {
         content = cleanDeepSeekOutput(content);
       }
+    }
       
       // Parse numbered list
       const subjects = content
@@ -684,11 +727,13 @@ async function callPromptWithHeaderEnforcement(
   apiKey: string,
   apiUrl: string,
   useOpenRouter: boolean,
+  useHuggingFace: boolean = false,
   maxAttempts: number = 4, // Allow extra retry for tricky subjects
   temperature: number = 0.3, // Default temperature (can be overridden for Custom/Override mode)
   maxTokens: number = 220 // Default max_tokens (can be overridden for Custom/Override mode)
 ): Promise<{ text: string; corrected: boolean; attempt: number; matched: boolean }> {
-  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  const useHuggingFaceInternal = useHuggingFace || false;
+  const model = useHuggingFaceInternal ? 'deepseek-ai/DeepSeek-V3.2' : (useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini');
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -705,20 +750,37 @@ async function callPromptWithHeaderEnforcement(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify({
+      // Handle different API formats
+      let requestBody: any;
+      if (useHuggingFaceInternal) {
+        // Hugging Face Inference API format
+        requestBody = {
+          inputs: `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`,
+          parameters: {
+            temperature: temperature,
+            max_new_tokens: maxTokens,
+            return_full_text: false
+          }
+        };
+      } else {
+        // OpenAI/OpenRouter format
+        requestBody = {
           model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
           ],
-          temperature: temperature, // Use passed temperature (default 0.3, Custom/Override uses 0.1)
-          max_tokens: useOpenRouter ? (maxTokens === 100 ? 100 : 4000) : maxTokens, // Use passed max_tokens (default 220, Custom/Override uses 100)
+          temperature: temperature,
+          max_tokens: useOpenRouter ? (maxTokens === 100 ? 100 : 4000) : maxTokens,
           stream: false
-        })
+        };
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify(requestBody)
       });
 
       clearTimeout(timeoutId);
@@ -727,16 +789,37 @@ async function callPromptWithHeaderEnforcement(
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data: ChatGPTResponse = await response.json();
-      if (!data.choices || data.choices.length === 0) {
-        throw new Error('No response from API');
-      }
-
-      let rawText = data.choices[0].message.content;
+      const data: any = await response.json();
+      let rawText: string;
       
-      // Clean DeepSeek R1 reasoning tags if using OpenRouter
-      if (useOpenRouter) {
-        rawText = cleanDeepSeekOutput(rawText);
+      if (useHuggingFaceInternal) {
+        // Hugging Face returns different format
+        if (Array.isArray(data) && data.length > 0) {
+          rawText = data[0].generated_text || '';
+        } else if (data.generated_text) {
+          rawText = data.generated_text;
+        } else if (data[0]?.generated_text) {
+          rawText = data[0].generated_text;
+        } else {
+          throw new Error('Unexpected Hugging Face response format');
+        }
+        // Remove the prompt part if it's included in generated_text
+        const promptPrefix = `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`;
+        if (rawText.startsWith(promptPrefix)) {
+          rawText = rawText.substring(promptPrefix.length).trim();
+        }
+      } else {
+        // OpenAI/OpenRouter format
+        const chatData = data as ChatGPTResponse;
+        if (!chatData.choices || chatData.choices.length === 0) {
+          throw new Error('No response from API');
+        }
+        rawText = chatData.choices[0].message.content;
+        
+        // Clean DeepSeek R1 reasoning tags if using OpenRouter
+        if (useOpenRouter) {
+          rawText = cleanDeepSeekOutput(rawText);
+        }
       }
       
       const text = rawText.trim();
@@ -904,13 +987,14 @@ export const generatePromptWithChatGPT = async (
 ): Promise<string | null> => {
   // Determine which service to use
   const useOpenRouter = promptService === 'openrouter';
-  const apiKey = useOpenRouter ? getOpenRouterApiKey() : getOpenAIApiKey();
-  const apiUrl = useOpenRouter ? OPENROUTER_API_URL : OPENAI_API_URL;
-  const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
+  const useHuggingFace = promptService === 'huggingface';
+  const apiKey = useHuggingFace ? getHuggingFaceApiKey() : (useOpenRouter ? getOpenRouterApiKey() : getOpenAIApiKey());
+  const apiUrl = useHuggingFace ? HUGGINGFACE_API_URL : (useOpenRouter ? OPENROUTER_API_URL : OPENAI_API_URL);
+  const model = useHuggingFace ? 'deepseek-ai/DeepSeek-V3.2' : (useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini');
   
   if (!apiKey) {
-    const serviceName = useOpenRouter ? 'OpenRouter' : 'OpenAI';
-    const envVar = useOpenRouter ? 'VITE_OPENROUTER_API_KEY' : 'VITE_OPENAI_API_KEY';
+    const serviceName = useHuggingFace ? 'Hugging Face' : (useOpenRouter ? 'OpenRouter' : 'OpenAI');
+    const envVar = useHuggingFace ? 'VITE_HUGGINGFACE_API_KEY' : (useOpenRouter ? 'VITE_OPENROUTER_API_KEY' : 'VITE_OPENAI_API_KEY');
     throw new Error(`${serviceName} API key is not configured. Please set ${envVar} in your environment variables.`);
   }
 
@@ -1294,7 +1378,6 @@ INSTRUCTIONS:
 Output ONLY: "[Your specific subject description]"`;
 
     // SREF mode: Direct API call without header enforcement (no "PRIMARY SUBJECT:" required)
-    const model = useOpenRouter ? 'tngtech/deepseek-r1t2-chimera:free' : 'gpt-4o-mini';
     let cleaned: string | null = null;
     
     for (let attempt = 1; attempt <= 4; attempt++) {
@@ -1312,11 +1395,22 @@ Output ONLY: "[Your specific subject description]"`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers,
-          signal: controller.signal,
-          body: JSON.stringify({
+        // Hugging Face uses a different API format - check if we need to use OpenAI-compatible endpoint
+        // For now, try OpenAI-compatible format (some Hugging Face endpoints support it)
+        let requestBody: any;
+        if (useHuggingFace) {
+          // Hugging Face Inference API format (OpenAI-compatible for chat models)
+          requestBody = {
+            inputs: `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`,
+            parameters: {
+              temperature: 0.2,
+              max_new_tokens: 150,
+              return_full_text: false
+            }
+          };
+        } else {
+          // OpenAI/OpenRouter format
+          requestBody = {
             model,
             messages: [
               { role: 'system', content: systemPrompt },
@@ -1325,7 +1419,14 @@ Output ONLY: "[Your specific subject description]"`;
             temperature: 0.2,
             max_tokens: useOpenRouter ? 4000 : 150,
             stream: false
-          })
+          };
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers,
+          signal: controller.signal,
+          body: JSON.stringify(requestBody)
         });
 
         clearTimeout(timeoutId);
@@ -1334,16 +1435,37 @@ Output ONLY: "[Your specific subject description]"`;
           throw new Error(`API error: ${response.status}`);
         }
 
-        const data: ChatGPTResponse = await response.json();
-        if (!data.choices || data.choices.length === 0) {
-          throw new Error('No response from API');
-        }
-
-        let rawText = data.choices[0].message.content;
+        const data: any = await response.json();
+        let rawText: string;
         
-        // Clean DeepSeek R1 reasoning tags if using OpenRouter
-        if (useOpenRouter) {
-          rawText = cleanDeepSeekOutput(rawText);
+        if (useHuggingFace) {
+          // Hugging Face returns different format: { generated_text: "..." } or array
+          if (Array.isArray(data) && data.length > 0) {
+            rawText = data[0].generated_text || '';
+          } else if (data.generated_text) {
+            rawText = data.generated_text;
+          } else if (data[0]?.generated_text) {
+            rawText = data[0].generated_text;
+          } else {
+            throw new Error('Unexpected Hugging Face response format');
+          }
+          // Remove the prompt part if it's included in generated_text
+          const promptPrefix = `${systemPrompt}\n\nUser: ${userPrompt}\n\nAssistant:`;
+          if (rawText.startsWith(promptPrefix)) {
+            rawText = rawText.substring(promptPrefix.length).trim();
+          }
+        } else {
+          // OpenAI/OpenRouter format
+          const chatData = data as ChatGPTResponse;
+          if (!chatData.choices || chatData.choices.length === 0) {
+            throw new Error('No response from API');
+          }
+          rawText = chatData.choices[0].message.content;
+          
+          // Clean DeepSeek R1 reasoning tags if using OpenRouter
+          if (useOpenRouter) {
+            rawText = cleanDeepSeekOutput(rawText);
+          }
         }
         
         let text = rawText.trim();
@@ -1651,6 +1773,7 @@ Output ONLY: "PRIMARY SUBJECT: [Theme]. [Your prompt]"`;
         apiKey,
         apiUrl,
         useOpenRouter,
+        useHuggingFace,
         4, // maxAttempts
         0.4, // temperature (higher for more creative expansion)
         200 // max_tokens (more tokens for expanded descriptions)
