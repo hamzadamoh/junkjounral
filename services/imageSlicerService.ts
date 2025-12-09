@@ -202,139 +202,80 @@ export const detectGridConfig = async (
 };
 
 /**
- * Finds vertical grid lines (white columns) in the image
+ * Finds the boundaries of each cell in the grid by detecting white separators
+ * Returns an array of [start, end] pairs for each cell
  */
-const findVerticalGridLines = (imageData: ImageData, numCols: number): number[] => {
+const findCellBoundaries = (
+  imageData: ImageData, 
+  numCells: number, 
+  isVertical: boolean
+): Array<[number, number]> => {
   const { width, height, data } = imageData;
-  const lines: number[] = [0]; // Start with left edge
+  const size = isVertical ? width : height;
+  const perpSize = isVertical ? height : width;
   
-  // Scan for white columns (grid separators)
-  const whiteColumns: number[] = [];
+  // Scan for white lines (grid separators)
+  const whiteLines: boolean[] = new Array(size).fill(false);
   
-  for (let x = 0; x < width; x++) {
+  for (let pos = 0; pos < size; pos++) {
     let whiteCount = 0;
-    const samplePoints = Math.min(50, height);
-    const step = Math.floor(height / samplePoints);
+    const samplePoints = Math.min(30, perpSize);
+    const step = Math.floor(perpSize / samplePoints);
     
     for (let i = 0; i < samplePoints; i++) {
-      const y = i * step;
+      const perpPos = i * step;
+      const x = isVertical ? pos : perpPos;
+      const y = isVertical ? perpPos : pos;
       const idx = (y * width + x) * 4;
       const r = data[idx];
       const g = data[idx + 1];
       const b = data[idx + 2];
       
-      if (r >= 240 && g >= 240 && b >= 240) {
+      // Check for white/near-white pixels
+      if (r >= 235 && g >= 235 && b >= 235) {
         whiteCount++;
       }
     }
     
-    if (whiteCount >= samplePoints * 0.7) {
-      whiteColumns.push(x);
+    // Mark as white line if 60%+ of samples are white
+    whiteLines[pos] = whiteCount >= samplePoints * 0.6;
+  }
+  
+  // Find content regions (non-white areas between white separators)
+  const boundaries: Array<[number, number]> = [];
+  let inContent = false;
+  let contentStart = 0;
+  
+  for (let pos = 0; pos < size; pos++) {
+    if (!whiteLines[pos] && !inContent) {
+      // Start of content region
+      inContent = true;
+      contentStart = pos;
+    } else if (whiteLines[pos] && inContent) {
+      // End of content region
+      inContent = false;
+      boundaries.push([contentStart, pos - 1]);
     }
   }
   
-  // Find gaps between white column groups (these are the grid lines)
-  if (whiteColumns.length > 0) {
-    let groupStart = whiteColumns[0];
-    let groupEnd = whiteColumns[0];
-    
-    for (let i = 1; i < whiteColumns.length; i++) {
-      if (whiteColumns[i] - whiteColumns[i - 1] <= 3) {
-        // Continue the group
-        groupEnd = whiteColumns[i];
-      } else {
-        // End of group - record the middle of this white band
-        const middle = Math.floor((groupStart + groupEnd) / 2);
-        if (middle > 10 && middle < width - 10) { // Ignore edges
-          lines.push(middle);
-        }
-        groupStart = whiteColumns[i];
-        groupEnd = whiteColumns[i];
-      }
+  // Handle last region if it extends to the edge
+  if (inContent) {
+    boundaries.push([contentStart, size - 1]);
+  }
+  
+  console.log(`[ImageSlicer] Found ${boundaries.length} ${isVertical ? 'columns' : 'rows'}: ${boundaries.map(b => `[${b[0]}-${b[1]}]`).join(', ')}`);
+  
+  // If we didn't find enough cells, fall back to even division
+  if (boundaries.length !== numCells) {
+    console.log(`[ImageSlicer] Expected ${numCells} ${isVertical ? 'columns' : 'rows'}, found ${boundaries.length}. Falling back to even division.`);
+    boundaries.length = 0;
+    const cellSize = Math.floor(size / numCells);
+    for (let i = 0; i < numCells; i++) {
+      boundaries.push([i * cellSize, (i + 1) * cellSize - 1]);
     }
   }
   
-  lines.push(width); // End with right edge
-  
-  // If we didn't find enough lines, fall back to even division
-  if (lines.length < numCols + 1) {
-    console.log(`[ImageSlicer] Only found ${lines.length - 1} vertical lines, falling back to even division`);
-    lines.length = 0;
-    for (let i = 0; i <= numCols; i++) {
-      lines.push(Math.floor(i * width / numCols));
-    }
-  }
-  
-  console.log(`[ImageSlicer] Vertical grid lines: ${lines.join(', ')}`);
-  return lines;
-};
-
-/**
- * Finds horizontal grid lines (white rows) in the image
- */
-const findHorizontalGridLines = (imageData: ImageData, numRows: number): number[] => {
-  const { width, height, data } = imageData;
-  const lines: number[] = [0]; // Start with top edge
-  
-  // Scan for white rows (grid separators)
-  const whiteRows: number[] = [];
-  
-  for (let y = 0; y < height; y++) {
-    let whiteCount = 0;
-    const samplePoints = Math.min(50, width);
-    const step = Math.floor(width / samplePoints);
-    
-    for (let i = 0; i < samplePoints; i++) {
-      const x = i * step;
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      
-      if (r >= 240 && g >= 240 && b >= 240) {
-        whiteCount++;
-      }
-    }
-    
-    if (whiteCount >= samplePoints * 0.7) {
-      whiteRows.push(y);
-    }
-  }
-  
-  // Find gaps between white row groups (these are the grid lines)
-  if (whiteRows.length > 0) {
-    let groupStart = whiteRows[0];
-    let groupEnd = whiteRows[0];
-    
-    for (let i = 1; i < whiteRows.length; i++) {
-      if (whiteRows[i] - whiteRows[i - 1] <= 3) {
-        // Continue the group
-        groupEnd = whiteRows[i];
-      } else {
-        // End of group - record the middle of this white band
-        const middle = Math.floor((groupStart + groupEnd) / 2);
-        if (middle > 10 && middle < height - 10) { // Ignore edges
-          lines.push(middle);
-        }
-        groupStart = whiteRows[i];
-        groupEnd = whiteRows[i];
-      }
-    }
-  }
-  
-  lines.push(height); // End with bottom edge
-  
-  // If we didn't find enough lines, fall back to even division
-  if (lines.length < numRows + 1) {
-    console.log(`[ImageSlicer] Only found ${lines.length - 1} horizontal lines, falling back to even division`);
-    lines.length = 0;
-    for (let i = 0; i <= numRows; i++) {
-      lines.push(Math.floor(i * height / numRows));
-    }
-  }
-  
-  console.log(`[ImageSlicer] Horizontal grid lines: ${lines.join(', ')}`);
-  return lines;
+  return boundaries;
 };
 
 /**
@@ -371,26 +312,24 @@ export const sliceGridImage = async (
         // Get the full image data for grid detection
         const fullImageData = mainCtx.getImageData(0, 0, img.width, img.height);
         
-        // Detect grid lines (white separators)
-        const verticalLines = findVerticalGridLines(fullImageData, cols);
-        const horizontalLines = findHorizontalGridLines(fullImageData, rows);
+        // Detect cell boundaries (content regions between white separators)
+        const colBoundaries = findCellBoundaries(fullImageData, cols, true);
+        const rowBoundaries = findCellBoundaries(fullImageData, rows, false);
         
         const bgColor = detectBackgroundColor(fullImageData);
         console.log(`[ImageSlicer] Detected background color: rgb(${bgColor.r}, ${bgColor.g}, ${bgColor.b})`);
         
-        // Slice each cell using detected grid lines
+        // Slice each cell using detected boundaries
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
-            // Get bounds from detected grid lines
-            const x = verticalLines[col];
-            const y = horizontalLines[row];
-            const nextX = verticalLines[col + 1] || img.width;
-            const nextY = horizontalLines[row + 1] || img.height;
+            // Get bounds from detected cell boundaries
+            const [x, xEnd] = colBoundaries[col] || [col * Math.floor(img.width / cols), (col + 1) * Math.floor(img.width / cols) - 1];
+            const [y, yEnd] = rowBoundaries[row] || [row * Math.floor(img.height / rows), (row + 1) * Math.floor(img.height / rows) - 1];
             
-            const sliceWidth = nextX - x;
-            const sliceHeight = nextY - y;
+            const sliceWidth = xEnd - x + 1;
+            const sliceHeight = yEnd - y + 1;
             
-            console.log(`[ImageSlicer] Slice [${row},${col}]: (${x},${y}) ${sliceWidth}x${sliceHeight}`);
+            console.log(`[ImageSlicer] Slice [${row},${col}]: (${x},${y}) to (${xEnd},${yEnd}) = ${sliceWidth}x${sliceHeight}`);
             
             // Create a canvas for this slice
             const sliceCanvas = document.createElement('canvas');
