@@ -616,7 +616,14 @@ const App: React.FC = () => {
           
           // Add moodboard if provided
           if (bulkMoodboard.trim()) {
-            finalPrompt += ` --p m${bulkMoodboard.trim()}`;
+            // Remove any existing --p prefix and m prefix, then add them properly
+            let moodboardId = bulkMoodboard.trim();
+            // Remove --p if present
+            moodboardId = moodboardId.replace(/^--p\s*/i, '').trim();
+            // Remove m prefix if present (we'll add it back)
+            moodboardId = moodboardId.replace(/^m/, '').trim();
+            // Add m prefix and --p parameter
+            finalPrompt += ` --p m${moodboardId}`;
           }
           
           // Add SREF if provided
@@ -700,7 +707,14 @@ const App: React.FC = () => {
             
             // Add moodboard if provided
             if (bulkMoodboard.trim()) {
-              finalPrompt += ` --p m${bulkMoodboard.trim()}`;
+              // Remove any existing --p prefix and m prefix, then add them properly
+              let moodboardId = bulkMoodboard.trim();
+              // Remove --p if present
+              moodboardId = moodboardId.replace(/^--p\s*/i, '').trim();
+              // Remove m prefix if present (we'll add it back)
+              moodboardId = moodboardId.replace(/^m/, '').trim();
+              // Add m prefix and --p parameter
+              finalPrompt += ` --p m${moodboardId}`;
             }
             
             // Add SREF if provided
@@ -2460,7 +2474,7 @@ const App: React.FC = () => {
                 type="text"
                 value={srefMoodboard}
                 onChange={(e) => setSrefMoodboard(e.target.value)}
-                placeholder="e.g., m7396698770005557263"
+                placeholder="e.g., 7396698770005557263 (just the number, or m7396698770005557263)"
                 className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
               />
               <p className="text-xs text-slate-500 mt-2">
@@ -2638,7 +2652,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 type="text"
                 value={bulkMoodboard}
                 onChange={(e) => setBulkMoodboard(e.target.value)}
-                placeholder="e.g., m7396698770005557263"
+                placeholder="e.g., 7396698770005557263 (just the number, or m7396698770005557263)"
                 className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
               />
               <p className="text-xs text-slate-500 mt-2">
