@@ -416,15 +416,22 @@ const getTaskStatus = async (jobId: string): Promise<TtapiJobStatus> => {
 /**
  * Polls a ttapi.io task until it completes or fails
  * Added rate limit handling with exponential backoff
+ * 
+ * RATE LIMIT MITIGATION:
+ * - Initial delay: 10 seconds (was 3s - too aggressive)
+ * - Stagger delay: Each task waits (taskIndex * 2000ms) before starting to poll
+ * - Exponential backoff: delay increases by 1.2x each poll, max 30 seconds
+ * - This prevents overwhelming Ttapi's API when polling multiple tasks
  */
 const pollTaskUntilComplete = async (
   jobId: string,
-  maxAttempts: number = 180,
-  initialDelay: number = 3000,
+  maxAttempts: number = 120, // Reduced from 180 since we poll less frequently
+  initialDelay: number = 10000, // 10 seconds (was 3s)
   staggerDelay: number = 0 // Add stagger delay to avoid simultaneous polling
 ): Promise<string[]> => {
   // Stagger polling start to avoid rate limits when multiple tasks poll simultaneously
   if (staggerDelay > 0) {
+    console.log(`[Ttapi] ⏳ Staggering poll start by ${staggerDelay/1000}s for task ${jobId}`);
     await new Promise(resolve => setTimeout(resolve, staggerDelay));
   }
   
@@ -750,8 +757,9 @@ const pollTaskUntilComplete = async (
       // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, delay));
       
-      // Exponential backoff, but cap at 10 seconds
-      delay = Math.min(delay * 1.1, 10000);
+      // Exponential backoff, cap at 30 seconds to avoid rate limits
+      // Starts at 10s, grows: 12s, 14.4s, 17.3s, 20.7s, 24.9s, 29.9s, 30s...
+      delay = Math.min(delay * 1.2, 30000);
     } catch (error: any) {
       // If it's a task failure or rate limit resend, throw immediately
       if (error.message && (error.message.includes('task failed') || error.message.includes('RATE_LIMIT_RESEND_TASK'))) {
@@ -1148,8 +1156,9 @@ export const generateJournalPage = async (
     
     // Poll until complete - returns all image URLs
     // Add stagger delay based on variationIndex to avoid simultaneous polling
-    // Each request waits (variationIndex * 500ms) before starting to poll
-    const staggerDelay = (variationIndex ?? 0) * 500; // 0ms, 500ms, 1000ms, 1500ms, etc.
+    // Each request waits (variationIndex * 2000ms) before starting to poll
+    // This spreads out polling requests to avoid rate limiting
+    const staggerDelay = (variationIndex ?? 0) * 2000; // 0ms, 2s, 4s, 6s, etc.
     
     let pollingRetryCount = 0;
     const maxPollingRetries = 2;
@@ -1157,7 +1166,11 @@ export const generateJournalPage = async (
     
     while (imageUrls.length === 0 && pollingRetryCount <= maxPollingRetries) {
       try {
-        imageUrls = await pollTaskUntilComplete(currentJobId, 180, 5000, staggerDelay);
+        // Use longer delays to avoid rate limiting:
+        // - maxAttempts: 120 (at ~15s average = 30 min max wait)
+        // - initialDelay: 10000ms (10s between polls)
+        // - staggerDelay: spreads out concurrent task polling
+        imageUrls = await pollTaskUntilComplete(currentJobId, 120, 10000, staggerDelay);
         
         if (!imageUrls || imageUrls.length === 0) {
           throw new Error('No images returned from ttapi.io');
