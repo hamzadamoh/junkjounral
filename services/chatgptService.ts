@@ -453,33 +453,32 @@ Output ONLY a numbered list, one subject per line.`;
         content = cleanDeepSeekOutput(content);
       }
     }
-      
-      // Parse numbered list
-      const subjects = content
-        .split('\n')
-        .map(line => line.replace(/^\d+[\.\)]\s*/, '').trim())
-        .filter(line => {
-          const lower = line.toLowerCase();
-          // Filter out forbidden subjects (but allow if they match the primary subject)
-          // Only filter if the primary subject doesn't contain these elements
-          const primarySubjectLower = (primarySubject || '').toLowerCase();
-          const isFantasyImage = primarySubjectLower.includes('elf') || primarySubjectLower.includes('elemental') || 
-                                 primarySubjectLower.includes('fairy') || primarySubjectLower.includes('magical') ||
-                                 primarySubjectLower.includes('fire') || primarySubjectLower.includes('flame');
-          
-          // If image is fantasy/magical, allow fantasy subjects; otherwise filter them
-          const forbidden = isFantasyImage 
-            ? ['raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic'] // Allow elves, elementals, fairies for fantasy images
-            : ['gnome', 'fairy', 'elf', 'goblin', 'troll', 'raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic']; // Filter all for nature images
-          
-          return line.length > 0 && line.length < 60 && !forbidden.some(f => lower.includes(f));
-        })
-        .slice(0, listSize);
-      
-      if (subjects.length >= Math.min(batchSize, 20)) {
-        console.log(`[Image-Specific Subject List] Generated ${subjects.length} subjects for theme "${imageTheme}" (Primary Subject: "${primarySubject}")`);
-        return subjects;
-      }
+    
+    // Parse numbered list
+    const subjects = content
+      .split('\n')
+      .map(line => line.replace(/^\d+[\.\)]\s*/, '').trim())
+      .filter(line => {
+        const lower = line.toLowerCase();
+        // Filter out forbidden subjects (but allow if they match the primary subject)
+        // Only filter if the primary subject doesn't contain these elements
+        const primarySubjectLower = (primarySubject || '').toLowerCase();
+        const isFantasyImage = primarySubjectLower.includes('elf') || primarySubjectLower.includes('elemental') || 
+                               primarySubjectLower.includes('fairy') || primarySubjectLower.includes('magical') ||
+                               primarySubjectLower.includes('fire') || primarySubjectLower.includes('flame');
+        
+        // If image is fantasy/magical, allow fantasy subjects; otherwise filter them
+        const forbidden = isFantasyImage 
+          ? ['raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic'] // Allow elves, elementals, fairies for fantasy images
+          : ['gnome', 'fairy', 'elf', 'goblin', 'troll', 'raccoon', 'squirrel', 'chipmunk', 'floating island', 'flying castle', 'anthropomorphic']; // Filter all for nature images
+        
+        return line.length > 0 && line.length < 60 && !forbidden.some(f => lower.includes(f));
+      })
+      .slice(0, listSize);
+    
+    if (subjects.length >= Math.min(batchSize, 20)) {
+      console.log(`[Image-Specific Subject List] Generated ${subjects.length} subjects for theme "${imageTheme}" (Primary Subject: "${primarySubject}")`);
+      return subjects;
     }
   } catch (error) {
     console.error('[Image-Specific Subject List] Generation failed:', error);
