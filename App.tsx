@@ -53,10 +53,14 @@ const App: React.FC = () => {
   const [isCustomTheme, setIsCustomTheme] = useState<boolean>(false);
   const [isImageThemeExpansion, setIsImageThemeExpansion] = useState<boolean>(false);
   const [isSrefMode, setIsSrefMode] = useState<boolean>(false);
+  const [isBulkPromptMode, setIsBulkPromptMode] = useState<boolean>(false);
   const [srefCode, setSrefCode] = useState<string>('');
   const [srefSubject, setSrefSubject] = useState<string>('');
   const [srefCategory, setSrefCategory] = useState<string>(''); // Selected category for SREF mode
   const [srefMoodboard, setSrefMoodboard] = useState<string>(''); // Midjourney moodboard ID (--p parameter)
+  const [bulkPrompts, setBulkPrompts] = useState<string>(''); // Bulk prompts text (each paragraph is a prompt)
+  const [bulkMoodboard, setBulkMoodboard] = useState<string>(''); // Moodboard for all bulk prompts
+  const [bulkSrefCode, setBulkSrefCode] = useState<string>(''); // SREF code for all bulk prompts
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -425,6 +429,7 @@ const App: React.FC = () => {
     setIsCustomTheme(true);
     setIsImageThemeExpansion(false);
     setIsSrefMode(false);
+    setIsBulkPromptMode(false);
     setSelectedTheme(null);
   };
 
@@ -432,6 +437,7 @@ const App: React.FC = () => {
     setIsImageThemeExpansion(true);
     setIsCustomTheme(false);
     setIsSrefMode(false);
+    setIsBulkPromptMode(false);
     setSelectedTheme(null);
   };
 
@@ -439,6 +445,15 @@ const App: React.FC = () => {
     setIsSrefMode(true);
     setIsCustomTheme(false);
     setIsImageThemeExpansion(false);
+    setIsBulkPromptMode(false);
+    setSelectedTheme(null);
+  };
+
+  const handleBulkPromptModeSelect = () => {
+    setIsBulkPromptMode(true);
+    setIsCustomTheme(false);
+    setIsImageThemeExpansion(false);
+    setIsSrefMode(false);
     setSelectedTheme(null);
   };
 
@@ -542,6 +557,148 @@ const App: React.FC = () => {
 
     // STEP 1: Generate prompts
     addLog('Generating prompts...');
+    
+    // Check if we're in bulk prompt mode
+    const isBulkPromptModeForTheme = selectedTheme?.id === 'bulk-prompt-import';
+    
+    // Handle bulk prompt mode - parse prompts and use them directly
+    if (isBulkPromptModeForTheme && selectedTheme?.basePrompt) {
+      const parsePrompts = (text: string): string[] => {
+        return text
+          .split(/\n\s*\n/) // Split by double newlines (paragraphs)
+          .map(p => p.trim())
+          .filter(p => p.length > 0);
+      };
+      
+      const bulkPromptsList = parsePrompts(selectedTheme.basePrompt);
+      const totalPrompts = bulkPromptsList.length;
+      
+      if (totalPrompts === 0) {
+        setErrorMsg('No prompts detected. Please paste at least one prompt.');
+        setStatus(GenerationStatus.ERROR);
+        return;
+      }
+      
+      addLog(`[Bulk Prompt Mode] Detected ${totalPrompts} prompt${totalPrompts !== 1 ? 's' : ''}. Generating images for each...`);
+      
+      // For Ttapi: each prompt generates 4 images, so we need to adjust
+      const imagesPerPrompt = settings.imageService === 'ttapi' ? 4 : 1;
+      const totalImagesToGenerate = totalPrompts * imagesPerPrompt;
+      const actualTotal = Math.min(totalImagesToGenerate, total);
+      
+      // Update placeholder images to match actual count
+      const updatedImages = newImages.slice(0, actualTotal);
+      setGeneratedImages(updatedImages);
+      
+      // Generate images for each prompt
+      const imagePromises = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPrompt)).map(async (prompt, promptIndex) => {
+        try {
+          // Apply moodboard and SREF if provided
+          let finalPrompt = prompt.trim();
+          
+          // Add moodboard if provided
+          if (bulkMoodboard.trim()) {
+            finalPrompt += ` --p m${bulkMoodboard.trim()}`;
+          }
+          
+          // Add SREF if provided
+          if (bulkSrefCode.trim()) {
+            finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
+          }
+          
+          // Add aspect ratio
+          if (settings.aspectRatio) {
+            finalPrompt += ` --ar ${settings.aspectRatio}`;
+          }
+          
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] Generating: "${prompt.substring(0, 60)}..."`);
+          
+          // Generate image based on service
+          if (settings.imageService === 'ttapi') {
+            // Ttapi generates 4 images per prompt
+            const result = await generateWithTtapi(
+              finalPrompt,
+              settings,
+              promptIndex
+            );
+            
+            // Ttapi returns a single URL (grid image) or array of URLs
+            // Update all 4 placeholder images for this prompt
+            const startIndex = promptIndex * 4;
+            const endIndex = Math.min(startIndex + 4, actualTotal);
+            
+            if (Array.isArray(result)) {
+              // Multiple images returned
+              for (let i = 0; i < result.length && (startIndex + i) < actualTotal; i++) {
+                updatedImages[startIndex + i].url = result[i];
+                updatedImages[startIndex + i].status = 'completed';
+                updatedImages[startIndex + i].prompt = finalPrompt;
+              }
+            } else if (result) {
+              // Single image (grid) - update first placeholder
+              updatedImages[startIndex].url = result;
+              updatedImages[startIndex].status = 'completed';
+              updatedImages[startIndex].prompt = finalPrompt;
+            }
+            
+            setGeneratedImages([...updatedImages]);
+            setCurrentProgress(Math.min(endIndex, actualTotal));
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] ✅ Completed (${endIndex - startIndex} images)`, 'success');
+          } else {
+            // Replicate/Pollinations: 1 image per prompt
+            const imageIndex = promptIndex;
+            if (imageIndex >= actualTotal) return;
+            
+            let imageUrl = '';
+            if (settings.imageService === 'replicate') {
+              imageUrl = await generateWithReplicate(
+                finalPrompt,
+                settings,
+                imageIndex
+              );
+            } else if (settings.imageService === 'pollinations') {
+              imageUrl = await generateWithPollinations(
+                finalPrompt,
+                settings,
+                imageIndex
+              );
+            }
+            
+            if (imageUrl) {
+              updatedImages[imageIndex].url = imageUrl;
+              updatedImages[imageIndex].status = 'completed';
+              updatedImages[imageIndex].prompt = finalPrompt;
+              setGeneratedImages([...updatedImages]);
+              setCurrentProgress(imageIndex + 1);
+              addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] ✅ Completed`, 'success');
+            } else {
+              throw new Error('No image URL returned');
+            }
+          }
+        } catch (error: any) {
+          console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
+          const startIndex = settings.imageService === 'ttapi' ? promptIndex * 4 : promptIndex;
+          const endIndex = settings.imageService === 'ttapi' ? Math.min(startIndex + 4, actualTotal) : startIndex + 1;
+          
+          for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
+            updatedImages[i].status = 'error';
+            updatedImages[i].prompt = prompt;
+          }
+          setGeneratedImages([...updatedImages]);
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${bulkPromptsList.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
+        }
+      });
+      
+      await Promise.allSettled(imagePromises);
+      
+      const completed = updatedImages.filter(img => img.status === 'completed').length;
+      const errored = updatedImages.filter(img => img.status === 'error').length;
+      
+      addLog(`[Bulk Prompt Mode] ✅ Completed: ${completed} successful, ${errored} failed`, completed > 0 ? 'success' : 'error');
+      setStatus(GenerationStatus.COMPLETED);
+      setCurrentProgress(actualTotal);
+      return;
+    }
     
     // Determine the theme name to use
     // If SREF mode: use the SREF subject
@@ -2265,6 +2422,143 @@ const App: React.FC = () => {
       );
     }
 
+    // If bulk prompt mode is selected, show the input form
+    if (isBulkPromptMode) {
+      // Parse prompts from text (each paragraph is a prompt)
+      const parsePrompts = (text: string): string[] => {
+        return text
+          .split(/\n\s*\n/) // Split by double newlines (paragraphs)
+          .map(p => p.trim())
+          .filter(p => p.length > 0);
+      };
+
+      const detectedPrompts = parsePrompts(bulkPrompts);
+      
+      return (
+        <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
+          <div className="text-center space-y-4">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <button 
+                onClick={() => {
+                  setIsBulkPromptMode(false);
+                  setBulkPrompts('');
+                  setBulkMoodboard('');
+                  setBulkSrefCode('');
+                }}
+                className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+              >
+                <ChevronLeft />
+              </button>
+              <h2 className="text-3xl font-serif text-gothic-gold">Bulk Prompt Import</h2>
+            </div>
+            <p className="text-slate-400">
+              Paste multiple prompts (each paragraph is a separate prompt). Each prompt will generate images with optional moodboard and SREF applied.
+            </p>
+          </div>
+
+          <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
+            {/* Bulk Prompts Textarea */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Prompts (One per paragraph)
+              </label>
+              <textarea
+                value={bulkPrompts}
+                onChange={(e) => setBulkPrompts(e.target.value)}
+                placeholder="Paste your prompts here, one per paragraph:
+
+A glowing lantern hanging from a twisted tree branch, illuminating the forest floor.
+
+A crystal vial filled with shimmering moonlight, sealed with a silver crescent moon cap.
+
+A silver-furred fox with luminous eyes, playfully chasing fireflies under the moonlight."
+                rows={12}
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent resize-none font-mono text-sm"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Each paragraph will be treated as a separate prompt. Empty lines between paragraphs are used to separate prompts.
+              </p>
+              {detectedPrompts.length > 0 && (
+                <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700/50 rounded text-xs text-blue-400">
+                  ✓ Detected {detectedPrompts.length} prompt{detectedPrompts.length !== 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+
+            {/* Moodboard Input */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Midjourney Moodboard (Optional - applies to all prompts)
+              </label>
+              <input
+                type="text"
+                value={bulkMoodboard}
+                onChange={(e) => setBulkMoodboard(e.target.value)}
+                placeholder="e.g., m7396698770005557263"
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Enter the Midjourney moodboard ID. This will be applied to all prompts as the --p parameter. Optional.
+              </p>
+            </div>
+
+            {/* SREF Code Input */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Midjourney SREF Code or URL (Optional - applies to all prompts)
+              </label>
+              <input
+                type="text"
+                value={bulkSrefCode}
+                onChange={(e) => setBulkSrefCode(e.target.value)}
+                placeholder="e.g., https://cdn.midjourney.com/... or SREF code"
+                className="w-full px-4 py-3 bg-gothic-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-gothic-gold focus:border-transparent"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Enter the Midjourney style reference code or URL. This will be applied to all prompts as the --sref parameter. Optional.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (detectedPrompts.length > 0) {
+                  // Create a custom theme object for bulk prompt mode
+                  const hasSref = bulkSrefCode.trim().length > 0;
+                  const hasMoodboard = bulkMoodboard.trim().length > 0;
+                  let description = `${detectedPrompts.length} prompt${detectedPrompts.length !== 1 ? 's' : ''}`;
+                  if (hasSref) {
+                    description += `, SREF: ${bulkSrefCode.trim().substring(0, 50)}...`;
+                  }
+                  if (hasMoodboard) {
+                    description += `, Moodboard: ${bulkMoodboard.trim()}`;
+                  }
+                  
+                  const customTheme: Theme = {
+                    id: 'bulk-prompt-import',
+                    name: 'Bulk Prompt Import',
+                    description,
+                    thumbnail: '',
+                    basePrompt: detectedPrompts.join('\n\n'), // Store all prompts
+                    styleKeywords: ['bulk', 'prompt-import']
+                  };
+                  setSelectedTheme(customTheme);
+                  setIsBulkPromptMode(false);
+                  setStep(2);
+                } else {
+                  alert('Please paste at least one prompt. Each paragraph is treated as a separate prompt.');
+                }
+              }}
+              disabled={detectedPrompts.length === 0}
+              className="w-full bg-gradient-to-r from-gothic-gold to-amber-600 hover:from-amber-500 hover:to-amber-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-black font-bold py-4 rounded-lg shadow-lg shadow-amber-900/20 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
+            >
+              <FileText className="animate-pulse" size={20} />
+              Continue with {detectedPrompts.length > 0 ? `${detectedPrompts.length} Prompt${detectedPrompts.length !== 1 ? 's' : ''}` : 'Bulk Prompts'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // If custom theme mode is selected, show the input form
     if (isCustomTheme) {
       return (
@@ -2460,11 +2754,11 @@ const App: React.FC = () => {
       <div className="text-center space-y-4">
         <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Choose how you want to generate your journal pages - with a custom theme description, by uploading an image to extract the theme, or using a Midjourney style reference code.
+          Choose how you want to generate your journal pages - with a custom theme description, by uploading an image to extract the theme, using a Midjourney style reference code, or by pasting multiple prompts.
         </p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
           {/* Custom Theme Option */}
           <button
             onClick={handleCustomThemeSelect}
@@ -2509,6 +2803,22 @@ const App: React.FC = () => {
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">SREF Style Match</h3>
               <p className="text-sm text-slate-400">
                 Input a subject and Midjourney SREF code - generates subject variations with style from SREF
+              </p>
+            </div>
+          </button>
+
+          {/* Bulk Prompt Import Option */}
+          <button
+            onClick={handleBulkPromptModeSelect}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <FileText className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Bulk Prompt Import</h3>
+              <p className="text-sm text-slate-400">
+                Paste multiple prompts (one per paragraph) with optional moodboard and SREF for all
               </p>
             </div>
           </button>
