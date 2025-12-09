@@ -616,10 +616,28 @@ const App: React.FC = () => {
           // Generate image based on service
           if (settings.imageService === 'ttapi') {
             // Ttapi generates 4 images per prompt
+            // Create a dummy theme for bulk prompt mode
+            const dummyTheme: Theme = {
+              id: 'bulk-prompt',
+              name: 'Bulk Prompt',
+              description: 'Bulk prompt import',
+              thumbnail: '',
+              basePrompt: prompt,
+              styleKeywords: []
+            };
+            
+            // Debug: Log the final prompt before sending
+            console.log(`[Bulk Prompt ${promptIndex + 1}] Final prompt length: ${finalPrompt.length}, preview: "${finalPrompt.substring(0, 100)}..."`);
+            
             const result = await generateWithTtapi(
-              finalPrompt,
+              dummyTheme,
               settings,
-              promptIndex
+              undefined, // parametersForMJ
+              settings.aspectRatio || '1:1', // aspectRatio
+              settings.midjourneyMode || 'fast', // processMode
+              undefined, // onProgress
+              promptIndex, // variationIndex
+              finalPrompt.trim() || undefined // customPrompt - ensure it's not empty string
             );
             
             // Ttapi returns a single URL (grid image) or array of URLs
@@ -649,18 +667,38 @@ const App: React.FC = () => {
             const imageIndex = promptIndex;
             if (imageIndex >= actualTotal) return;
             
+            // Create a dummy theme for bulk prompt mode
+            const dummyTheme: Theme = {
+              id: 'bulk-prompt',
+              name: 'Bulk Prompt',
+              description: 'Bulk prompt import',
+              thumbnail: '',
+              basePrompt: prompt,
+              styleKeywords: []
+            };
+            
             let imageUrl = '';
             if (settings.imageService === 'replicate') {
               imageUrl = await generateWithReplicate(
-                finalPrompt,
+                dummyTheme,
                 settings,
-                imageIndex
+                undefined, // parametersForMJ
+                settings.aspectRatio || '1:1', // aspectRatio
+                settings.midjourneyMode || 'fast', // processMode
+                undefined, // onProgress
+                imageIndex, // variationIndex
+                finalPrompt // customPrompt
               );
             } else if (settings.imageService === 'pollinations') {
               imageUrl = await generateWithPollinations(
-                finalPrompt,
+                dummyTheme,
                 settings,
-                imageIndex
+                undefined, // parametersForMJ
+                settings.aspectRatio || '1:1', // aspectRatio
+                settings.midjourneyMode || 'fast', // processMode
+                undefined, // onProgress
+                imageIndex, // variationIndex
+                finalPrompt // customPrompt
               );
             }
             

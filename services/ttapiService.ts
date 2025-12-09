@@ -75,8 +75,10 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
     case 'Ephemera Sheet': layoutPrompt = 'A sheet containing multiple cut-out ephemera items like tags, tickets, and cards'; break;
   }
 
-  const elementsPrompt = settings.elements.length > 0 
-    ? `featuring elements: ${settings.elements.join(', ')}` 
+  // Safety check: ensure elements is an array
+  const elementsArray = Array.isArray(settings.elements) ? settings.elements : [];
+  const elementsPrompt = elementsArray.length > 0 
+    ? `featuring elements: ${elementsArray.join(', ')}` 
     : '';
 
   const extraDetails = [
@@ -147,9 +149,15 @@ const constructPrompt = (theme: Theme, settings: GenerationSettings, parametersF
 
   let prompt = '';
   if (settings.colorIntensity === 'Multicolored') {
-    prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. Color palette: ${colorPalette}. vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor illustration, vivid and alive, fresh and vibrant, clean modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, modern colorful illustration.`;
+    const styleKeywordsStr = theme.styleKeywords && Array.isArray(theme.styleKeywords) && theme.styleKeywords.length > 0
+      ? `${theme.styleKeywords.join(', ')} style.`
+      : '';
+    prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${styleKeywordsStr} Color palette: ${colorPalette}. vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor illustration, vivid and alive, fresh and vibrant, clean modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, modern colorful illustration.`;
   } else {
-    prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
+    const styleKeywordsStr = theme.styleKeywords && Array.isArray(theme.styleKeywords) && theme.styleKeywords.length > 0
+      ? `${theme.styleKeywords.join(', ')} style.`
+      : '';
+    prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${styleKeywordsStr} Color palette: ${colorPalette}. Extensive cursive handwritten text overlays (like old letters or journal entries), faded brown/sepia ink handwriting, flowing cursive script, multiple layers of handwritten text, vintage postage stamps, old tickets, vintage labels, faded botanical illustrations, floral patterns, sheet music notation, vintage seals, antique ephemera, layered collage style, mixed media junk journal page, tea-stained paper, worn edges, vintage collage style, illustrated style, artistic rendering, stylized illustration, hand-drawn aesthetic, NOT photorealistic, NOT realistic photography, NOT hyper-realistic, NOT modern watercolor, NOT clean digital art, vintage distressed aesthetic, old journal page, aged vintage design, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, no still life photography, no objects placed around page, flat collage design, single flat page layout, one cohesive page design, not a photograph of objects, vintage junk journal aesthetic, illustrated artistic style, real junk journal page with text overlays and ephemera.`;
   }
 
   // Add variation modifiers
@@ -949,7 +957,8 @@ export const generateJournalPage = async (
   
   try {
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
-    let prompt = customPrompt || constructPrompt(theme, settings, parametersForMJ, variationIndex);
+    // Check if customPrompt is a non-empty string
+    let prompt = (customPrompt && customPrompt.trim()) ? customPrompt : constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
     // CRITICAL: Extract --ar parameter if it exists in the middle of the prompt
     // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
