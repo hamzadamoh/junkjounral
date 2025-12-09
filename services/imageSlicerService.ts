@@ -74,74 +74,118 @@ const detectBackgroundColor = (
 };
 
 /**
- * Checks if a pixel is similar to the background color
+ * Checks if a pixel is white/near-white (the grid border color)
+ * More aggressive detection for white borders
  */
-const isBackgroundPixel = (
-  r: number,
-  g: number,
-  b: number,
-  bgColor: { r: number; g: number; b: number },
-  threshold: number = 30
-): boolean => {
-  const diff = Math.abs(r - bgColor.r) + Math.abs(g - bgColor.g) + Math.abs(b - bgColor.b);
-  return diff < threshold;
+const isWhitePixel = (r: number, g: number, b: number, threshold: number = 240): boolean => {
+  // Check if all RGB values are above threshold (near white)
+  return r >= threshold && g >= threshold && b >= threshold;
 };
 
 /**
- * Detects content bounds within a slice by analyzing pixel data
- * This is the "intelligent auto-crop" algorithm
+ * Checks if a row is mostly white (border row)
  */
-const detectContentBounds = (
-  imageData: ImageData,
-  bgColor: { r: number; g: number; b: number },
-  threshold: number = 30
-): { x: number; y: number; width: number; height: number } => {
-  const { data, width, height } = imageData;
+const isWhiteRow = (imageData: ImageData, y: number, threshold: number = 240): boolean => {
+  const { data, width } = imageData;
+  let whiteCount = 0;
+  const samplePoints = Math.min(20, width);
+  const step = Math.floor(width / samplePoints);
   
-  let minX = width;
-  let minY = height;
-  let maxX = 0;
-  let maxY = 0;
-  
-  // Scan all pixels to find content bounds
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-      const a = data[idx + 3];
-      
-      // Skip transparent pixels
-      if (a < 128) continue;
-      
-      // Check if this pixel is NOT background
-      if (!isBackgroundPixel(r, g, b, bgColor, threshold)) {
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-      }
+  for (let i = 0; i < samplePoints; i++) {
+    const x = i * step;
+    const idx = (y * width + x) * 4;
+    if (isWhitePixel(data[idx], data[idx + 1], data[idx + 2], threshold)) {
+      whiteCount++;
     }
   }
   
-  // If no content found, return full bounds
-  if (minX >= maxX || minY >= maxY) {
+  return whiteCount >= samplePoints * 0.8; // 80% white = border row
+};
+
+/**
+ * Checks if a column is mostly white (border column)
+ */
+const isWhiteColumn = (imageData: ImageData, x: number, threshold: number = 240): boolean => {
+  const { data, width, height } = imageData;
+  let whiteCount = 0;
+  const samplePoints = Math.min(20, height);
+  const step = Math.floor(height / samplePoints);
+  
+  for (let i = 0; i < samplePoints; i++) {
+    const y = i * step;
+    const idx = (y * width + x) * 4;
+    if (isWhitePixel(data[idx], data[idx + 1], data[idx + 2], threshold)) {
+      whiteCount++;
+    }
+  }
+  
+  return whiteCount >= samplePoints * 0.8; // 80% white = border column
+};
+
+/**
+ * Detects content bounds by trimming white borders from edges
+ * Scans inward from each edge until non-white content is found
+ */
+const detectContentBounds = (
+  imageData: ImageData,
+  _bgColor: { r: number; g: number; b: number },
+  _threshold: number = 30
+): { x: number; y: number; width: number; height: number } => {
+  const { width, height } = imageData;
+  
+  let top = 0;
+  let bottom = height - 1;
+  let left = 0;
+  let right = width - 1;
+  
+  // Find top edge (scan down until non-white row)
+  for (let y = 0; y < height; y++) {
+    if (!isWhiteRow(imageData, y)) {
+      top = y;
+      break;
+    }
+  }
+  
+  // Find bottom edge (scan up until non-white row)
+  for (let y = height - 1; y >= 0; y--) {
+    if (!isWhiteRow(imageData, y)) {
+      bottom = y;
+      break;
+    }
+  }
+  
+  // Find left edge (scan right until non-white column)
+  for (let x = 0; x < width; x++) {
+    if (!isWhiteColumn(imageData, x)) {
+      left = x;
+      break;
+    }
+  }
+  
+  // Find right edge (scan left until non-white column)
+  for (let x = width - 1; x >= 0; x--) {
+    if (!isWhiteColumn(imageData, x)) {
+      right = x;
+      break;
+    }
+  }
+  
+  // Ensure valid bounds
+  if (left >= right || top >= bottom) {
+    console.log('[ImageSlicer] No content bounds detected, using full image');
     return { x: 0, y: 0, width, height };
   }
   
-  // Add small padding around content
-  const padding = 2;
-  minX = Math.max(0, minX - padding);
-  minY = Math.max(0, minY - padding);
-  maxX = Math.min(width - 1, maxX + padding);
-  maxY = Math.min(height - 1, maxY + padding);
+  const cropWidth = right - left + 1;
+  const cropHeight = bottom - top + 1;
+  
+  console.log(`[ImageSlicer] Cropping: (${left},${top}) to (${right},${bottom}) = ${cropWidth}x${cropHeight}`);
   
   return {
-    x: minX,
-    y: minY,
-    width: maxX - minX + 1,
-    height: maxY - minY + 1,
+    x: left,
+    y: top,
+    width: cropWidth,
+    height: cropHeight,
   };
 };
 
