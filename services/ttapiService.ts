@@ -710,14 +710,15 @@ const pollTaskUntilComplete = async (
       }
       }
 
-      // Check if task failed
-      if (status.status === 'failed' || status.status === 'error') {
+      // Check if task failed (case-insensitive - Ttapi returns "FAILED" uppercase)
+      const taskStatusLower = status.status?.toLowerCase() || '';
+      if (taskStatusLower === 'failed' || taskStatusLower === 'error') {
         const errorMsg = status.error || status.message || 'Unknown error';
         
         // Check if it's a rate limit error
         if (errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('rate limited')) {
           // Instead of retrying indefinitely, throw error to trigger resend as new task
-          console.warn(`[Ttapi] ⚠️ Rate limit detected during polling. Will resend as new task.`);
+          console.warn(`[Ttapi] ⚠️ Rate limit detected during polling (status=${status.status}). Will resend as new task.`);
           throw new Error(`RATE_LIMIT_RESEND_TASK: ${errorMsg}`);
         }
         
