@@ -32,7 +32,7 @@ import {
   downloadSlicesAsZip,
   copyAllPrompts,
 } from '../services/imageSlicerService';
-import { analyzeAllImages, analyzeSingleSlice, getGeminiApiKey } from '../services/geminiService';
+import { analyzeAllImages, analyzeSingleSlice, hasOpenAIKey } from '../services/oracleService';
 
 interface ArcaneSplitterProps {
   onPromptsGenerated?: (prompts: string[]) => void;
@@ -57,8 +57,8 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   
-  // Check if Gemini API is configured
-  const hasGeminiKey = !!getGeminiApiKey();
+  // Check if OpenAI API is configured (uses existing key)
+  const hasApiKey = hasOpenAIKey();
   
   // Handle file selection
   const handleFileSelect = useCallback(async (file: File) => {
@@ -145,9 +145,9 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     }
   }, [sourceImage, gridConfig, autoCrop]);
   
-  // Analyze all slices with Gemini
+  // Analyze all slices with GPT-4 Vision
   const handleAnalyzeAll = useCallback(async () => {
-    if (slices.length === 0 || !hasGeminiKey) return;
+    if (slices.length === 0 || !hasApiKey) return;
     
     setIsAnalyzing(true);
     setAnalysisProgress({ completed: 0, total: slices.length });
@@ -170,11 +170,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     } finally {
       setIsAnalyzing(false);
     }
-  }, [slices, hasGeminiKey, onPromptsGenerated]);
+  }, [slices, hasApiKey, onPromptsGenerated]);
   
   // Analyze single slice
   const handleAnalyzeSingle = useCallback(async (sliceId: string) => {
-    if (!hasGeminiKey) return;
+    if (!hasApiKey) return;
     
     const slice = slices.find(s => s.id === sliceId);
     if (!slice) return;
@@ -187,7 +187,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     setSlices(prev => prev.map(s => 
       s.id === sliceId ? analyzed : s
     ));
-  }, [slices, hasGeminiKey]);
+  }, [slices, hasApiKey]);
   
   // Download all slices as ZIP
   const handleDownloadZip = useCallback(async () => {
@@ -409,7 +409,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
               </div>
               
               <div className="flex flex-wrap gap-2">
-                {hasGeminiKey ? (
+                {hasApiKey ? (
                   <button
                     onClick={handleAnalyzeAll}
                     disabled={isAnalyzing}
@@ -430,7 +430,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
                   </button>
                 ) : (
                   <div className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-400">
-                    Set VITE_GEMINI_API_KEY to enable AI analysis
+                    Set VITE_OPENAI_API_KEY to enable AI analysis
                   </div>
                 )}
                 
@@ -506,7 +506,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
                       >
                         <Download className="w-4 h-4 text-white" />
                       </button>
-                      {hasGeminiKey && !slice.prompt && !slice.isAnalyzing && (
+                      {hasApiKey && !slice.prompt && !slice.isAnalyzing && (
                         <button
                           onClick={() => handleAnalyzeSingle(slice.id)}
                           className="p-2 bg-purple-600 rounded-lg hover:bg-purple-500"
