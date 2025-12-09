@@ -1840,7 +1840,7 @@ const App: React.FC = () => {
   };
 
   // Helper function to shuffle array (Fisher-Yates algorithm)
-  const shuffleArray = <T>(array: T[]): T[] => {
+  const shuffleArray = <T extends unknown>(array: T[]): T[] => {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
