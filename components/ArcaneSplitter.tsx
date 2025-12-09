@@ -9,19 +9,15 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
   Upload,
   Scissors,
-  Sparkles,
   Download,
   Copy,
   Check,
   Loader2,
-  Grid3X3,
   Wand2,
   Archive,
   Eye,
   X,
   AlertCircle,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import {
   SlicedImage,
@@ -42,7 +38,7 @@ interface ArcaneSplitterProps {
 const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onClose }) => {
   // State
   const [sourceImage, setSourceImage] = useState<string | null>(null);
-  const [gridConfig, setGridConfig] = useState<GridConfig>({ rows: 2, cols: 2 });
+  const [gridConfig, setGridConfig] = useState<GridConfig>({ rows: 3, cols: 4 }); // Fixed: 3 rows × 4 cols = 12 images
   const [slices, setSlices] = useState<AnalyzedSlice[]>([]);
   const [isSlicing, setIsSlicing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -51,8 +47,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [previewSlice, setPreviewSlice] = useState<AnalyzedSlice | null>(null);
   const [copiedPrompts, setCopiedPrompts] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [autoCrop, setAutoCrop] = useState(true);
+  const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -60,7 +55,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   // Check if OpenAI API is configured (uses existing key)
   const hasApiKey = hasOpenAIKey();
   
-  // Handle file selection
+  // Handle file selection - auto-slice immediately
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
     
@@ -75,13 +70,26 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       setSourceImage(base64);
       setSlices([]);
       
-      // Auto-detect grid configuration
-      const detectedConfig = await detectGridConfig(base64);
-      setGridConfig(detectedConfig);
-      console.log('[ArcaneSplitter] Detected grid config:', detectedConfig);
+      // Fixed grid: 3 rows × 4 cols = 12 images
+      const config: GridConfig = { rows: 3, cols: 4 };
+      setGridConfig(config);
+      console.log('[ArcaneSplitter] Using fixed grid: 3 rows × 4 cols = 12 images');
+      
+      // Auto-slice immediately
+      setIsSlicing(true);
+      try {
+        const slicedImages = await sliceGridImage(base64, config, autoCrop);
+        setSlices(slicedImages.map(s => ({ ...s, isAnalyzing: false })));
+        console.log(`[ArcaneSplitter] Auto-sliced into ${slicedImages.length} images`);
+      } catch (err: any) {
+        setError(err.message || 'Failed to slice image');
+        console.error('[ArcaneSplitter] Auto-slice error:', err);
+      } finally {
+        setIsSlicing(false);
+      }
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [autoCrop]);
   
   // Handle drag and drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -126,24 +134,6 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     return () => document.removeEventListener('paste', handlePaste);
   }, [handlePaste]);
   
-  // Slice the image
-  const handleSlice = useCallback(async () => {
-    if (!sourceImage) return;
-    
-    setIsSlicing(true);
-    setError(null);
-    
-    try {
-      const slicedImages = await sliceGridImage(sourceImage, gridConfig, autoCrop);
-      setSlices(slicedImages.map(s => ({ ...s, isAnalyzing: false })));
-      console.log(`[ArcaneSplitter] Created ${slicedImages.length} slices`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to slice image');
-      console.error('[ArcaneSplitter] Slicing error:', err);
-    } finally {
-      setIsSlicing(false);
-    }
-  }, [sourceImage, gridConfig, autoCrop]);
   
   // Analyze all slices with GPT-4 Vision
   const handleAnalyzeAll = useCallback(async () => {
@@ -290,106 +280,22 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
               </div>
               <div>
                 <p className="text-lg font-medium text-white">
-                  {isDragging ? 'Drop your image here' : 'Drop a grid image or click to upload'}
+                  {isDragging ? 'Drop your image here' : 'Drop your 4×3 grid image'}
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  Supports PNG, JPG, WebP • You can also paste (Ctrl+V)
+                  Will auto-slice into 12 images • Paste with Ctrl+V
                 </p>
               </div>
             </div>
           </div>
         )}
         
-        {/* Source Image Preview & Settings */}
-        {sourceImage && slices.length === 0 && (
-          <div className="space-y-4">
-            <div className="relative rounded-lg overflow-hidden bg-slate-800">
-              <img 
-                src={sourceImage} 
-                alt="Source" 
-                className="w-full max-h-96 object-contain"
-              />
-              <button
-                onClick={() => setSourceImage(null)}
-                className="absolute top-2 right-2 p-2 bg-slate-900/80 rounded-lg hover:bg-slate-900"
-              >
-                <X className="w-4 h-4 text-white" />
-              </button>
-            </div>
-            
-            {/* Grid Settings */}
-            <div className="bg-slate-800/50 rounded-lg p-4 space-y-4">
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center justify-between w-full text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <Grid3X3 className="w-5 h-5 text-purple-400" />
-                  <span className="font-medium text-white">Grid Settings</span>
-                  <span className="text-sm text-slate-400">({gridConfig.rows}×{gridConfig.cols})</span>
-                </div>
-                {showSettings ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-              </button>
-              
-              {showSettings && (
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-700">
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Rows</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={gridConfig.rows}
-                      onChange={(e) => setGridConfig(prev => ({ ...prev, rows: parseInt(e.target.value) || 1 }))}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Columns</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={gridConfig.cols}
-                      onChange={(e) => setGridConfig(prev => ({ ...prev, cols: parseInt(e.target.value) || 1 }))}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={autoCrop}
-                        onChange={(e) => setAutoCrop(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-purple-500 focus:ring-purple-500"
-                      />
-                      <span className="text-sm text-slate-300">Auto-crop whitespace/borders</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Slice Button */}
-            <button
-              onClick={handleSlice}
-              disabled={isSlicing}
-              className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-amber-600 rounded-lg font-medium text-white
-                hover:from-purple-500 hover:to-amber-500 disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2 transition-all"
-            >
-              {isSlicing ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Slicing...
-                </>
-              ) : (
-                <>
-                  <Scissors className="w-5 h-5" />
-                  Slice into {gridConfig.rows * gridConfig.cols} Images
-                </>
-              )}
-            </button>
+        {/* Loading indicator while slicing */}
+        {sourceImage && slices.length === 0 && isSlicing && (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <Loader2 className="w-12 h-12 text-purple-400 animate-spin" />
+            <p className="text-lg text-white">Slicing into 12 images...</p>
+            <p className="text-sm text-slate-400">3 rows × 4 columns</p>
           </div>
         )}
         

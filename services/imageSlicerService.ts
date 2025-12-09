@@ -146,71 +146,15 @@ const detectContentBounds = (
 };
 
 /**
- * Auto-detects the grid configuration from an image
- * Analyzes the image to find natural grid divisions
+ * Returns the default grid configuration
+ * Always 3 rows × 4 columns = 12 images (user's standard format)
  */
 export const detectGridConfig = async (
-  imageBase64: string
+  _imageBase64: string
 ): Promise<GridConfig> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const width = img.width;
-      const height = img.height;
-      const aspectRatio = width / height;
-      
-      console.log(`[ImageSlicer] Detecting grid for ${width}x${height} image (aspect ratio: ${aspectRatio.toFixed(2)})`);
-      
-      // Common grid configurations based on aspect ratio
-      // The image you showed is 4 columns x 3 rows (wider than tall)
-      
-      if (aspectRatio >= 0.9 && aspectRatio <= 1.1) {
-        // Square-ish: likely 2x2 (Midjourney default) or 3x3
-        console.log('[ImageSlicer] Detected: Square grid (2x2)');
-        resolve({ rows: 2, cols: 2 });
-      } else if (aspectRatio >= 1.25 && aspectRatio <= 1.45) {
-        // ~4:3 aspect ratio: 3 rows x 4 cols (12 images like your example)
-        console.log('[ImageSlicer] Detected: 4:3 grid (3 rows x 4 cols = 12 images)');
-        resolve({ rows: 3, cols: 4 });
-      } else if (aspectRatio >= 0.7 && aspectRatio <= 0.85) {
-        // ~3:4 aspect ratio: 4 rows x 3 cols (12 images, portrait orientation)
-        console.log('[ImageSlicer] Detected: 3:4 grid (4 rows x 3 cols = 12 images)');
-        resolve({ rows: 4, cols: 3 });
-      } else if (aspectRatio >= 1.9 && aspectRatio <= 2.1) {
-        // 2:1-ish: likely 2 rows x 4 cols (8 images)
-        console.log('[ImageSlicer] Detected: 2:1 grid (2 rows x 4 cols = 8 images)');
-        resolve({ rows: 2, cols: 4 });
-      } else if (aspectRatio >= 0.45 && aspectRatio <= 0.55) {
-        // 1:2-ish: likely 4 rows x 2 cols (8 images)
-        console.log('[ImageSlicer] Detected: 1:2 grid (4 rows x 2 cols = 8 images)');
-        resolve({ rows: 4, cols: 2 });
-      } else if (aspectRatio >= 1.45 && aspectRatio <= 1.7) {
-        // ~3:2 aspect ratio: could be 2 rows x 3 cols (6 images)
-        console.log('[ImageSlicer] Detected: 3:2 grid (2 rows x 3 cols = 6 images)');
-        resolve({ rows: 2, cols: 3 });
-      } else if (aspectRatio >= 0.55 && aspectRatio <= 0.7) {
-        // ~2:3 aspect ratio: could be 3 rows x 2 cols (6 images)
-        console.log('[ImageSlicer] Detected: 2:3 grid (3 rows x 2 cols = 6 images)');
-        resolve({ rows: 3, cols: 2 });
-      } else {
-        // Default: try to guess based on aspect ratio
-        // If wider than tall, assume more columns; if taller, assume more rows
-        if (aspectRatio > 1) {
-          console.log(`[ImageSlicer] Unknown aspect ratio ${aspectRatio.toFixed(2)}, defaulting to 3x4 (wider)`);
-          resolve({ rows: 3, cols: 4 });
-        } else {
-          console.log(`[ImageSlicer] Unknown aspect ratio ${aspectRatio.toFixed(2)}, defaulting to 4x3 (taller)`);
-          resolve({ rows: 4, cols: 3 });
-        }
-      }
-    };
-    img.onerror = () => {
-      // Default fallback
-      console.log('[ImageSlicer] Image load error, defaulting to 3x4');
-      resolve({ rows: 3, cols: 4 });
-    };
-    img.src = imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`;
-  });
+  // User always uploads 4 columns × 3 rows grids (12 images)
+  console.log('[ImageSlicer] Using fixed grid: 3 rows × 4 cols = 12 images');
+  return { rows: 3, cols: 4 };
 };
 
 /**
