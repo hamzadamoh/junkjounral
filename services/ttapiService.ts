@@ -235,10 +235,10 @@ const cleanPromptForMidjourney = (prompt: string): string => {
   // Remove sequences like "word, word, word" that might be interpreted as parameters
   cleaned = cleaned.replace(/,\s*(?:flat|printable|SINGLE|PAGE|ONLY|not|multiple|objects|still|life|composition|3D|shadows|depth|realistic|photography|lighting|illustration|style|top-down|view|scrapbook|digital|design|lay|high|resolution|journal|page)\b/gi, '');
   
-  // Replace commas with periods (commas can be interpreted as parameter separators)
-  // But only if they're not part of a URL or parameter
-  cleaned = cleaned.replace(/,(\s+)(?![a-z]+:)/gi, '.$1');
-  
+  // REMOVED: Aggressive comma-to-period replacement breaks normal sentence structure
+  // Commas are generally safe in Midjourney prompts unless they appear before parameters
+  // Only remove commas that are actually problematic (handled by problematicPhrases above)
+  // cleaned = cleaned.replace(/,(\s+)(?![a-z]+:)/gi, '.$1');
   // Replace multiple spaces with single space
   cleaned = cleaned.replace(/\s+/g, ' ');
   
@@ -707,20 +707,20 @@ const pollTaskUntilComplete = async (
       if (status.status === 'failed' || status.status === 'error') {
         const errorMsg = status.error || status.message || 'Unknown error';
         
-        // Check if it's a rate limit error
-        if (errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('rate limited')) {
-          consecutiveRateLimitErrors++;
-          console.warn(`[Ttapi] ⚠️ Rate limit detected (consecutive: ${consecutiveRateLimitErrors}). Applying exponential backoff...`);
-          
-          // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
-          const backoffDelay = Math.min(5000 * Math.pow(2, consecutiveRateLimitErrors - 1), 60000);
-          console.log(`[Ttapi] ⏳ Waiting ${backoffDelay / 1000}s before retrying...`);
-          await new Promise(resolve => setTimeout(resolve, backoffDelay));
-          
-          // Reset delay to initial after backoff
-          delay = initialDelay;
-          continue; // Retry polling
+          // Instead of retrying the same task indefinitely, throw an error
+          // This will be caught by the outer catch block which will resend as a new task
+          console.warn(`[Ttapi]  Rate limit detected during polling. Will resend as new task.`);
+          throw new Error(`RATE_LIMIT_RESEND_TASK: ${errorMsg}`);
         }
+
+
+
+
+
+
+
+
+
         
         throw new Error(`Ttapi task failed: ${errorMsg}`);
       }
@@ -1232,4 +1232,5 @@ export const generateJournalPage = async (
     throw new Error(`Ttapi Image Generation Error: ${error.message || 'Unknown error occurred'}`);
   }
 };
+
 
