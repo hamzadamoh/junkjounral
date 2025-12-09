@@ -37,8 +37,8 @@ interface ArcaneSplitterProps {
 
 const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onClose }) => {
   // State
-  const [sourceImage, setSourceImage] = useState<string | null>(null);
-  const [gridConfig, setGridConfig] = useState<GridConfig>({ rows: 3, cols: 4 }); // Fixed: 3 rows × 4 cols = 12 images
+  const [sourceImages, setSourceImages] = useState<string[]>([]); // Track all uploaded grids
+  const [gridConfig] = useState<GridConfig>({ rows: 3, cols: 4 }); // Fixed: 3 rows × 4 cols = 12 images
   const [slices, setSlices] = useState<AnalyzedSlice[]>([]);
   const [isSlicing, setIsSlicing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -55,7 +55,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   // Check if OpenAI API is configured (uses existing key)
   const hasApiKey = hasOpenAIKey();
   
-  // Handle file selection - auto-slice immediately
+  // Handle file selection - auto-slice immediately and append to existing slices
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
     
@@ -67,20 +67,23 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
-      setSourceImage(base64);
-      setSlices([]);
+      
+      // Add to source images list
+      setSourceImages(prev => [...prev, base64]);
       
       // Fixed grid: 3 rows × 4 cols = 12 images
       const config: GridConfig = { rows: 3, cols: 4 };
-      setGridConfig(config);
-      console.log('[ArcaneSplitter] Using fixed grid: 3 rows × 4 cols = 12 images');
+      console.log('[ArcaneSplitter] Processing new grid: 3 rows × 4 cols = 12 images');
       
-      // Auto-slice immediately
+      // Auto-slice immediately and APPEND to existing slices
       setIsSlicing(true);
       try {
         const slicedImages = await sliceGridImage(base64, config, autoCrop);
-        setSlices(slicedImages.map(s => ({ ...s, isAnalyzing: false })));
-        console.log(`[ArcaneSplitter] Auto-sliced into ${slicedImages.length} images`);
+        const newSlices = slicedImages.map(s => ({ ...s, isAnalyzing: false }));
+        
+        // Append new slices to existing ones
+        setSlices(prev => [...prev, ...newSlices]);
+        console.log(`[ArcaneSplitter] Added ${slicedImages.length} new slices (total: ${slices.length + slicedImages.length})`);
       } catch (err: any) {
         setError(err.message || 'Failed to slice image');
         console.error('[ArcaneSplitter] Auto-slice error:', err);
@@ -89,7 +92,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       }
     };
     reader.readAsDataURL(file);
-  }, [autoCrop]);
+  }, [autoCrop, slices.length]);
   
   // Handle drag and drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -247,57 +250,58 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           </div>
         )}
         
-        {/* Drop Zone */}
-        {!sourceImage && (
-          <div
-            ref={dropZoneRef}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`
-              relative border-2 border-dashed rounded-xl p-12 text-center cursor-pointer
-              transition-all duration-300
-              ${isDragging 
-                ? 'border-purple-500 bg-purple-500/10' 
-                : 'border-slate-700 hover:border-purple-500/50 hover:bg-slate-800/50'}
-            `}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-              className="hidden"
-            />
-            
-            <div className="flex flex-col items-center gap-4">
+        {/* Drop Zone - Always visible, compact when slices exist */}
+        <div
+          ref={dropZoneRef}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`
+            relative border-2 border-dashed rounded-xl text-center cursor-pointer
+            transition-all duration-300
+            ${slices.length > 0 
+              ? 'p-4' 
+              : 'p-12'}
+            ${isDragging 
+              ? 'border-purple-500 bg-purple-500/10' 
+              : 'border-slate-700 hover:border-purple-500/50 hover:bg-slate-800/50'}
+          `}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+            className="hidden"
+          />
+          
+          {isSlicing ? (
+            <div className="flex flex-col items-center gap-2 py-4">
+              <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+              <p className="text-sm text-white">Slicing into 12 images...</p>
+            </div>
+          ) : (
+            <div className={`flex flex-col items-center ${slices.length > 0 ? 'gap-2' : 'gap-4'}`}>
               <div className={`
-                w-16 h-16 rounded-full flex items-center justify-center
+                ${slices.length > 0 ? 'w-10 h-10' : 'w-16 h-16'} rounded-full flex items-center justify-center
                 ${isDragging ? 'bg-purple-500/20' : 'bg-slate-800'}
               `}>
-                <Upload className={`w-8 h-8 ${isDragging ? 'text-purple-400' : 'text-slate-500'}`} />
+                <Upload className={`${slices.length > 0 ? 'w-5 h-5' : 'w-8 h-8'} ${isDragging ? 'text-purple-400' : 'text-slate-500'}`} />
               </div>
               <div>
-                <p className="text-lg font-medium text-white">
-                  {isDragging ? 'Drop your image here' : 'Drop your 4×3 grid image'}
+                <p className={`${slices.length > 0 ? 'text-sm' : 'text-lg'} font-medium text-white`}>
+                  {isDragging ? 'Drop your image here' : slices.length > 0 ? 'Add another 4×3 grid' : 'Drop your 4×3 grid image'}
                 </p>
-                <p className="text-sm text-slate-500 mt-1">
-                  Will auto-slice into 12 images • Paste with Ctrl+V
-                </p>
+                {slices.length === 0 && (
+                  <p className="text-sm text-slate-500 mt-1">
+                    Will auto-slice into 12 images • Paste with Ctrl+V
+                  </p>
+                )}
               </div>
             </div>
-          </div>
-        )}
-        
-        {/* Loading indicator while slicing */}
-        {sourceImage && slices.length === 0 && isSlicing && (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <Loader2 className="w-12 h-12 text-purple-400 animate-spin" />
-            <p className="text-lg text-white">Slicing into 12 images...</p>
-            <p className="text-sm text-slate-400">3 rows × 4 columns</p>
-          </div>
-        )}
+          )}
+        </div>
         
         {/* Sliced Images Grid */}
         {slices.length > 0 && (
@@ -306,6 +310,12 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
             <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-800/50 rounded-lg">
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <span className="font-medium text-white">{slices.length}</span> slices
+                {sourceImages.length > 0 && (
+                  <>
+                    <span>•</span>
+                    <span className="font-medium text-amber-400">{sourceImages.length}</span> grid{sourceImages.length !== 1 ? 's' : ''}
+                  </>
+                )}
                 {analyzedCount > 0 && (
                   <>
                     <span>•</span>
@@ -451,15 +461,15 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
               ))}
             </div>
             
-            {/* New Image Button */}
+            {/* Clear All Button */}
             <button
               onClick={() => {
-                setSourceImage(null);
+                setSourceImages([]);
                 setSlices([]);
               }}
               className="w-full py-3 px-4 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
             >
-              Process Another Image
+              Clear All ({slices.length} slices)
             </button>
           </div>
         )}
