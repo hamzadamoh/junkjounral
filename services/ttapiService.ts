@@ -969,10 +969,11 @@ export const generateJournalPage = async (
     // Check if customPrompt is a non-empty string
     let prompt = (customPrompt && customPrompt.trim()) ? customPrompt : constructPrompt(theme, settings, parametersForMJ, variationIndex);
     
-    // CRITICAL: Extract --ar parameter if it exists in the middle of the prompt
+    // CRITICAL: Extract --ar parameter and preserve other Midjourney parameters (--p, --sref, --sw, etc.)
     // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
-    // SIMPLE APPROACH: If --ar is found, extract it and remove EVERYTHING after it
+    // But we must preserve other valid Midjourney parameters that come after --ar
     let extractedAspectRatio: string | null = null;
+    let extractedParameters: string = ''; // Store other parameters found after --ar as a string
     const arMatch = prompt.match(/--ar\s+([^\s]+)/i);
     if (arMatch) {
       extractedAspectRatio = arMatch[1];
@@ -980,9 +981,19 @@ export const generateJournalPage = async (
       // Find the position where --ar starts
       const arIndex = prompt.indexOf('--ar');
       if (arIndex !== -1) {
+        // Extract everything after --ar (this includes the aspect ratio value and any following parameters)
+        const afterAr = prompt.substring(arIndex + '--ar'.length).trim();
+        // The first word is the aspect ratio value (already extracted in arMatch[1])
+        // Everything after the first word might be other parameters
+        const afterArValue = afterAr.substring(arMatch[1].length).trim();
+        if (afterArValue) {
+          // Preserve everything after the aspect ratio value as it might contain --p, --sref, etc.
+          extractedParameters = afterArValue;
+          console.log(`[Ttapi] Preserved parameters after --ar: ${extractedParameters}`);
+        }
         // Get everything before --ar and trim it
         prompt = prompt.substring(0, arIndex).trim();
-        console.log(`[Ttapi] Removed --ar and everything after it. New prompt: "${prompt}"`);
+        console.log(`[Ttapi] Removed --ar and extracted parameters. New prompt: "${prompt}"`);
       }
     }
     
@@ -1103,6 +1114,12 @@ export const generateJournalPage = async (
       if (finalAspectRatio && !prompt.includes('--ar')) {
         prompt += ` --ar ${finalAspectRatio}`;
       }
+    }
+
+    // Re-add extracted parameters that were found after --ar (like --p, --sref, etc.)
+    if (extractedParameters && extractedParameters.trim()) {
+      prompt += ` ${extractedParameters.trim()}`;
+      console.log(`[Ttapi] Re-added extracted parameters: ${extractedParameters.trim()}`);
     }
 
     // Add other Midjourney parameters (e.g., --v 6.1, --niji 6) if provided
