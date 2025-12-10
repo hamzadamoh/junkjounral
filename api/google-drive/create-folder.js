@@ -17,11 +17,33 @@ async function getAccessToken() {
   console.log('[Google Drive API] Client email exists:', !!clientEmail);
   console.log('[Google Drive API] Private key exists:', !!privateKey);
   console.log('[Google Drive API] Private key length:', privateKey ? privateKey.length : 0);
+  console.log('[Google Drive API] Private key first 50 chars:', privateKey ? privateKey.substring(0, 50) : 'N/A');
+  console.log('[Google Drive API] Private key last 50 chars:', privateKey ? privateKey.substring(privateKey.length - 50) : 'N/A');
+  console.log('[Google Drive API] Private key contains \\n:', privateKey ? privateKey.includes('\\n') : false);
+  console.log('[Google Drive API] Private key contains actual newlines:', privateKey ? privateKey.includes('\n') : false);
   
   if (clientEmail && privateKey) {
     try {
-      // Replace \\n with actual newlines
-      const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+      // Replace \\n with actual newlines (handle both escaped and actual newlines)
+      // First trim any leading/trailing whitespace
+      let formattedPrivateKey = privateKey.trim();
+      
+      // If it contains \n (escaped), replace with actual newlines
+      if (formattedPrivateKey.includes('\\n')) {
+        formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
+        console.log('[Google Drive API] Converted \\n to actual newlines');
+      }
+      
+      // Ensure it ends with a newline after END PRIVATE KEY
+      if (formattedPrivateKey.endsWith('-----END PRIVATE KEY-----')) {
+        formattedPrivateKey += '\n';
+      }
+      
+      // Also handle if it already has newlines (Vercel might convert them)
+      console.log('[Google Drive API] Formatted key length:', formattedPrivateKey.length);
+      console.log('[Google Drive API] Formatted key first 50 chars:', formattedPrivateKey.substring(0, 50));
+      console.log('[Google Drive API] Formatted key last 50 chars:', formattedPrivateKey.substring(formattedPrivateKey.length - 50));
+      
       console.log('[Google Drive API] Attempting to import googleapis...');
       
       let google;
