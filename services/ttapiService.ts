@@ -1455,9 +1455,19 @@ export const generateJournalPage = async (
     }
 
     // Re-add extracted parameters that were found after --ar (like --p, --sref, etc.)
+    // Remove any --ar from extractedParameters since we add it separately at the end
     if (extractedParameters && extractedParameters.trim()) {
-      prompt += ` ${extractedParameters.trim()}`;
-      console.log(`[Ttapi] Re-added extracted parameters: ${extractedParameters.trim()}`);
+      // Remove any --ar parameters from extractedParameters to avoid duplicates
+      let cleanedParams = extractedParameters.trim();
+      // Remove --ar and its value (e.g., "--ar 3:4" or "--ar 16:9")
+      cleanedParams = cleanedParams.replace(/--ar\s+[^\s]+/gi, '').trim();
+      // Clean up any double spaces
+      cleanedParams = cleanedParams.replace(/\s+/g, ' ');
+      
+      if (cleanedParams) {
+        prompt += ` ${cleanedParams}`;
+        console.log(`[Ttapi] Re-added extracted parameters (--ar removed): ${cleanedParams}`);
+      }
     }
 
     // Add other Midjourney parameters (e.g., --v 6.1, --niji 6) if provided

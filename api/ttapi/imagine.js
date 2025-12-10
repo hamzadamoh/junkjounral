@@ -33,7 +33,8 @@ export default async function handler(req, res) {
     if (url && options) {
       // Generic proxy request (for upscale, etc.)
       targetUrl = url;
-      requestBody = JSON.parse(options.body);
+      // options.body might already be a string or an object
+      requestBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
       requestHeaders = options.headers;
       console.log(`[Ttapi Proxy] Generic request to: ${targetUrl}`);
     } else if (prompt) {
@@ -58,16 +59,29 @@ export default async function handler(req, res) {
       body: JSON.stringify(requestBody)
     });
 
+    // Read response once - check status and parse accordingly
+    const responseText = await response.text();
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Ttapi Proxy] API error: ${response.status} - ${errorText}`);
+      console.error(`[Ttapi Proxy] API error: ${response.status} - ${responseText}`);
       return res.status(response.status).json({ 
         error: `Ttapi API error: ${response.status}`,
-        details: errorText 
+        details: responseText 
       });
     }
 
-    const data = await response.json();
+    // Parse JSON from the text we already read
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error(`[Ttapi Proxy] Failed to parse JSON response:`, responseText);
+      return res.status(500).json({ 
+        error: 'Invalid JSON response from Ttapi',
+        details: responseText 
+      });
+    }
+    
     console.log(`[Ttapi Proxy] Request successful:`, data);
 
     // Set CORS headers to allow the frontend to access this
