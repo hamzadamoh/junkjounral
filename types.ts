@@ -38,7 +38,8 @@ export interface GenerationSettings {
 
 export interface GeneratedImage {
   id: string;
-  url: string; // Base64 data URL
+  url: string; // Base64 data URL for display
+  originalUrl?: string; // Original image URL for high-quality downloads
   prompt: string;
   timestamp: number;
   status?: 'generating' | 'completed' | 'error';

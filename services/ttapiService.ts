@@ -857,11 +857,23 @@ const splitGridImage = async (gridImageUrl: string): Promise<string[]> => {
     const canvas = document.createElement('canvas');
     canvas.width = tileWidth;
     canvas.height = tileHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', {
+      alpha: true,
+      desynchronized: false,
+      willReadFrequently: false,
+      colorSpace: 'srgb',
+      // Enable high-quality image rendering
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: 'high'
+    });
     
     if (!ctx) {
       throw new Error('Failed to get canvas context');
     }
+    
+    // Set high-quality rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     
     const tiles: string[] = [];
     
@@ -874,14 +886,14 @@ const splitGridImage = async (gridImageUrl: string): Promise<string[]> => {
         // Clear canvas
         ctx.clearRect(0, 0, tileWidth, tileHeight);
         
-        // Draw the tile
+        // Draw the tile with high quality
         ctx.drawImage(
           imageBitmap,
           sx, sy, tileWidth, tileHeight,  // Source rectangle
           0, 0, tileWidth, tileHeight      // Destination rectangle
         );
         
-        // Convert to base64
+        // Convert to base64 - PNG is lossless, so this preserves quality
         const base64 = canvas.toDataURL('image/png');
         tiles.push(base64);
       }
@@ -1251,17 +1263,20 @@ export const generateJournalPage = async (
       throw new Error('No images returned from ttapi.io after retries');
     }
 
-    // Convert URLs to base64
+    // Convert URLs to base64, but also preserve original URLs for high-quality downloads
     // If we have exactly 1 image, it's likely a grid - split it client-side
     if (imageUrls.length === 1) {
       console.log(`[Ttapi] 📋 Detected grid image - splitting into 4 individual tiles...`);
       const base64Images = await splitGridImage(imageUrls[0]);
       console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
+      // For grid images, we can't preserve individual original URLs, so return base64 only
       return base64Images;
     } else {
       console.log(`[Ttapi] Converting ${imageUrls.length} image(s) to base64...`);
       const base64Images = await convertUrlsToBase64(imageUrls);
       console.log(`[Ttapi] ✅ Successfully generated ${base64Images.length} image(s)`);
+      // Return base64 images (original URLs are stored in imageUrls array, but we can't return both with current interface)
+      // TODO: Modify interface to return both base64 and original URLs for high-quality downloads
       return base64Images;
     }
   } catch (error: any) {
