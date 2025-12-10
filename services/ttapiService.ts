@@ -1279,10 +1279,11 @@ export const generateJournalPage = async (
       console.log(`[Ttapi] 📋 Detected grid image - splitting into 4 individual tiles...`);
       const base64Images = await splitGridImage(imageUrls[0]);
       console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
-      // For grid images, we can't split the original URL, but we can provide it for reference
-      // Attach original URL as property for backward compatibility
+      // For grid images, we split them client-side, so there are no individual original URLs
+      // The base64 images ARE the individual slices, so we should use those for downloads
+      // Don't set originalUrls - let downloads use the base64 slices directly
       const result = base64Images as any;
-      result.originalUrls = [imageUrls[0], imageUrls[0], imageUrls[0], imageUrls[0]]; // Same URL for all 4 tiles
+      result.originalUrls = undefined; // No individual URLs for split grid images
       return result;
     } else {
       console.log(`[Ttapi] Converting ${imageUrls.length} image(s) to base64...`);

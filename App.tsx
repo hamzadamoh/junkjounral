@@ -1882,36 +1882,33 @@ const App: React.FC = () => {
 
   const downloadImage = async (img: GeneratedImage, index: number) => {
     try {
-      // Use original URL for high-quality download if available, otherwise use base64
-      const downloadUrl = img.originalUrl || img.url;
+      let blob: Blob;
       
       // If using original URL, fetch it first to ensure we get the full quality image
       if (img.originalUrl) {
         const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
         if (response.ok) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          const paddedIndex = String(index + 1).padStart(3, '0');
-          link.download = `image_${paddedIndex}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          return;
+          blob = await response.blob();
+        } else {
+          // Fallback to base64 if original URL fetch fails
+          blob = await (await fetch(img.url)).blob();
         }
+      } else {
+        // Use base64 URL - convert to blob for better compatibility
+        blob = await (await fetch(img.url)).blob();
       }
       
-      // Fallback to base64 URL
+      // Create download link with blob
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = img.url;
+      link.href = url;
       // Use generic filename: image_001.png, image_002.png, etc.
       const paddedIndex = String(index + 1).padStart(3, '0');
       link.download = `image_${paddedIndex}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading image:', error);
       // Fallback to simple base64 download
