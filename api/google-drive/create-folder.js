@@ -24,8 +24,19 @@ async function getAccessToken() {
       const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
       console.log('[Google Drive API] Attempting to import googleapis...');
       
-      const { google } = await import('googleapis');
-      console.log('[Google Drive API] googleapis imported successfully');
+      let google;
+      try {
+        const googleapisModule = await import('googleapis');
+        google = googleapisModule.google || googleapisModule.default?.google;
+        if (!google) {
+          throw new Error('googleapis module does not export google');
+        }
+        console.log('[Google Drive API] googleapis imported successfully');
+      } catch (importError) {
+        console.error('[Google Drive API] ❌ Failed to import googleapis:', importError);
+        console.error('[Google Drive API] Import error details:', importError.message);
+        throw new Error(`Failed to import googleapis: ${importError.message}. Make sure googleapis is installed.`);
+      }
       
       const jwtClient = new google.auth.JWT(
         clientEmail,
@@ -92,8 +103,31 @@ export default async function handler(req, res) {
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
+      // Check what's missing and provide specific error
+      const hasOAuthToken = !!process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
+      const hasClientEmail = !!process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
+      const hasPrivateKey = !!process.env.GOOGLE_DRIVE_PRIVATE_KEY;
+      
+      let errorMessage = 'Failed to get Google Drive access token. ';
+      if (!hasOAuthToken && (!hasClientEmail || !hasPrivateKey)) {
+        errorMessage += 'Missing credentials: ';
+        if (!hasClientEmail) errorMessage += 'GOOGLE_DRIVE_CLIENT_EMAIL ';
+        if (!hasPrivateKey) errorMessage += 'GOOGLE_DRIVE_PRIVATE_KEY ';
+        errorMessage += '. Please configure these in Vercel environment variables and redeploy.';
+      } else if (hasClientEmail && hasPrivateKey) {
+        errorMessage += 'Service account credentials found but authentication failed. Check Vercel function logs for details.';
+      } else {
+        errorMessage += 'Please configure GOOGLE_DRIVE_ACCESS_TOKEN or service account credentials in Vercel.';
+      }
+      
       return res.status(500).json({ 
-        error: 'Failed to get Google Drive access token. Please configure GOOGLE_DRIVE_ACCESS_TOKEN or service account credentials.' 
+        error: errorMessage,
+        debug: {
+          hasOAuthToken,
+          hasClientEmail,
+          hasPrivateKey,
+          privateKeyLength: process.env.GOOGLE_DRIVE_PRIVATE_KEY?.length || 0
+        }
       });
     }
 
