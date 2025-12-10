@@ -314,26 +314,44 @@ const sendUpscaleToTtapi = async (
       })
     });
 
+    // Read response body once
+    const responseText = await response.text();
+    
     if (!response.ok) {
-      const errorText = await response.text();
       console.error(`[Ttapi] ❌ Upscale request failed: ${response.status} ${response.statusText}`);
-      console.error(`[Ttapi] Error response:`, errorText);
+      console.error(`[Ttapi] Error response:`, responseText);
       
       // Check for specific error types
       if (response.status === 400) {
-        const errorData = JSON.parse(errorText).error || errorText;
-        if (errorData.includes('account queue is full') || errorData.includes('queue is full')) {
-          throw new Error('QUEUE_FULL_RETRY');
+        try {
+          const errorData = JSON.parse(responseText);
+          const errorMsg = errorData.error || errorData.message || responseText;
+          if (errorMsg.includes('account queue is full') || errorMsg.includes('queue is full')) {
+            throw new Error('QUEUE_FULL_RETRY');
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, check the text directly
+          if (responseText.includes('account queue is full') || responseText.includes('queue is full')) {
+            throw new Error('QUEUE_FULL_RETRY');
+          }
         }
       }
       if (response.status === 429) {
         throw new Error('RATE_LIMIT_RETRY');
       }
       
-      throw new Error(`Upscale request failed: ${response.status} ${errorText}`);
+      throw new Error(`Upscale request failed: ${response.status} ${responseText}`);
     }
 
-    const result: TtapiTaskResponse = await response.json();
+    // Parse JSON from the already-read responseText
+    let result: TtapiTaskResponse;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`[Ttapi] Failed to parse upscale JSON response:`, responseText);
+      throw new Error(`Invalid JSON response from upscale: ${responseText}`);
+    }
+    
     console.log(`[Ttapi] Upscale response:`, JSON.stringify(result, null, 2));
 
     // Extract job ID from various possible locations
@@ -412,13 +430,16 @@ const sendTaskToTtapi = async (
     console.log(`[Ttapi] Response received. Status: ${response.status} ${response.statusText}`);
     console.log(`[Ttapi] Response headers:`, Object.fromEntries(response.headers.entries()));
     
+    // Read response body once - check status and parse accordingly
+    const responseText = await response.text();
+    
     // Check response status before parsing
     if (!response.ok) {
       let errorMessage = `Ttapi HTTP error: ${response.status}`;
       let errorDetail = '';
       
       try {
-        const errorJson = await response.json();
+        const errorJson = JSON.parse(responseText);
         console.error(`[Ttapi] HTTP ${response.status} error creating task:`, JSON.stringify(errorJson, null, 2));
         
         // Extract error message
@@ -445,16 +466,24 @@ const sendTaskToTtapi = async (
           errorMessage = `Ttapi HTTP error: ${response.status} - ${errorDetail}`;
         }
       } catch (parseError) {
-        const errorText = await response.text();
-        console.error(`[Ttapi] HTTP ${response.status} error (could not parse JSON):`, errorText);
-        errorMessage = `Ttapi HTTP error: ${response.status} - ${errorText}`;
+        // Use the already-read responseText
+        console.error(`[Ttapi] HTTP ${response.status} error (could not parse JSON):`, responseText);
+        errorMessage = `Ttapi HTTP error: ${response.status} - ${responseText}`;
       }
       
       const fullError = errorDetail ? `${errorMessage} ${errorDetail}` : errorMessage;
       throw new Error(fullError);
     }
     
-    const json: TtapiTaskResponse = await response.json();
+    // Parse JSON from the already-read responseText
+    let json: TtapiTaskResponse;
+    try {
+      json = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`[Ttapi] Failed to parse JSON response:`, responseText);
+      throw new Error(`Invalid JSON response from Ttapi: ${responseText}`);
+    }
+    
     console.log(`[Ttapi] Task creation response:`, JSON.stringify(json, null, 2));
 
     // Try multiple possible field names for the job ID
