@@ -45,13 +45,13 @@ For the "prompt" field, include:
 - Lighting (soft, dramatic, ethereal, etc.)
 - Composition details
 - Atmosphere/mood keywords
-- Technical parameters: --ar 3:4 --v 6.1 --s 250
+- Technical parameters: --ar 3:4 --v 6.1 --s 0
 
 Example response:
 {
   "name": "Enchanted Forest Guardian",
   "description": "A mystical deer with glowing antlers stands in a moonlit forest clearing, surrounded by floating fireflies and ancient trees.",
-  "prompt": "Majestic deer with luminescent crystalline antlers standing in an enchanted forest clearing, soft moonlight filtering through ancient oak trees, floating golden fireflies, mystical atmosphere, ethereal glow, deep teal and amber color palette, fantasy illustration style, highly detailed, magical realism, soft focus background, volumetric lighting --ar 3:4 --v 6.1 --s 250"
+  "prompt": "Majestic deer with luminescent crystalline antlers standing in an enchanted forest clearing, soft moonlight filtering through ancient oak trees, floating golden fireflies, mystical atmosphere, ethereal glow, deep teal and amber color palette, fantasy illustration style, highly detailed, magical realism, soft focus background, volumetric lighting --ar 3:4 --v 6.1 --s 0"
 }`;
 
 /**
