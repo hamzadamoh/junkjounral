@@ -38,6 +38,19 @@ async function getAccessToken() {
         throw new Error(`Failed to import googleapis: ${importError.message}. Make sure googleapis is installed.`);
       }
       
+      // Validate private key format
+      if (!formattedPrivateKey.includes('BEGIN PRIVATE KEY')) {
+        console.error('[Google Drive API] ❌ Private key format invalid: Missing BEGIN PRIVATE KEY');
+        throw new Error('Private key must start with -----BEGIN PRIVATE KEY-----');
+      }
+      if (!formattedPrivateKey.includes('END PRIVATE KEY')) {
+        console.error('[Google Drive API] ❌ Private key format invalid: Missing END PRIVATE KEY');
+        throw new Error('Private key must end with -----END PRIVATE KEY-----');
+      }
+      
+      console.log('[Google Drive API] Private key format validated');
+      console.log('[Google Drive API] Creating JWT client with email:', clientEmail);
+      
       const jwtClient = new google.auth.JWT(
         clientEmail,
         null,
@@ -46,13 +59,24 @@ async function getAccessToken() {
       );
       
       console.log('[Google Drive API] Authorizing JWT client...');
-      const tokens = await jwtClient.authorize();
-      console.log('[Google Drive API] ✅ JWT authorization successful');
-      
-      return tokens.access_token;
+      try {
+        const tokens = await jwtClient.authorize();
+        if (!tokens || !tokens.access_token) {
+          throw new Error('Authorization succeeded but no access token returned');
+        }
+        console.log('[Google Drive API] ✅ JWT authorization successful');
+        return tokens.access_token;
+      } catch (authError) {
+        console.error('[Google Drive API] ❌ JWT authorization failed:', authError);
+        console.error('[Google Drive API] Auth error message:', authError.message);
+        console.error('[Google Drive API] Auth error code:', authError.code);
+        console.error('[Google Drive API] Auth error response:', authError.response?.data || 'No response data');
+        throw authError;
+      }
     } catch (error) {
       console.error('[Google Drive API] ❌ Service account auth failed:', error);
       console.error('[Google Drive API] Error details:', error.message);
+      console.error('[Google Drive API] Error code:', error.code);
       console.error('[Google Drive API] Error stack:', error.stack);
       return null;
     }
