@@ -18,6 +18,8 @@ import {
   Eye,
   X,
   AlertCircle,
+  Trash2,
+  Sparkles,
 } from 'lucide-react';
 import {
   SlicedImage,
@@ -37,9 +39,9 @@ interface ArcaneSplitterProps {
 
 const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onClose }) => {
   // State
-  const [sourceImages, setSourceImages] = useState<string[]>([]); // Track all uploaded grids
+  const [sourceImages, setSourceImages] = useState<Array<{ id: string; base64: string }>>([]); // Track all uploaded grids with IDs
   const [gridConfig] = useState<GridConfig>({ rows: 3, cols: 4 }); // Fixed: 3 rows × 4 cols = 12 images
-  const [slices, setSlices] = useState<AnalyzedSlice[]>([]);
+  const [slices, setSlices] = useState<Array<AnalyzedSlice & { gridId?: string }>>([]);
   const [isSlicing, setIsSlicing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState({ completed: 0, total: 0 });
@@ -68,8 +70,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
       
-      // Add to source images list
-      setSourceImages(prev => [...prev, base64]);
+      // Generate unique ID for this grid
+      const gridId = `grid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Add to source images list with ID
+      setSourceImages(prev => [...prev, { id: gridId, base64 }]);
       
       // Fixed grid: 3 rows × 4 cols = 12 images
       const config: GridConfig = { rows: 3, cols: 4 };
@@ -79,7 +84,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       setIsSlicing(true);
       try {
         const slicedImages = await sliceGridImage(base64, config, autoCrop);
-        const newSlices = slicedImages.map(s => ({ ...s, isAnalyzing: false }));
+        const newSlices = slicedImages.map(s => ({ ...s, isAnalyzing: false, gridId }));
         
         // Append new slices to existing ones
         setSlices(prev => [...prev, ...newSlices]);
@@ -153,7 +158,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       const analyzed = await analyzeAllImages(slices, (completed, total) => {
         setAnalysisProgress({ completed, total });
       });
-      setSlices(analyzed);
+      // Preserve gridId for each analyzed slice
+      setSlices(prev => {
+        const gridIdMap = new Map(prev.map(s => [s.id, s.gridId]));
+        return analyzed.map(s => ({ ...s, gridId: gridIdMap.get(s.id) }));
+      });
       
       // Notify parent of generated prompts
       const prompts = analyzed.filter(s => s.prompt).map(s => s.prompt!);
@@ -178,7 +187,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     
     const analyzed = await analyzeSingleSlice(slice);
     setSlices(prev => prev.map(s => 
-      s.id === sliceId ? analyzed : s
+      s.id === sliceId ? { ...analyzed, gridId: s.gridId } : s // Preserve gridId
     ));
   }, [slices, hasApiKey]);
   
@@ -212,6 +221,17 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     link.download = `${slice.name || `slice-${slice.row + 1}-${slice.col + 1}`}.png`;
     link.href = slice.base64;
     link.click();
+  }, []);
+  
+  // Delete a single slice
+  const handleDeleteSlice = useCallback((sliceId: string) => {
+    setSlices(prev => prev.filter(s => s.id !== sliceId));
+  }, []);
+  
+  // Delete a grid and all its slices
+  const handleDeleteGrid = useCallback((gridId: string) => {
+    setSourceImages(prev => prev.filter(g => g.id !== gridId));
+    setSlices(prev => prev.filter(s => s.gridId !== gridId));
   }, []);
   
   const analyzedCount = slices.filter(s => s.prompt).length;
@@ -385,6 +405,48 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
               </div>
             </div>
             
+            {/* Grids List - Show uploaded grids with delete option */}
+            {sourceImages.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-slate-400">Uploaded Grids ({sourceImages.length})</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {sourceImages.map((grid) => {
+                    const gridSliceCount = slices.filter(s => s.gridId === grid.id).length;
+                    return (
+                      <div
+                        key={grid.id}
+                        className="group relative bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-purple-500/50 transition-colors"
+                      >
+                        <div className="aspect-square relative">
+                          <img
+                            src={grid.base64}
+                            alt={`Grid ${grid.id}`}
+                            className="w-full h-full object-contain bg-slate-900"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button
+                              onClick={() => {
+                                if (confirm(`Delete this grid and all ${gridSliceCount} slices?`)) {
+                                  handleDeleteGrid(grid.id);
+                                }
+                              }}
+                              className="p-2 bg-red-600 rounded-lg hover:bg-red-500"
+                              title="Delete Grid"
+                            >
+                              <Trash2 className="w-5 h-5 text-white" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="p-2 text-center">
+                          <p className="text-xs text-slate-400">{gridSliceCount} slices</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
             {/* Slices Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {slices.map((slice) => (
@@ -413,12 +475,14 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
                       <button
                         onClick={() => setPreviewSlice(slice)}
                         className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"
+                        title="Preview"
                       >
                         <Eye className="w-4 h-4 text-white" />
                       </button>
                       <button
                         onClick={() => handleDownloadSlice(slice)}
                         className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700"
+                        title="Download"
                       >
                         <Download className="w-4 h-4 text-white" />
                       </button>
@@ -426,10 +490,23 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
                         <button
                           onClick={() => handleAnalyzeSingle(slice.id)}
                           className="p-2 bg-purple-600 rounded-lg hover:bg-purple-500"
+                          title="Analyze"
                         >
                           <Wand2 className="w-4 h-4 text-white" />
                         </button>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this slice?')) {
+                            handleDeleteSlice(slice.id);
+                          }
+                        }}
+                        className="p-2 bg-red-600 rounded-lg hover:bg-red-500"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4 text-white" />
+                      </button>
                     </div>
                   </div>
                   
