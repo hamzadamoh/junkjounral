@@ -6,29 +6,48 @@
 async function getAccessToken() {
   const oauthToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
   if (oauthToken) {
+    console.log('[Google Drive API] Using OAuth2 access token');
     return oauthToken;
   }
 
   const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY;
+  
+  console.log('[Google Drive API] Checking service account credentials...');
+  console.log('[Google Drive API] Client email exists:', !!clientEmail);
+  console.log('[Google Drive API] Private key exists:', !!privateKey);
+  console.log('[Google Drive API] Private key length:', privateKey ? privateKey.length : 0);
   
   if (clientEmail && privateKey) {
     try {
+      // Replace \\n with actual newlines
+      const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+      console.log('[Google Drive API] Attempting to import googleapis...');
+      
       const { google } = await import('googleapis');
+      console.log('[Google Drive API] googleapis imported successfully');
+      
       const jwtClient = new google.auth.JWT(
         clientEmail,
         null,
-        privateKey,
+        formattedPrivateKey,
         ['https://www.googleapis.com/auth/drive']
       );
+      
+      console.log('[Google Drive API] Authorizing JWT client...');
       const tokens = await jwtClient.authorize();
+      console.log('[Google Drive API] ✅ JWT authorization successful');
+      
       return tokens.access_token;
     } catch (error) {
-      console.error('[Google Drive API] Service account auth failed:', error);
+      console.error('[Google Drive API] ❌ Service account auth failed:', error);
+      console.error('[Google Drive API] Error details:', error.message);
+      console.error('[Google Drive API] Error stack:', error.stack);
       return null;
     }
   }
 
+  console.error('[Google Drive API] ❌ No credentials found. Client email:', !!clientEmail, 'Private key:', !!privateKey);
   return null;
 }
 

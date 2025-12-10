@@ -6,25 +6,28 @@
 async function getAccessToken() {
   const oauthToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
   if (oauthToken) {
+    console.log('[Google Drive API] Using OAuth2 access token');
     return oauthToken;
   }
 
   const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY;
   
   if (clientEmail && privateKey) {
     try {
+      const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
       const { google } = await import('googleapis');
       const jwtClient = new google.auth.JWT(
         clientEmail,
         null,
-        privateKey,
+        formattedPrivateKey,
         ['https://www.googleapis.com/auth/drive']
       );
       const tokens = await jwtClient.authorize();
       return tokens.access_token;
     } catch (error) {
       console.error('[Google Drive API] Service account auth failed:', error);
+      console.error('[Google Drive API] Error details:', error.message);
       return null;
     }
   }
