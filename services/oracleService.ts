@@ -47,6 +47,8 @@ For the "prompt" field, include:
 - Atmosphere/mood keywords
 - Technical parameters: --ar 3:4 --v 6.1 --s 0
 
+CRITICAL: You MUST use --s 0 (stylize 0) in the prompt. Do NOT use --s 250 or any other stylize value. Always use --s 0.
+
 Example response:
 {
   "name": "Enchanted Forest Guardian",
@@ -148,6 +150,22 @@ export const analyzeImageWithOracle = async (
     // Validate required fields
     if (!result.name || !result.description || !result.prompt) {
       throw new Error('Missing required fields in Oracle response');
+    }
+    
+    // Force --s 0: Replace any --s 250 or --s250 with --s 0
+    // Also replace any other --s values with --s 0
+    result.prompt = result.prompt.replace(/--s\s*250/g, '--s 0');
+    result.prompt = result.prompt.replace(/--s\s*\d+/g, '--s 0');
+    // If --s 0 is not present, add it (but only if other parameters are present)
+    if (!result.prompt.includes('--s 0') && (result.prompt.includes('--ar') || result.prompt.includes('--v'))) {
+      // Add --s 0 before the last parameter or at the end
+      if (result.prompt.includes('--ar')) {
+        result.prompt = result.prompt.replace(/(--ar\s+[^\s]+)/, '$1 --s 0');
+      } else if (result.prompt.includes('--v')) {
+        result.prompt = result.prompt.replace(/(--v\s+[^\s]+)/, '$1 --s 0');
+      } else {
+        result.prompt += ' --s 0';
+      }
     }
     
     console.log('[Oracle] Successfully parsed analysis:', result.name);
