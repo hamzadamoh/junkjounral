@@ -666,6 +666,8 @@ const App: React.FC = () => {
           // Ttapi returns a single URL (grid image) or array of URLs
           // Extract original URLs if available (attached as property for backward compatibility)
           const originalUrls = (result as any)?.originalUrls as string[] | undefined;
+          const originalGridUrl = (result as any)?.originalGridUrl as string | undefined;
+          const isGrid = (result as any)?.isGrid as boolean | undefined;
           const base64Urls = Array.isArray(result) ? result : (result ? [result] : []);
           
           // Update all 4 placeholder images for this prompt
@@ -677,7 +679,11 @@ const App: React.FC = () => {
             for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
               updatedImages[startIndex + i].url = base64Urls[i];
               // Store original URL if available for high-quality downloads
-              if (originalUrls && originalUrls[i]) {
+              // For grid images, store the grid URL so we can split it fresh on download
+              if (isGrid && originalGridUrl) {
+                updatedImages[startIndex + i].originalUrl = originalGridUrl;
+                (updatedImages[startIndex + i] as any).gridSliceIndex = i;
+              } else if (originalUrls && originalUrls[i]) {
                 updatedImages[startIndex + i].originalUrl = originalUrls[i];
               }
               updatedImages[startIndex + i].status = 'completed';
@@ -1598,6 +1604,8 @@ const App: React.FC = () => {
           
           // Extract original URLs if available (attached as property for backward compatibility)
           const originalUrls = (base64Urls as any)?.originalUrls as string[] | undefined;
+          const originalGridUrl = (base64Urls as any)?.originalGridUrl as string | undefined;
+          const isGrid = (base64Urls as any)?.isGrid as boolean | undefined;
           const base64Array = Array.isArray(base64Urls) ? base64Urls : [];
           
           // Add all images from this request to the gallery
@@ -1610,7 +1618,10 @@ const App: React.FC = () => {
                   ...img, 
                   url: base64Url, 
                   // Store original URL if available for high-quality downloads
-                  originalUrl: originalUrls && originalUrls[imgIdx] ? originalUrls[imgIdx] : undefined,
+                  // For grid images, store the grid URL so we can split it fresh on download
+                  originalUrl: isGrid && originalGridUrl ? originalGridUrl : (originalUrls && originalUrls[imgIdx] ? originalUrls[imgIdx] : undefined),
+                  // Store grid slice index for grid images (0-3)
+                  ...(isGrid && originalGridUrl ? { gridSliceIndex: imgIdx } : {}),
                   status: 'completed' as const,
                   prompt: generatedPrompts[actualIdx] || img.prompt
                 } : img
@@ -1884,8 +1895,33 @@ const App: React.FC = () => {
     try {
       let blob: Blob;
       
-      // If using original URL, fetch it first to ensure we get the full quality image
-      if (img.originalUrl) {
+      // Check if this is a grid image that needs to be split fresh for maximum quality
+      const gridSliceIndex = (img as any).gridSliceIndex as number | undefined;
+      
+      if (img.originalUrl && gridSliceIndex !== undefined) {
+        // This is a grid image - split it fresh from the original URL to preserve maximum quality
+        console.log(`[Download] Grid image detected, splitting fresh from original URL for slice ${gridSliceIndex}`);
+        try {
+          // Import splitGridImage dynamically
+          const { splitGridImage } = await import('./services/ttapiService');
+          // Use the proxy URL to fetch the grid image
+          const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`;
+          const slices = await splitGridImage(proxyUrl);
+          
+          // Extract the specific slice (slices are base64 data URLs)
+          if (slices[gridSliceIndex]) {
+            blob = await (await fetch(slices[gridSliceIndex])).blob();
+          } else {
+            // Fallback to base64 if slice extraction fails
+            blob = await (await fetch(img.url)).blob();
+          }
+        } catch (error) {
+          console.warn(`[Download] Failed to split grid fresh, using pre-split base64:`, error);
+          // Fallback to base64 if grid splitting fails
+          blob = await (await fetch(img.url)).blob();
+        }
+      } else if (img.originalUrl) {
+        // Regular image with original URL - fetch it directly
         const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
         if (response.ok) {
           blob = await response.blob();
@@ -1942,32 +1978,48 @@ const App: React.FC = () => {
 
       // Fetch all images and add to zip with generic filenames
       // Use original URLs for high-quality downloads if available
+      // Import splitGridImage for grid images
+      const { splitGridImage } = await import('./services/ttapiService');
+      
       for (let i = 0; i < shuffledImages.length; i++) {
         const img = shuffledImages[i];
         try {
           let blob: Blob;
+          const gridSliceIndex = (img as any).gridSliceIndex as number | undefined;
           
-          // Prefer original URL for high-quality download
-          if (img.originalUrl) {
+          // Check if this is a grid image that needs to be split fresh
+          if (img.originalUrl && gridSliceIndex !== undefined) {
+            // Grid image - split fresh for maximum quality
+            try {
+              const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`;
+              const slices = await splitGridImage(proxyUrl);
+              if (slices[gridSliceIndex]) {
+                blob = await (await fetch(slices[gridSliceIndex])).blob();
+              } else {
+                blob = await (await fetch(img.url)).blob();
+              }
+            } catch (error) {
+              console.warn(`Failed to split grid for image ${i + 1}, using base64:`, error);
+              blob = await (await fetch(img.url)).blob();
+            }
+          } else if (img.originalUrl) {
+            // Regular image with original URL - fetch it directly
             try {
               const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
               if (response.ok) {
                 blob = await response.blob();
               } else {
                 // Fallback to base64
-                const response = await fetch(img.url);
-                blob = await response.blob();
+                blob = await (await fetch(img.url)).blob();
               }
             } catch (error) {
               // Fallback to base64 if original URL fetch fails
               console.warn(`Failed to fetch original URL for image ${i + 1}, using base64:`, error);
-              const response = await fetch(img.url);
-              blob = await response.blob();
+              blob = await (await fetch(img.url)).blob();
             }
           } else {
             // Use base64 URL
-            const response = await fetch(img.url);
-            blob = await response.blob();
+            blob = await (await fetch(img.url)).blob();
           }
           
           // Use generic filename: image_001.png, image_002.png, etc.

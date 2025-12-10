@@ -834,7 +834,7 @@ const convertUrlsToBase64 = async (imageUrls: string[]): Promise<string[]> => {
  * Splits a grid image into 4 individual images (2x2 grid)
  * Returns an array of 4 base64 data URLs
  */
-const splitGridImage = async (gridImageUrl: string): Promise<string[]> => {
+export const splitGridImage = async (gridImageUrl: string): Promise<string[]> => {
   try {
     console.log(`[Ttapi] 🖼️ Splitting grid image into 4 individual images...`);
     
@@ -1279,11 +1279,11 @@ export const generateJournalPage = async (
       console.log(`[Ttapi] 📋 Detected grid image - splitting into 4 individual tiles...`);
       const base64Images = await splitGridImage(imageUrls[0]);
       console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
-      // For grid images, we split them client-side, so there are no individual original URLs
-      // The base64 images ARE the individual slices, so we should use those for downloads
-      // Don't set originalUrls - let downloads use the base64 slices directly
+      // Store the original grid URL so we can split it fresh on download for maximum quality
+      // This avoids quality loss from re-encoding the pre-split base64 images
       const result = base64Images as any;
-      result.originalUrls = undefined; // No individual URLs for split grid images
+      result.originalGridUrl = imageUrls[0]; // Store grid URL for high-quality downloads
+      result.isGrid = true; // Mark as grid so download can split fresh
       return result;
     } else {
       console.log(`[Ttapi] Converting ${imageUrls.length} image(s) to base64...`);
