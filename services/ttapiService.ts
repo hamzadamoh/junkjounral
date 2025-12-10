@@ -956,6 +956,7 @@ const pollTaskUntilComplete = async (
               return /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(url) || 
                      url.includes('cdn.discordapp.com') || 
                      url.includes('mjcdn.ttapi.io') ||
+                     url.includes('cdn.ttapi.io') ||
                      url.includes('discordapp.com/attachments');
             });
           if (imageUrls.length > 0) {
@@ -1144,7 +1145,10 @@ const convertUrlsToBase64 = async (imageUrls: string[]): Promise<string[]> => {
   const convertPromises = imageUrls.map(async (url) => {
     try {
       // Use proxy for Discord CDN URLs (CORS blocked) or Ttapi CDN URLs
-      const needsProxy = url.includes('cdn.discordapp.com') || url.includes('discord.com') || url.includes('mjcdn.ttapi.io');
+      const needsProxy = url.includes('cdn.discordapp.com') || 
+                        url.includes('discord.com') || 
+                        url.includes('mjcdn.ttapi.io') ||
+                        url.includes('cdn.ttapi.io');
       const fetchUrl = needsProxy ? `/api/ttapi/image?url=${encodeURIComponent(url)}` : url;
       
       const imageResponse = await fetch(fetchUrl);
