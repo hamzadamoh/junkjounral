@@ -951,8 +951,18 @@ const convertUrlToBase64 = async (url: string): Promise<string> => {
 };
 
 /**
+ * Return type for image generation - includes both base64 (for display) and original URL (for high-quality downloads)
+ */
+export interface ImageGenerationResult {
+  base64: string; // Base64 data URL for display
+  originalUrl?: string; // Original image URL for high-quality downloads
+}
+
+/**
  * Main function to generate a journal page using ttapi.io Midjourney
  * Returns an array of base64-encoded images (typically 4 images per request)
+ * Note: Returns string[] for backward compatibility, but original URLs should be stored separately
+ * TODO: Update to return ImageGenerationResult[] for original URL support
  */
 export const generateJournalPage = async (
   theme: Theme,

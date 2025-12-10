@@ -1863,15 +1863,49 @@ const App: React.FC = () => {
     return shuffled;
   };
 
-  const downloadImage = (img: GeneratedImage, index: number) => {
-    const link = document.createElement('a');
-    link.href = img.url;
-    // Use generic filename: image_001.png, image_002.png, etc.
-    const paddedIndex = String(index + 1).padStart(3, '0');
-    link.download = `image_${paddedIndex}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const downloadImage = async (img: GeneratedImage, index: number) => {
+    try {
+      // Use original URL for high-quality download if available, otherwise use base64
+      const downloadUrl = img.originalUrl || img.url;
+      
+      // If using original URL, fetch it first to ensure we get the full quality image
+      if (img.originalUrl) {
+        const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          const paddedIndex = String(index + 1).padStart(3, '0');
+          link.download = `image_${paddedIndex}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          return;
+        }
+      }
+      
+      // Fallback to base64 URL
+      const link = document.createElement('a');
+      link.href = img.url;
+      // Use generic filename: image_001.png, image_002.png, etc.
+      const paddedIndex = String(index + 1).padStart(3, '0');
+      link.download = `image_${paddedIndex}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      // Fallback to simple base64 download
+      const link = document.createElement('a');
+      link.href = img.url;
+      const paddedIndex = String(index + 1).padStart(3, '0');
+      link.download = `image_${paddedIndex}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const downloadAllAsZip = async () => {
@@ -1893,11 +1927,35 @@ const App: React.FC = () => {
       console.log(`[Download] Shuffled ${shuffledImages.length} images for random order`);
 
       // Fetch all images and add to zip with generic filenames
+      // Use original URLs for high-quality downloads if available
       for (let i = 0; i < shuffledImages.length; i++) {
         const img = shuffledImages[i];
         try {
-          const response = await fetch(img.url);
-          const blob = await response.blob();
+          let blob: Blob;
+          
+          // Prefer original URL for high-quality download
+          if (img.originalUrl) {
+            try {
+              const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
+              if (response.ok) {
+                blob = await response.blob();
+              } else {
+                // Fallback to base64
+                const response = await fetch(img.url);
+                blob = await response.blob();
+              }
+            } catch (error) {
+              // Fallback to base64 if original URL fetch fails
+              console.warn(`Failed to fetch original URL for image ${i + 1}, using base64:`, error);
+              const response = await fetch(img.url);
+              blob = await response.blob();
+            }
+          } else {
+            // Use base64 URL
+            const response = await fetch(img.url);
+            blob = await response.blob();
+          }
+          
           // Use generic filename: image_001.png, image_002.png, etc.
           const paddedIndex = String(i + 1).padStart(3, '0');
           const fileName = `image_${paddedIndex}.png`;
