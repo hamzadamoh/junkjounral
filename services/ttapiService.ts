@@ -12,6 +12,11 @@ const getTtapiApiKey = (): string => {
   return import.meta.env.VITE_TTAPI_API_KEY || '';
 };
 
+// Get Discord token for direct CDN access
+const getDiscordToken = (): string => {
+  return import.meta.env.VITE_DISCORD_TOKEN || '';
+};
+
 interface TtapiTaskResponse {
   jobId?: string;
   job_id?: string;
@@ -256,6 +261,102 @@ const cleanPromptForMidjourney = (prompt: string): string => {
 };
 
 /**
+ * Sends an upscale task to Ttapi for a specific image in a grid
+ * @param taskId The original task ID from the /imagine command
+ * @param imageIndex The index of the image to upscale (0-3 for the 4 images in a grid)
+ * @returns The new task ID for the upscale operation
+ */
+const sendUpscaleToTtapi = async (
+  taskId: string,
+  imageIndex: number
+): Promise<string | null> => {
+  console.log(`[Ttapi] ===== Starting sendUpscaleToTtapi =====`);
+  console.log(`[Ttapi] Task ID: ${taskId}, Image Index: ${imageIndex}`);
+  
+  const apiKey = getTtapiApiKey();
+  if (!apiKey) {
+    throw new Error('Ttapi API key is not configured');
+  }
+
+  const data = {
+    taskId: taskId,
+    imageIndex: imageIndex
+  };
+
+  const baseUrl = getTtapiBaseUrl();
+  const url = `${baseUrl}/midjourney/v1/upscale`;
+  console.log(`[Ttapi] Upscale URL: ${url}`);
+  console.log(`[Ttapi] Upscale data:`, JSON.stringify(data, null, 2));
+
+  const options: RequestInit = {
+    method: 'POST',
+    headers: {
+      'TT-API-KEY': apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  };
+
+  try {
+    console.log(`[Ttapi] Sending upscale request via Vercel proxy...`);
+    const response = await fetch('/api/ttapi/imagine', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url: url,
+        options: {
+          method: 'POST',
+          headers: options.headers,
+          body: JSON.stringify(data)
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Ttapi] ❌ Upscale request failed: ${response.status} ${response.statusText}`);
+      console.error(`[Ttapi] Error response:`, errorText);
+      
+      // Check for specific error types
+      if (response.status === 400) {
+        const errorData = JSON.parse(errorText).error || errorText;
+        if (errorData.includes('account queue is full') || errorData.includes('queue is full')) {
+          throw new Error('QUEUE_FULL_RETRY');
+        }
+      }
+      if (response.status === 429) {
+        throw new Error('RATE_LIMIT_RETRY');
+      }
+      
+      throw new Error(`Upscale request failed: ${response.status} ${errorText}`);
+    }
+
+    const result: TtapiTaskResponse = await response.json();
+    console.log(`[Ttapi] Upscale response:`, JSON.stringify(result, null, 2));
+
+    // Extract job ID from various possible locations
+    const jobId = result.jobId || result.job_id || result.id || result.task_id || 
+                  result.data?.jobId || result.data?.job_id || result.data?.id || result.data?.task_id;
+
+    if (jobId) {
+      console.log(`[Ttapi] ✅ Upscale task created successfully. Job ID: ${jobId}`);
+      return jobId;
+    } else {
+      console.error(`[Ttapi] ❌ No job ID found in upscale response:`, result);
+      throw new Error('No job ID returned from upscale request');
+    }
+  } catch (error: any) {
+    if (error.message === 'QUEUE_FULL_RETRY' || error.message === 'RATE_LIMIT_RETRY') {
+      throw error; // Re-throw to be handled by caller
+    }
+    console.error(`[Ttapi] ❌ Error sending upscale request:`, error);
+    throw new Error(`Failed to send upscale request: ${error.message}`);
+  }
+};
+
+/**
  * Sends a task to ttapi.io Midjourney
  */
 const sendTaskToTtapi = async (
@@ -471,6 +572,36 @@ const pollTaskUntilComplete = async (
         // Log full response for debugging
         console.log(`[Ttapi] Task ${jobId} completed. Full response:`, JSON.stringify(status, null, 2));
         
+        // PRIORITY 0: Try to extract message_id and message_hash for direct Discord CDN access
+        // This gets high-quality (2048+ px) images directly from Midjourney's CDN
+        let messageId: string | undefined;
+        let messageHash: string | undefined;
+        let channelId: string | undefined;
+        
+        // Extract from various possible locations in Ttapi response
+        if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
+          messageId = status.data.message_id || status.data.messageId || status.data.id;
+          messageHash = status.data.message_hash || status.data.messageHash || status.data.hash;
+          channelId = status.data.channel_id || status.data.channelId || import.meta.env.VITE_DISCORD_CHANNEL_ID;
+        }
+        
+        // Also check top-level
+        if (!messageId) messageId = (status as any).message_id || (status as any).messageId;
+        if (!messageHash) messageHash = (status as any).message_hash || (status as any).messageHash;
+        
+        // If we have message_id and hash, fetch directly from Discord CDN
+        if (messageId && messageHash) {
+          console.log(`[Ttapi] 🎯 Found message_id (${messageId}) and hash (${messageHash}), fetching from Discord CDN...`);
+          const discordImageUrls = await fetchFromDiscordCDN(messageId, messageHash, channelId);
+          
+          if (discordImageUrls.length > 0) {
+            console.log(`[Ttapi] ✅ Successfully fetched ${discordImageUrls.length} images from Discord CDN (high-quality)`);
+            return discordImageUrls;
+          } else {
+            console.warn(`[Ttapi] ⚠️ Discord CDN fetch returned no images, falling back to Ttapi URLs`);
+          }
+        }
+        
         // Check if response contains components/variations (Midjourney grid -> individual images)
         // Ttapi might return a grid image and components to get individual variations
         if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
@@ -626,14 +757,14 @@ const pollTaskUntilComplete = async (
           }
         }
 
-        // If we only found 1 image (likely a grid), check if we can get individual images
-        // Midjourney typically returns a grid image first, then you need to use variations/components
+        // If we only found 1 image (likely a grid), try to get individual images via upscale
+        // Midjourney typically returns a grid image first, then you need to use upscale to get individual images
         if (imageUrls.length === 1) {
           const singleUrl = imageUrls[0];
           console.log(`[Ttapi] ⚠️ Only found 1 image URL (likely a grid): ${singleUrl}`);
-          console.log(`[Ttapi] 📋 Checking if response contains individual image URLs or components...`);
+          console.log(`[Ttapi] 📋 Checking if response contains individual image URLs or attempting upscale...`);
           
-          // Check if data contains individual image URLs (variations)
+          // Check if data contains individual image URLs (variations/upsamples already done)
           if (status.data && typeof status.data === 'object' && !Array.isArray(status.data)) {
             // Check for variation URLs (variation1, variation2, variation3, variation4)
             const variationUrls: string[] = [];
@@ -658,15 +789,111 @@ const pollTaskUntilComplete = async (
               console.log(`[Ttapi] ✅ Found ${variationUrls.length} individual image URLs in variations/upsamples`);
               imageUrls = variationUrls;
             } else {
-              // If no individual URLs found, we'll split the grid image into 4 tiles
-              console.log(`[Ttapi] ⚠️ No individual image URLs found. Will split grid image into 4 tiles.`);
-              // Keep singleUrl - we'll split it later in convertUrlsToBase64
-              imageUrls = [singleUrl]; // Mark as grid to split
+              // No individual URLs found - try upscale API to get individual images
+              console.log(`[Ttapi] 🎯 No individual URLs found. Attempting to upscale grid to get individual images...`);
+              
+              // Use the current jobId as the taskId for upscale
+              const taskId = jobId;
+              
+              try {
+                // Trigger 4 upscale requests (imageIndex 0-3) in parallel
+                console.log(`[Ttapi] 📤 Triggering 4 upscale requests for imageIndex 0-3...`);
+                const upscalePromises = [];
+                for (let i = 0; i < 4; i++) {
+                  upscalePromises.push(sendUpscaleToTtapi(taskId, i));
+                }
+                
+                const upscaleJobIds = await Promise.all(upscalePromises);
+                console.log(`[Ttapi] ✅ All 4 upscale tasks created:`, upscaleJobIds);
+                
+                // Poll all 4 upscale tasks
+                console.log(`[Ttapi] 📡 Polling upscale tasks for completion...`);
+                const upscaleImageUrls: string[] = [];
+                
+                for (let i = 0; i < upscaleJobIds.length; i++) {
+                  const upscaleJobId = upscaleJobIds[i];
+                  if (!upscaleJobId) {
+                    console.warn(`[Ttapi] ⚠️ Upscale task ${i} did not return a job ID, skipping...`);
+                    continue;
+                  }
+                  
+                  try {
+                    // Poll this upscale task
+                    const upscaleUrls = await pollTaskUntilComplete(
+                      upscaleJobId,
+                      10, // initialDelay
+                      2, // staggerDelay
+                      1.2, // delay multiplier
+                      120, // maxAttempts
+                      30 // maxDelay
+                    );
+                    
+                    if (upscaleUrls && upscaleUrls.length > 0) {
+                      // Take the first URL (upscale returns 1 image)
+                      upscaleImageUrls.push(upscaleUrls[0]);
+                      console.log(`[Ttapi] ✅ Upscale task ${i} completed: ${upscaleUrls[0]}`);
+                    } else {
+                      console.warn(`[Ttapi] ⚠️ Upscale task ${i} completed but no image URL found`);
+                    }
+                  } catch (upscaleError: any) {
+                    console.error(`[Ttapi] ❌ Upscale task ${i} failed:`, upscaleError);
+                    // Continue with other upscale tasks
+                  }
+                }
+                
+                if (upscaleImageUrls.length > 0) {
+                  console.log(`[Ttapi] ✅ Successfully upscaled ${upscaleImageUrls.length} images from grid`);
+                  imageUrls = upscaleImageUrls;
+                } else {
+                  // Fallback to splitting grid if upscale fails
+                  console.log(`[Ttapi] ⚠️ Upscale failed, falling back to grid splitting`);
+                  imageUrls = [singleUrl]; // Mark as grid to split
+                }
+              } catch (upscaleError: any) {
+                console.error(`[Ttapi] ❌ Error during upscale process:`, upscaleError);
+                // Fallback to splitting grid if upscale fails
+                console.log(`[Ttapi] ⚠️ Falling back to grid splitting due to upscale error`);
+                imageUrls = [singleUrl]; // Mark as grid to split
+              }
             }
           } else {
-            // No data object, mark as grid to split
-            console.log(`[Ttapi] ⚠️ No data object found. Will split grid image into 4 tiles.`);
-            imageUrls = [singleUrl]; // Mark as grid to split
+            // No data object, try upscale or fallback to splitting
+            console.log(`[Ttapi] ⚠️ No data object found. Attempting upscale...`);
+            
+            const taskId = jobId;
+            try {
+              // Trigger 4 upscale requests
+              const upscalePromises = [];
+              for (let i = 0; i < 4; i++) {
+                upscalePromises.push(sendUpscaleToTtapi(taskId, i));
+              }
+              
+              const upscaleJobIds = await Promise.all(upscalePromises);
+              const upscaleImageUrls: string[] = [];
+              
+              for (let i = 0; i < upscaleJobIds.length; i++) {
+                const upscaleJobId = upscaleJobIds[i];
+                if (!upscaleJobId) continue;
+                
+                try {
+                  const upscaleUrls = await pollTaskUntilComplete(upscaleJobId, 10, 2, 1.2, 120, 30);
+                  if (upscaleUrls && upscaleUrls.length > 0) {
+                    upscaleImageUrls.push(upscaleUrls[0]);
+                  }
+                } catch (error) {
+                  console.error(`[Ttapi] Upscale task ${i} failed:`, error);
+                }
+              }
+              
+              if (upscaleImageUrls.length > 0) {
+                imageUrls = upscaleImageUrls;
+              } else {
+                imageUrls = [singleUrl]; // Fallback to grid splitting
+              }
+            } catch (error) {
+              console.error(`[Ttapi] Upscale failed:`, error);
+              imageUrls = [singleUrl]; // Fallback to grid splitting
+            }
           }
         }
         
@@ -789,6 +1016,95 @@ const pollTaskUntilComplete = async (
   }
 
   throw new Error(`Ttapi task did not complete after ${maxAttempts} attempts`);
+};
+
+/**
+ * Fetches images directly from Discord CDN using message_id and hash
+ * This gets the high-quality (2048+ px) versions directly from Midjourney's CDN
+ */
+const fetchFromDiscordCDN = async (
+  messageId: string,
+  messageHash: string,
+  channelId?: string
+): Promise<string[]> => {
+  const discordToken = getDiscordToken();
+  
+  if (!discordToken) {
+    console.warn('[Ttapi] Discord token not available, cannot fetch from Discord CDN');
+    return [];
+  }
+
+  try {
+    // Discord CDN format for Midjourney attachments:
+    // https://cdn.discordapp.com/attachments/{channel_id}/{attachment_id}/{filename}.png
+    // For high-quality versions, we can use the message hash
+    
+    // First, try to get the message from Discord API to get attachment IDs
+    // If channelId is not provided, we'll try to extract it from the hash or use a fallback
+    const discordApiUrl = channelId 
+      ? `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`
+      : null;
+    
+    let attachmentIds: string[] = [];
+    
+    if (discordApiUrl) {
+      try {
+        const response = await fetch(discordApiUrl, {
+          headers: {
+            'Authorization': discordToken,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const message = await response.json();
+          // Extract attachment IDs from the message
+          if (message.attachments && Array.isArray(message.attachments)) {
+            attachmentIds = message.attachments.map((att: any) => att.id);
+            console.log(`[Ttapi] ✅ Found ${attachmentIds.length} attachments in Discord message`);
+          }
+        }
+      } catch (error) {
+        console.warn('[Ttapi] Failed to fetch message from Discord API, will use hash-based URLs:', error);
+      }
+    }
+    
+    // If we have attachment IDs, construct URLs directly
+    // Otherwise, use the hash to construct URLs (Midjourney format)
+    const imageUrls: string[] = [];
+    
+    if (attachmentIds.length > 0 && channelId) {
+      // Use attachment IDs for direct CDN access
+      for (const attachmentId of attachmentIds) {
+        // High-quality version (2048+ px) - Midjourney typically uses this format
+        const cdnUrl = `https://cdn.discordapp.com/attachments/${channelId}/${attachmentId}/${messageHash}.png`;
+        imageUrls.push(cdnUrl);
+      }
+    } else {
+      // Fallback: Use hash-based URL construction
+      // Midjourney grid images are typically at:
+      // https://cdn.discordapp.com/attachments/{channel_id}/{message_id}/{hash}.png
+      // For individual images, they might be at:
+      // https://cdn.discordapp.com/attachments/{channel_id}/{message_id}/{hash}_0.png, _1.png, etc.
+      
+      // Try to get channel ID from environment or use message_id as fallback
+      const fallbackChannelId = import.meta.env.VITE_DISCORD_CHANNEL_ID || messageId;
+      
+      // Try different URL patterns for individual images
+      for (let i = 0; i < 4; i++) {
+        const cdnUrl = i === 0 
+          ? `https://cdn.discordapp.com/attachments/${fallbackChannelId}/${messageId}/${messageHash}.png`
+          : `https://cdn.discordapp.com/attachments/${fallbackChannelId}/${messageId}/${messageHash}_${i}.png`;
+        imageUrls.push(cdnUrl);
+      }
+    }
+    
+    console.log(`[Ttapi] 🔗 Constructed ${imageUrls.length} Discord CDN URLs from message_id and hash`);
+    return imageUrls;
+  } catch (error) {
+    console.error('[Ttapi] ❌ Error fetching from Discord CDN:', error);
+    return [];
+  }
 };
 
 /**
