@@ -1279,15 +1279,22 @@ export const generateJournalPage = async (
       console.log(`[Ttapi] 📋 Detected grid image - splitting into 4 individual tiles...`);
       const base64Images = await splitGridImage(imageUrls[0]);
       console.log(`[Ttapi] ✅ Successfully split grid into ${base64Images.length} individual images`);
-      // For grid images, we can't preserve individual original URLs, so return base64 only
-      return base64Images;
+      // For grid images, we can't split the original URL, but we can provide it for reference
+      // Attach original URL as property for backward compatibility
+      const result = base64Images as any;
+      result.originalUrls = [imageUrls[0], imageUrls[0], imageUrls[0], imageUrls[0]]; // Same URL for all 4 tiles
+      return result;
     } else {
       console.log(`[Ttapi] Converting ${imageUrls.length} image(s) to base64...`);
       const base64Images = await convertUrlsToBase64(imageUrls);
       console.log(`[Ttapi] ✅ Successfully generated ${base64Images.length} image(s)`);
-      // Return base64 images (original URLs are stored in imageUrls array, but we can't return both with current interface)
-      // TODO: Modify interface to return both base64 and original URLs for high-quality downloads
-      return base64Images;
+      // Store original URLs alongside base64 for high-quality downloads
+      // We'll attach original URLs to the return value
+      // For backward compatibility, return string[] but attach originalUrls as a property
+      const result = base64Images as any;
+      result.originalUrls = imageUrls; // Attach original URLs
+      console.log(`[Ttapi] ✅ Attached ${imageUrls.length} original URL(s) for high-quality downloads`);
+      return result;
     }
   } catch (error: any) {
     console.error(`[Ttapi] ❌ Error generating journal page:`, error);

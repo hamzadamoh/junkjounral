@@ -664,22 +664,25 @@ const App: React.FC = () => {
           );
           
           // Ttapi returns a single URL (grid image) or array of URLs
+          // Extract original URLs if available (attached as property for backward compatibility)
+          const originalUrls = (result as any)?.originalUrls as string[] | undefined;
+          const base64Urls = Array.isArray(result) ? result : (result ? [result] : []);
+          
           // Update all 4 placeholder images for this prompt
           const startIndex = promptIndex * 4;
           const endIndex = Math.min(startIndex + 4, actualTotal);
           
-          if (Array.isArray(result)) {
+          if (base64Urls.length > 0) {
             // Multiple images returned
-            for (let i = 0; i < result.length && (startIndex + i) < actualTotal; i++) {
-              updatedImages[startIndex + i].url = result[i];
+            for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
+              updatedImages[startIndex + i].url = base64Urls[i];
+              // Store original URL if available for high-quality downloads
+              if (originalUrls && originalUrls[i]) {
+                updatedImages[startIndex + i].originalUrl = originalUrls[i];
+              }
               updatedImages[startIndex + i].status = 'completed';
               updatedImages[startIndex + i].prompt = finalPrompt;
             }
-          } else if (result) {
-            // Single image (grid) - update first placeholder
-            updatedImages[startIndex].url = result;
-            updatedImages[startIndex].status = 'completed';
-            updatedImages[startIndex].prompt = finalPrompt;
           }
           
           setGeneratedImages([...updatedImages]);
@@ -1593,8 +1596,12 @@ const App: React.FC = () => {
             generatedPrompts[requestIdx * 4] // Use prompt from first image in this batch
           ) as string[]; // Type assertion: Midjourney returns array
           
+          // Extract original URLs if available (attached as property for backward compatibility)
+          const originalUrls = (base64Urls as any)?.originalUrls as string[] | undefined;
+          const base64Array = Array.isArray(base64Urls) ? base64Urls : [];
+          
           // Add all images from this request to the gallery
-          base64Urls.forEach((base64Url, imgIdx) => {
+          base64Array.forEach((base64Url, imgIdx) => {
             const actualIdx = startIdx + imgIdx;
             if (actualIdx < total) {
               addLog(`[Image ${actualIdx + 1}/${total}] ✅ COMPLETED`, 'success');
@@ -1602,6 +1609,8 @@ const App: React.FC = () => {
                 idx === actualIdx ? { 
                   ...img, 
                   url: base64Url, 
+                  // Store original URL if available for high-quality downloads
+                  originalUrl: originalUrls && originalUrls[imgIdx] ? originalUrls[imgIdx] : undefined,
                   status: 'completed' as const,
                   prompt: generatedPrompts[actualIdx] || img.prompt
                 } : img
@@ -1808,13 +1817,21 @@ const App: React.FC = () => {
           img.prompt // Use the same prompt
         ) as string[];
 
+        // Extract original URLs if available
+        const originalUrls = (base64Urls as any)?.originalUrls as string[] | undefined;
+        const base64Array = Array.isArray(base64Urls) ? base64Urls : [];
+        
         // Update with the first image from the array (or use the index if multiple)
-        if (base64Urls && base64Urls.length > 0) {
-          const imageToUse = base64Urls[index % base64Urls.length] || base64Urls[0];
+        if (base64Array.length > 0) {
+          const imageIdx = index % base64Array.length;
+          const imageToUse = base64Array[imageIdx] || base64Array[0];
+          const originalUrlToUse = originalUrls && originalUrls[imageIdx] ? originalUrls[imageIdx] : undefined;
+          
           setGeneratedImages(prev => prev.map((item, idx) => 
             idx === index ? { 
               ...item, 
-              url: imageToUse, 
+              url: imageToUse,
+              originalUrl: originalUrlToUse, // Store original URL for high-quality downloads
               status: 'completed' as const 
             } : item
           ));
