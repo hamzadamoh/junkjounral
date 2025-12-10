@@ -24,28 +24,41 @@ export default async function handler(req, res) {
     const ttapiDomain = process.env.TTAPI_DOMAIN || process.env.VITE_TTAPI_DOMAIN || 'https://api.ttapi.io';
 
     // Check if this is a generic proxy request (for upscale or other endpoints)
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
     const { url, options, prompt } = req.body;
 
-    let targetUrl: string;
-    let requestBody: any;
-    let requestHeaders: any;
+    let targetUrl;
+    let requestBody;
+    let requestHeaders;
 
     if (url && options) {
       // Generic proxy request (for upscale, etc.)
       targetUrl = url;
       // options.body might already be a string or an object
-      requestBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-      requestHeaders = options.headers;
+      try {
+        requestBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid options.body format' });
+      }
+      requestHeaders = options.headers || {};
       console.log(`[Ttapi Proxy] Generic request to: ${targetUrl}`);
-    } else if (prompt) {
-      // Legacy /imagine request
+    } else if (prompt !== undefined) {
+      // /imagine request - preserve all fields (prompt, getUImages, etc.)
       targetUrl = `${ttapiDomain}/midjourney/v1/imagine`;
-      requestBody = { prompt };
+      // Preserve all fields from req.body (prompt, getUImages, aspect_ratio, process_mode, etc.)
+      requestBody = req.body;
       requestHeaders = {
         'TT-API-KEY': apiKey,
         'Content-Type': 'application/json'
       };
-      console.log(`[Ttapi Proxy] Creating task with prompt: ${prompt.substring(0, 100)}...`);
+      const promptPreview = typeof prompt === 'string' && prompt.length > 100 
+        ? prompt.substring(0, 100) + '...' 
+        : (prompt || 'N/A');
+      console.log(`[Ttapi Proxy] Creating task with prompt: ${promptPreview}`);
+      console.log(`[Ttapi Proxy] Request body includes:`, Object.keys(requestBody || {}).join(', '));
     } else {
       return res.status(400).json({ error: 'Missing prompt or url/options in request body' });
     }
@@ -93,8 +106,10 @@ export default async function handler(req, res) {
     res.status(200).json(data);
   } catch (error) {
     console.error('[Ttapi Proxy] Error:', error);
+    console.error('[Ttapi Proxy] Error stack:', error.stack);
     res.status(500).json({ 
-      error: error.message || 'Internal server error' 
+      error: error.message || 'Internal server error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }
