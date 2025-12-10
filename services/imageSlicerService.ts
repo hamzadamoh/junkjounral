@@ -411,18 +411,41 @@ export const downloadSlicesAsZip = async (
   slices: SlicedImage[],
   filename: string = 'sliced-images'
 ): Promise<void> => {
+  if (slices.length === 0) {
+    console.warn('[ImageSlicer] No slices to download');
+    return;
+  }
+  
+  console.log(`[ImageSlicer] Downloading ${slices.length} slices as ZIP...`);
+  
   const JSZip = (await import('jszip')).default;
   const { saveAs } = await import('file-saver');
   
   const zip = new JSZip();
   
   slices.forEach((slice, index) => {
+    // Validate slice has base64 data
+    if (!slice.base64 || !slice.base64.startsWith('data:image/')) {
+      console.error(`[ImageSlicer] Invalid slice at index ${index}: missing or invalid base64`);
+      return;
+    }
+    
     // Convert base64 to blob
     const base64Data = slice.base64.replace(/^data:image\/\w+;base64,/, '');
-    zip.file(`${filename}_${index + 1}_r${slice.row + 1}c${slice.col + 1}.png`, base64Data, { base64: true });
+    
+    // Validate base64 data is not empty
+    if (!base64Data || base64Data.length < 100) {
+      console.error(`[ImageSlicer] Slice at index ${index} has suspiciously small base64 data (${base64Data.length} chars)`);
+    }
+    
+    const fileName = `${filename}_${index + 1}_r${slice.row + 1}c${slice.col + 1}.png`;
+    console.log(`[ImageSlicer] Adding slice ${index + 1} (${slice.width}x${slice.height}) to ZIP as ${fileName}`);
+    
+    zip.file(fileName, base64Data, { base64: true });
   });
   
   const blob = await zip.generateAsync({ type: 'blob' });
+  console.log(`[ImageSlicer] ZIP created: ${blob.size} bytes, ${slices.length} files`);
   saveAs(blob, `${filename}.zip`);
 };
 

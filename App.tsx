@@ -19,7 +19,9 @@ import {
   ChevronRight,
   Link,
   Table,
-  Scissors
+  Scissors,
+  Upload,
+  Folder
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -30,6 +32,7 @@ import { generateJournalPage as generateWithReplicate } from './services/replica
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
+import { uploadImagesToGoogleDrive } from './services/googleDriveService';
 import ArcaneSplitter from './components/ArcaneSplitter';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
@@ -95,9 +98,7 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
-  const [wordPressUrls, setWordPressUrls] = useState<Map<string, string>>(new Map()); // Map of image ID to WordPress URL
-  const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false);
-  const [copiedLinks, setCopiedLinks] = useState<boolean>(false);
+  const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
   
   // --- Refs ---
   const hasCheckedAuth = useRef<boolean>(false);
@@ -2069,138 +2070,54 @@ const App: React.FC = () => {
     }
   };
 
-  const exportToGoogleSheets = async () => {
+  const uploadToGoogleDrive = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
     
     if (completedImages.length === 0) {
-      alert('No completed images to export');
+      alert('No completed images to upload');
       return;
     }
 
-    try {
-      addLog(`[Google Sheets] Preparing to export ${completedImages.length} images...`, 'log');
-      
-      // Upload all images to WordPress
-      setIsUploadingToWordPress(true);
-      setCopiedLinks(false);
-      const newWordPressUrls = new Map<string, string>();
-      
-      addLog(`[Google Sheets] Uploading ${completedImages.length} images to WordPress...`, 'log');
-      
-      for (let i = 0; i < completedImages.length; i++) {
-        const img = completedImages[i];
-        try {
-          addLog(`[Google Sheets] Uploading image ${i + 1}/${completedImages.length}...`, 'log');
-          
-          // Convert image URL to base64
-          const base64Image = await urlToBase64(img.url!);
-          
-          // Upload to WordPress
-          const wordPressUrl = await uploadImageToWordPress(base64Image);
-          newWordPressUrls.set(img.id, wordPressUrl);
-          
-          addLog(`[Google Sheets] ✅ Image ${i + 1} uploaded: ${wordPressUrl}`, 'success');
-        } catch (error: any) {
-          console.error(`[Google Sheets] Failed to upload image ${i + 1}:`, error);
-          addLog(`[Google Sheets] ⚠️ Failed to upload image ${i + 1}: ${error.message}`, 'error');
-          // Continue with other images even if one fails
-        }
-      }
-      
-      // Update state with WordPress URLs
-      setWordPressUrls(newWordPressUrls);
-      setIsUploadingToWordPress(false);
-      
-      // Generate CSV with WordPress URLs
-      const csvContent = generateCSVForGoogleSheets(completedImages, newWordPressUrls);
-      const filename = `Generated_Images_${selectedTheme?.name || 'Custom'}_${new Date().toISOString().split('T')[0]}.csv`;
-      downloadCSV(csvContent, filename);
-      
-      addLog(`[Google Sheets] ✅ CSV file generated and downloaded successfully!`, 'success');
-      
-      // Show success message with copy button info
-      const instructions = `✅ All images uploaded to WordPress!\n✅ CSV file downloaded!\n\nNext steps:\n1. Click "Copy All WordPress Links" button to copy all image URLs\n2. Open Google Sheets\n3. File → Import → Upload the CSV file\n4. Paste the WordPress URLs into the "Image for Canva" column\n5. Use the Google Apps Script (provided in documentation) to insert images\n\nOr manually:\n- Column D ("inserted") will have checkboxes\n- Column E ("image preview") will show images after running the script`;
-      alert(instructions);
-    } catch (error: any) {
-      console.error('Error exporting to Google Sheets:', error);
-      addLog(`[Google Sheets] ❌ Error: ${error.message}`, 'error');
-      setIsUploadingToWordPress(false);
-      alert(`Failed to export to Google Sheets: ${error.message}`);
+    // Prompt for folder name
+    const folderName = prompt('Enter a name for the Google Drive folder:');
+    if (!folderName || folderName.trim() === '') {
+      return; // User cancelled or entered empty name
     }
-  };
 
-  const generateCSVForGoogleSheets = (images: GeneratedImage[], wpUrls: Map<string, string> = new Map()): string => {
-    // Headers matching the Google Apps Script format
-    const headers = ['Title for Canva', 'Ingredients for Canva', 'Image for Canva', 'inserted', 'image preview'];
-    const rows = [headers];
+    try {
+      setIsUploadingToGoogleDrive(true);
+      addLog(`[Google Drive] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
 
-    images.forEach((img, index) => {
-      // Use WordPress URL if available, otherwise fall back to original URL
-      const imageUrl = wpUrls.get(img.id) || img.url || '';
-      rows.push([
-        `Image ${index + 1}`,
-        img.prompt || 'No prompt available',
-        imageUrl,
-        'FALSE', // Checkbox column
-        '' // Image preview column (will be populated by script)
-      ]);
-    });
+      // Prepare images for upload
+      const imagesToUpload = completedImages.map(img => ({
+        id: img.id,
+        url: img.url!,
+        prompt: img.prompt || '',
+      }));
 
-    // Convert to CSV format
-    return rows.map(row => 
-      row.map(cell => {
-        // Escape quotes and wrap in quotes if contains comma, quote, or newline
-        const cellStr = String(cell);
-        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
-          return `"${cellStr.replace(/"/g, '""')}"`;
+      // Upload to Google Drive
+      const result = await uploadImagesToGoogleDrive(folderName.trim(), imagesToUpload);
+
+      if (result.success) {
+        addLog(`[Google Drive] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
+        addLog(`[Google Drive] 📁 Folder: ${result.folderUrl}`, 'success');
+        
+        // Open folder in new tab
+        if (result.folderUrl) {
+          window.open(result.folderUrl, '_blank');
         }
-        return cellStr;
-      }).join(',')
-    ).join('\n');
-  };
-
-  const copyAllWordPressLinks = async () => {
-    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
-    const links: string[] = [];
-    
-    completedImages.forEach((img, index) => {
-      const wpUrl = wordPressUrls.get(img.id);
-      if (wpUrl) {
-        links.push(wpUrl);
+        
+        alert(`✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images to Google Drive!\n\nFolder: ${folderName}\n\nClick OK to open the folder.`);
       } else {
-        // If WordPress URL not available, use original URL
-        links.push(img.url || '');
+        throw new Error(result.error || 'Upload failed');
       }
-    });
-    
-    if (links.length === 0) {
-      alert('No image links available. Please export to Google Sheets first to upload images to WordPress.');
-      return;
-    }
-    
-    try {
-      const linksText = links.join('\n');
-      await navigator.clipboard.writeText(linksText);
-      setCopiedLinks(true);
-      addLog(`[Google Sheets] ✅ Copied ${links.length} image links to clipboard!`, 'success');
-      setTimeout(() => setCopiedLinks(false), 3000);
     } catch (error: any) {
-      console.error('Failed to copy links:', error);
-      addLog(`[Google Sheets] ❌ Failed to copy links: ${error.message}`, 'error');
-      alert(`Failed to copy links: ${error.message}`);
+      console.error('Error uploading to Google Drive:', error);
+      addLog(`[Google Drive] ❌ Error: ${error.message}`, 'error');
+      alert(`Failed to upload to Google Drive: ${error.message}`);
+    } finally {
+      setIsUploadingToGoogleDrive(false);
     }
-  };
-
-  const downloadCSV = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const downloadAllAsPdf = async () => {
@@ -3605,38 +3522,21 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   <FileText size={18} /> Download PDF ({completedCount})
                 </button>
                 <button 
-                  onClick={exportToGoogleSheets}
-                  disabled={isUploadingToWordPress}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title="Export to Google Sheets (uploads images to WordPress)"
+                  onClick={uploadToGoogleDrive}
+                  disabled={isUploadingToGoogleDrive}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                  title="Upload all images to Google Drive"
                 >
-                  {isUploadingToWordPress ? (
+                  {isUploadingToGoogleDrive ? (
                     <>
                       <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
                     </>
                   ) : (
                     <>
-                      <Table size={18} /> Export to Sheets ({completedCount})
+                      <Folder size={18} /> Upload to Drive ({completedCount})
                     </>
                   )}
                 </button>
-                {wordPressUrls.size > 0 && (
-                  <button 
-                    onClick={copyAllWordPressLinks}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-                    title="Copy all WordPress image links to clipboard"
-                  >
-                    {copiedLinks ? (
-                      <>
-                        <Check size={18} /> Copied! ({wordPressUrls.size})
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={18} /> Copy WordPress Links ({wordPressUrls.size})
-                      </>
-                    )}
-                  </button>
-                )}
               </>
             )}
            <button 
