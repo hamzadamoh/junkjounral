@@ -2095,8 +2095,14 @@ const App: React.FC = () => {
         prompt: img.prompt || '',
       }));
 
-      // Upload to Google Drive
-      const result = await uploadImagesToGoogleDrive(folderName.trim(), imagesToUpload);
+      // Upload to Google Drive with progress callback
+      const result = await uploadImagesToGoogleDrive(
+        folderName.trim(), 
+        imagesToUpload,
+        (uploaded, total) => {
+          addLog(`[Google Drive] Uploading ${uploaded}/${total} images...`, 'log');
+        }
+      );
 
       if (result.success) {
         addLog(`[Google Drive] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
