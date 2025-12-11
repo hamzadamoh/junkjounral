@@ -1,24 +1,21 @@
 /**
- * Cloudinary Service
- * Handles uploading images to Cloudinary with folder support
+ * Cloudflare R2 Service
+ * Handles uploading images to Cloudflare R2 with folder support
+ * R2 provides public URLs that don't require login
  */
 
-export interface CloudinaryUploadResult {
+export interface R2UploadResult {
   success: boolean;
   folderName?: string;
+  folderUrl?: string;
   uploadedFiles?: Array<{
     id: string;
     name: string;
     url: string;
-    secureUrl: string;
   }>;
   error?: string;
 }
 
-/**
- * Upload images to Cloudinary in a folder
- * Uploads images one at a time to avoid payload limits
- */
 /**
  * Shuffle array using Fisher-Yates algorithm
  */
@@ -87,30 +84,30 @@ function generateRandomFilename(): string {
   const randomPart1 = Math.random().toString(36).substring(2, 8);
   const randomPart2 = Math.random().toString(36).substring(2, 8);
   const randomNumber = Math.floor(Math.random() * 10000);
-  return `img_${randomPart1}_${randomPart2}_${randomNumber}_${timestamp}`;
+  return `img_${randomPart1}_${randomPart2}_${randomNumber}_${timestamp}.jpg`;
 }
 
-export async function uploadImagesToCloudinary(
+export async function uploadImagesToR2(
   folderName: string,
   images: Array<{ id: string; url: string; prompt?: string }>,
   onProgress?: (uploaded: number, total: number) => void
-): Promise<CloudinaryUploadResult> {
+): Promise<R2UploadResult> {
   try {
-    console.log(`[Cloudinary] Starting parallel upload of ${images.length} images to folder: "${folderName}"`);
+    console.log(`[R2] Starting parallel upload of ${images.length} images to folder: "${folderName}"`);
 
     // Shuffle images to mix them up (since Midjourney generates 4 images per prompt)
     const shuffledImages = shuffleArray(images);
-    console.log(`[Cloudinary] Shuffled ${images.length} images to randomize order`);
+    console.log(`[R2] Shuffled ${images.length} images to randomize order`);
 
     // Step 1: Convert all images to JPG in parallel
-    console.log(`[Cloudinary] Converting ${shuffledImages.length} images to JPG format...`);
+    console.log(`[R2] Converting ${shuffledImages.length} images to JPG format...`);
     const conversionPromises = shuffledImages.map((image, index) => 
       convertToJpg(image.url).then(jpgBase64 => ({
         image,
         jpgBase64,
         index,
       })).catch(error => {
-        console.error(`[Cloudinary] Error converting image ${index + 1}:`, error);
+        console.error(`[R2] Error converting image ${index + 1}:`, error);
         return null;
       })
     );
@@ -118,20 +115,21 @@ export async function uploadImagesToCloudinary(
     const convertedImages = await Promise.all(conversionPromises);
     const validConvertedImages = convertedImages.filter((item): item is { image: { id: string; url: string; prompt?: string }; jpgBase64: string; index: number } => item !== null);
     
-    console.log(`[Cloudinary] ✅ Converted ${validConvertedImages.length}/${shuffledImages.length} images to JPG`);
+    console.log(`[R2] ✅ Converted ${validConvertedImages.length}/${shuffledImages.length} images to JPG`);
 
     if (validConvertedImages.length === 0) {
       throw new Error('Failed to convert any images to JPG');
     }
 
-    // Step 2: Upload all images to Cloudinary in parallel
-    console.log(`[Cloudinary] Uploading ${validConvertedImages.length} images in parallel...`);
+    // Step 2: Upload all images to R2 in parallel
+    console.log(`[R2] Uploading ${validConvertedImages.length} images in parallel...`);
     
     let completedCount = 0;
     const uploadPromises = validConvertedImages.map(({ image, jpgBase64, index }) => {
       const filename = generateRandomFilename();
+      const filePath = `${folderName}/${filename}`;
       
-      return fetch('/api/cloudinary/upload', {
+      return fetch('/api/r2/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,8 +137,8 @@ export async function uploadImagesToCloudinary(
         body: JSON.stringify({
           folder: folderName,
           filename: filename,
+          filePath: filePath,
           base64: jpgBase64,
-          format: 'jpg',
         }),
       })
       .then(async (uploadResponse) => {
@@ -156,17 +154,16 @@ export async function uploadImagesToCloudinary(
           onProgress(completedCount, validConvertedImages.length);
         }
 
-        console.log(`[Cloudinary] Uploaded ${completedCount}/${validConvertedImages.length}: ${filename}`);
+        console.log(`[R2] Uploaded ${completedCount}/${validConvertedImages.length}: ${filename}`);
 
         return {
-          id: uploadData.public_id || uploadData.secure_url,
+          id: uploadData.key || uploadData.url,
           name: filename,
-          url: uploadData.url || uploadData.secure_url,
-          secureUrl: uploadData.secure_url,
+          url: uploadData.url,
         };
       })
       .catch((error) => {
-        console.error(`[Cloudinary] Error uploading image ${index + 1}:`, error);
+        console.error(`[R2] Error uploading image ${index + 1}:`, error);
         return null;
       });
     });
@@ -180,21 +177,29 @@ export async function uploadImagesToCloudinary(
         }
         return null;
       })
-      .filter((file): file is { id: string; name: string; url: string; secureUrl: string } => file !== null);
+      .filter((file): file is { id: string; name: string; url: string } => file !== null);
 
     if (uploadedFiles.length === 0) {
       throw new Error('Failed to upload any images');
     }
 
-    console.log(`[Cloudinary] ✅ Successfully uploaded ${uploadedFiles.length}/${validConvertedImages.length} images`);
+    console.log(`[R2] ✅ Successfully uploaded ${uploadedFiles.length}/${validConvertedImages.length} images`);
+
+    // Generate public folder URL
+    // R2 public URL format: https://[account-id].r2.cloudflarestorage.com/[bucket]/[folder]/
+    // Or custom domain: https://[custom-domain]/[folder]/
+    const folderUrl = uploadedFiles[0]?.url 
+      ? uploadedFiles[0].url.substring(0, uploadedFiles[0].url.lastIndexOf('/') + 1)
+      : undefined;
 
     return {
       success: true,
       folderName,
+      folderUrl,
       uploadedFiles,
     };
   } catch (error: any) {
-    console.error('[Cloudinary] Upload error:', error);
+    console.error('[R2] Upload error:', error);
     return {
       success: false,
       error: error.message || 'Unknown error occurred',

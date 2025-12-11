@@ -32,7 +32,7 @@ import { generateJournalPage as generateWithReplicate } from './services/replica
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
-import { uploadImagesToCloudinary } from './services/cloudinaryService';
+import { uploadImagesToR2 } from './services/r2Service';
 import ArcaneSplitter from './components/ArcaneSplitter';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
@@ -98,9 +98,9 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
-  const [isUploadingToCloudinary, setIsUploadingToCloudinary] = useState<boolean>(false);
-  const [showCloudinaryModal, setShowCloudinaryModal] = useState<boolean>(false);
-  const [cloudinaryModalData, setCloudinaryModalData] = useState<{
+  const [isUploadingToR2, setIsUploadingToR2] = useState<boolean>(false);
+  const [showR2Modal, setShowR2Modal] = useState<boolean>(false);
+  const [r2ModalData, setR2ModalData] = useState<{
     title: string;
     message: string;
     folderUrl?: string;
@@ -2078,7 +2078,7 @@ const App: React.FC = () => {
     }
   };
 
-  const uploadToCloudinary = async () => {
+  const uploadToR2 = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
     
     if (completedImages.length === 0) {
@@ -2087,14 +2087,14 @@ const App: React.FC = () => {
     }
 
     // Prompt for folder name
-    const folderName = prompt('Enter a name for the Cloudinary folder:');
+    const folderName = prompt('Enter a name for the R2 folder:');
     if (!folderName || folderName.trim() === '') {
       return; // User cancelled or entered empty name
     }
 
     try {
-      setIsUploadingToCloudinary(true);
-      addLog(`[Cloudinary] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
+      setIsUploadingToR2(true);
+      addLog(`[R2] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
 
       // Prepare images for upload
       const imagesToUpload = completedImages.map(img => ({
@@ -2103,55 +2103,58 @@ const App: React.FC = () => {
         prompt: img.prompt || '',
       }));
 
-      // Upload to Cloudinary with progress callback
-      const result = await uploadImagesToCloudinary(
+      // Upload to R2 with progress callback
+      const result = await uploadImagesToR2(
         folderName.trim(), 
         imagesToUpload,
         (uploaded, total) => {
-          addLog(`[Cloudinary] Uploading ${uploaded}/${total} images...`, 'log');
+          addLog(`[R2] Uploading ${uploaded}/${total} images...`, 'log');
         }
       );
 
       if (result.success) {
-        addLog(`[Cloudinary] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
-        addLog(`[Cloudinary] 📁 Folder: ${result.folderName}`, 'success');
+        addLog(`[R2] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
+        addLog(`[R2] 📁 Folder: ${result.folderName}`, 'success');
+        if (result.folderUrl) {
+          addLog(`[R2] 🔗 Folder URL: ${result.folderUrl}`, 'success');
+        }
         
         // Copy URLs to clipboard if possible
-        const urls = result.uploadedFiles?.map(f => f.secureUrl).join('\n') || '';
+        const urls = result.uploadedFiles?.map(f => f.url).join('\n') || '';
         if (navigator.clipboard && urls) {
           try {
             await navigator.clipboard.writeText(urls);
-            addLog(`[Cloudinary] 📋 URLs copied to clipboard!`, 'success');
+            addLog(`[R2] 📋 URLs copied to clipboard!`, 'success');
           } catch (clipError) {
             console.warn('Failed to copy to clipboard:', clipError);
           }
         }
         
         // Show success modal
-        setCloudinaryModalData({
+        setR2ModalData({
           title: 'Upload Successful!',
-          message: `Successfully uploaded ${result.uploadedFiles?.length || 0} images to Cloudinary.`,
+          message: `Successfully uploaded ${result.uploadedFiles?.length || 0} images to Cloudflare R2. All URLs are public and can be shared directly.`,
           folderUrl: result.folderUrl,
-          urls: result.uploadedFiles?.map(f => f.secureUrl) || [],
+          urls: result.uploadedFiles?.map(f => f.url) || [],
           type: 'success',
         });
-        setShowCloudinaryModal(true);
+        setShowR2Modal(true);
       } else {
         throw new Error(result.error || 'Upload failed');
       }
     } catch (error: any) {
-      console.error('Error uploading to Cloudinary:', error);
-      addLog(`[Cloudinary] ❌ Error: ${error.message}`, 'error');
+      console.error('Error uploading to R2:', error);
+      addLog(`[R2] ❌ Error: ${error.message}`, 'error');
       
       // Show error modal
-      setCloudinaryModalData({
+      setR2ModalData({
         title: 'Upload Failed',
         message: error.message || 'Unknown error occurred',
         type: 'error',
       });
-      setShowCloudinaryModal(true);
+      setShowR2Modal(true);
     } finally {
-      setIsUploadingToCloudinary(false);
+      setIsUploadingToR2(false);
     }
   };
 
@@ -3557,18 +3560,18 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   <FileText size={18} /> Download PDF ({completedCount})
                 </button>
                 <button 
-                  onClick={uploadToCloudinary}
-                  disabled={isUploadingToCloudinary}
+                  onClick={uploadToR2}
+                  disabled={isUploadingToR2}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title="Upload all images to Cloudinary (images will be shuffled, renamed, and converted to JPG)"
+                  title="Upload all images to Cloudflare R2 (images will be shuffled, renamed, and converted to JPG)"
                 >
-                  {isUploadingToCloudinary ? (
+                  {isUploadingToR2 ? (
                     <>
                       <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
                     </>
                   ) : (
                     <>
-                      <Link size={18} /> Upload to Cloudinary ({completedCount})
+                      <Link size={18} /> Upload to R2 ({completedCount})
                     </>
                   )}
                 </button>
@@ -3909,18 +3912,18 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
         </div>
       )}
 
-      {/* Cloudinary Upload Modal */}
-      {showCloudinaryModal && cloudinaryModalData && (
+      {/* R2 Upload Modal */}
+      {showR2Modal && r2ModalData && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="max-w-2xl w-full bg-gothic-800/95 backdrop-blur-sm border-2 border-gothic-gold/30 rounded-xl p-8 shadow-2xl animate-fade-in">
             <div className="flex items-center justify-between mb-6">
-              <h3 className={`text-2xl font-serif ${cloudinaryModalData.type === 'success' ? 'text-gothic-gold' : 'text-red-400'}`}>
-                {cloudinaryModalData.title}
+              <h3 className={`text-2xl font-serif ${r2ModalData.type === 'success' ? 'text-gothic-gold' : 'text-red-400'}`}>
+                {r2ModalData.title}
               </h3>
               <button
                 onClick={() => {
-                  setShowCloudinaryModal(false);
-                  setCloudinaryModalData(null);
+                  setShowR2Modal(false);
+                  setR2ModalData(null);
                 }}
                 className="text-slate-400 hover:text-white transition-colors p-1"
               >
@@ -3929,45 +3932,56 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             </div>
 
             <div className="space-y-4">
-              <p className="text-slate-200">{cloudinaryModalData.message}</p>
+              <p className="text-slate-200">{r2ModalData.message}</p>
 
-              {cloudinaryModalData.type === 'success' && cloudinaryModalData.folderUrl && (
+              {r2ModalData.type === 'success' && r2ModalData.folderUrl && (
                 <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
-                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 View Folder in Cloudinary:</p>
+                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 Public Folder Link:</p>
                   <a
-                    href={cloudinaryModalData.folderUrl}
+                    href={r2ModalData.folderUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gothic-gold hover:text-amber-400 break-all text-sm flex items-center gap-2 transition-colors"
                   >
                     <Link size={16} />
-                    Open Folder (requires Cloudinary login)
+                    {r2ModalData.folderUrl}
                   </a>
-                  <p className="text-slate-500 text-xs mt-2">Folder: {cloudinaryModalData.folderUrl.split('/').pop()}</p>
+                  <p className="text-green-400 text-xs mt-2">✅ This folder link is public - share it directly with customers!</p>
                 </div>
               )}
 
-              {cloudinaryModalData.type === 'success' && cloudinaryModalData.urls && cloudinaryModalData.urls.length > 0 && (
-                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 max-h-64 overflow-y-auto">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-slate-300 text-sm font-medium">Image URLs ({cloudinaryModalData.urls.length}):</p>
-                    <button
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(cloudinaryModalData.urls?.join('\n') || '');
-                          addLog('[Cloudinary] 📋 URLs copied to clipboard!', 'success');
-                        } catch (error) {
-                          console.error('Failed to copy:', error);
-                        }
-                      }}
-                      className="text-gothic-gold hover:text-amber-400 text-sm flex items-center gap-1 transition-colors"
-                    >
-                      <Copy size={14} />
-                      Copy All
-                    </button>
+              {r2ModalData.type === 'success' && r2ModalData.urls && r2ModalData.urls.length > 0 && (
+                <>
+                  {/* Public URLs Notice */}
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                    <p className="text-green-400 text-sm font-medium mb-1">✅ Public URLs - No Login Required</p>
+                    <p className="text-slate-300 text-xs">
+                      These URLs are public and can be shared directly with your Etsy customers. They don't need to create an account or log in.
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    {cloudinaryModalData.urls.map((url, index) => (
+
+                  <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-slate-300 text-sm font-medium">Image URLs ({r2ModalData.urls.length}):</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(r2ModalData.urls?.join('\n') || '');
+                              addLog('[R2] 📋 URLs copied to clipboard!', 'success');
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                            }
+                          }}
+                          className="text-gothic-gold hover:text-amber-400 text-sm flex items-center gap-1 transition-colors"
+                        >
+                          <Copy size={14} />
+                          Copy All
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {r2ModalData.urls.map((url, index) => (
                       <div key={index} className="flex items-start gap-2">
                         <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
                         <a
@@ -3982,7 +3996,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(url);
-                              addLog(`[Cloudinary] 📋 URL ${index + 1} copied!`, 'success');
+                              addLog(`[R2] 📋 URL ${index + 1} copied!`, 'success');
                             } catch (error) {
                               console.error('Failed to copy:', error);
                             }
@@ -3999,27 +4013,78 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               )}
 
               <div className="flex gap-3 pt-4">
-                {cloudinaryModalData.type === 'success' && cloudinaryModalData.folderUrl && (
-                  <a
-                    href={cloudinaryModalData.folderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 bg-gothic-gold hover:bg-amber-600 text-black font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Folder size={18} />
-                    Open Folder
-                  </a>
+                {r2ModalData.type === 'success' && r2ModalData.urls && r2ModalData.urls.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        // Download as text file
+                        const content = r2ModalData.urls?.join('\n') || '';
+                        const blob = new Blob([content], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `r2-urls-${Date.now()}.txt`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        addLog('[R2] 📄 URLs file downloaded!', 'success');
+                      }}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText size={18} />
+                      Download URLs (.txt)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Download as HTML file
+                        const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Image URLs</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #1e1e1e; color: #fff; }
+    a { color: #f59e0b; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .url { margin: 10px 0; padding: 10px; background: #2d2d2d; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Image URLs (${r2ModalData.urls?.length || 0} images)</h1>
+  <p>All URLs are public and can be accessed without login.</p>
+  ${r2ModalData.urls?.map((url, i) => `
+    <div class="url">
+      <strong>Image ${i + 1}:</strong><br>
+      <a href="${url}" target="_blank">${url}</a>
+    </div>
+  `).join('')}
+</body>
+</html>`;
+                        const blob = new Blob([htmlContent], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `r2-urls-${Date.now()}.html`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        addLog('[R2] 📄 HTML file downloaded!', 'success');
+                      }}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText size={18} />
+                      Download URLs (.html)
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => {
-                    setShowCloudinaryModal(false);
-                    setCloudinaryModalData(null);
+                    setShowR2Modal(false);
+                    setR2ModalData(null);
                   }}
-                  className={`flex-1 ${cloudinaryModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gothic-gold hover:bg-amber-600 text-black'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
+                  className={`flex-1 ${r2ModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gothic-gold hover:bg-amber-600 text-black'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
                 >
                   Close
                 </button>
               </div>
+              )}
             </div>
           </div>
         </div>
