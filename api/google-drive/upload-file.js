@@ -79,6 +79,20 @@ async function uploadFile(filename, base64Data, folderId, accessToken) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[Google Drive API] Upload error response:', errorText);
+      
+      // Check for specific error types
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.errors?.some(e => e.reason === 'storageQuotaExceeded')) {
+          throw new Error('Google Drive storage quota exceeded. Please free up space in your Google Drive or upgrade your storage plan.');
+        }
+        if (errorJson.error?.errors?.some(e => e.reason === 'insufficientFilePermissions')) {
+          throw new Error('Insufficient permissions. Make sure the service account has Editor access to the folder.');
+        }
+      } catch (parseError) {
+        // If parsing fails, use the original error
+      }
+      
       throw new Error(`Failed to upload file: ${response.status} ${errorText}`);
     }
 
@@ -124,6 +138,16 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[Google Drive API] ❌ Error:', error);
+    
+    // Check for storage quota error
+    if (error.message && error.message.includes('storageQuotaExceeded')) {
+      return res.status(403).json({ 
+        error: 'Google Drive storage quota exceeded',
+        message: 'Your Google Drive is out of storage space. Please free up space or upgrade your storage plan.',
+        details: error.message
+      });
+    }
+    
     return res.status(500).json({ 
       error: 'Failed to upload file',
       message: error.message 

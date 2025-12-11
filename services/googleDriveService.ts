@@ -80,6 +80,13 @@ export async function uploadImagesToGoogleDrive(
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }));
           console.error(`[Google Drive] Failed to upload image ${i + 1}:`, errorData);
+          
+          // Check if it's a storage quota error
+          if (errorData.error === 'Google Drive storage quota exceeded' || 
+              errorData.message?.includes('storage quota')) {
+            console.error(`[Google Drive] ⚠️ Storage quota exceeded for image ${i + 1}`);
+            // Continue with other images, but we'll report this in the final result
+          }
           // Continue with other images
           continue;
         }
@@ -104,11 +111,25 @@ export async function uploadImagesToGoogleDrive(
       }
     }
 
+    // Check if all uploads failed
+    if (uploadedFiles.length === 0 && images.length > 0) {
+      return {
+        success: false,
+        folderId,
+        folderUrl,
+        uploadedFiles: [],
+        error: 'All uploads failed. This may be due to Google Drive storage quota being exceeded. Please free up space in your Google Drive or upgrade your storage plan.',
+      };
+    }
+
     return {
       success: true,
       folderId,
       folderUrl,
       uploadedFiles,
+      ...(uploadedFiles.length < images.length ? {
+        warning: `Only ${uploadedFiles.length} of ${images.length} images were uploaded. Some uploads may have failed due to storage quota.`
+      } : {})
     };
   } catch (error: any) {
     console.error('[Google Drive] ❌ Upload failed:', error);
