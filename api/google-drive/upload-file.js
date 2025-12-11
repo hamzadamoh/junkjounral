@@ -4,10 +4,51 @@
  */
 
 async function getAccessToken() {
+  // Option 1: Direct access token (temporary, expires in ~1 hour)
   const oauthToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
   if (oauthToken) {
-    console.log('[Google Drive API] Using OAuth2 access token');
+    console.log('[Google Drive API] Using OAuth2 access token (may expire)');
     return oauthToken;
+  }
+
+  // Option 2: Refresh token (permanent solution)
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  
+  if (refreshToken && clientId && clientSecret) {
+    console.log('[Google Drive API] Using refresh token to get access token');
+    try {
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Google Drive API] Failed to refresh token:', errorText);
+        throw new Error(`Failed to refresh token: ${response.status} ${errorText}`);
+      }
+
+      const tokenData = await response.json();
+      if (tokenData.access_token) {
+        console.log('[Google Drive API] ✅ Successfully refreshed access token');
+        return tokenData.access_token;
+      } else {
+        throw new Error('No access token in refresh response');
+      }
+    } catch (error) {
+      console.error('[Google Drive API] ❌ Error refreshing token:', error);
+      throw error;
+    }
   }
 
   const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;

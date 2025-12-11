@@ -4,10 +4,51 @@
  */
 
 async function getAccessToken() {
+  // Option 1: Direct access token (temporary, expires in ~1 hour)
   const oauthToken = process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
   if (oauthToken) {
-    console.log('[Google Drive API] Using OAuth2 access token');
+    console.log('[Google Drive API] Using OAuth2 access token (may expire)');
     return oauthToken;
+  }
+
+  // Option 2: Refresh token (permanent solution)
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  
+  if (refreshToken && clientId && clientSecret) {
+    console.log('[Google Drive API] Using refresh token to get access token');
+    try {
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Google Drive API] Failed to refresh token:', errorText);
+        throw new Error(`Failed to refresh token: ${response.status} ${errorText}`);
+      }
+
+      const tokenData = await response.json();
+      if (tokenData.access_token) {
+        console.log('[Google Drive API] ✅ Successfully refreshed access token');
+        return tokenData.access_token;
+      } else {
+        throw new Error('No access token in refresh response');
+      }
+    } catch (error) {
+      console.error('[Google Drive API] ❌ Error refreshing token:', error);
+      throw error;
+    }
   }
 
   const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
@@ -189,19 +230,28 @@ export default async function handler(req, res) {
     if (!accessToken) {
       // Check what's missing and provide specific error
       const hasOAuthToken = !!process.env.GOOGLE_DRIVE_ACCESS_TOKEN;
+      const hasRefreshToken = !!process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+      const hasClientId = !!process.env.GOOGLE_DRIVE_CLIENT_ID;
+      const hasClientSecret = !!process.env.GOOGLE_DRIVE_CLIENT_SECRET;
       const hasClientEmail = !!process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
       const hasPrivateKey = !!process.env.GOOGLE_DRIVE_PRIVATE_KEY;
       
       let errorMessage = 'Failed to get Google Drive access token. ';
-      if (!hasOAuthToken && (!hasClientEmail || !hasPrivateKey)) {
-        errorMessage += 'Missing credentials: ';
-        if (!hasClientEmail) errorMessage += 'GOOGLE_DRIVE_CLIENT_EMAIL ';
-        if (!hasPrivateKey) errorMessage += 'GOOGLE_DRIVE_PRIVATE_KEY ';
-        errorMessage += '. Please configure these in Vercel environment variables and redeploy.';
+      
+      // Check for refresh token setup
+      if (hasRefreshToken && (!hasClientId || !hasClientSecret)) {
+        errorMessage += 'Refresh token found but missing GOOGLE_DRIVE_CLIENT_ID or GOOGLE_DRIVE_CLIENT_SECRET. ';
+        errorMessage += 'All three are required for refresh token authentication.';
+      } else if (!hasOAuthToken && !hasRefreshToken && (!hasClientEmail || !hasPrivateKey)) {
+        errorMessage += 'Missing credentials. You need either:\n';
+        errorMessage += '1. GOOGLE_DRIVE_ACCESS_TOKEN (temporary, expires in ~1 hour), OR\n';
+        errorMessage += '2. GOOGLE_DRIVE_REFRESH_TOKEN + GOOGLE_DRIVE_CLIENT_ID + GOOGLE_DRIVE_CLIENT_SECRET (permanent solution), OR\n';
+        errorMessage += '3. Service account credentials (but these cannot use personal Drive storage).';
       } else if (hasClientEmail && hasPrivateKey) {
         errorMessage += 'Service account credentials found but authentication failed. Check Vercel function logs for details.';
+        errorMessage += ' Note: Service accounts cannot use personal Drive storage. Use OAuth2 refresh token instead.';
       } else {
-        errorMessage += 'Please configure GOOGLE_DRIVE_ACCESS_TOKEN or service account credentials in Vercel.';
+        errorMessage += 'Please configure OAuth2 credentials (access token or refresh token) in Vercel.';
       }
       
       return res.status(500).json({ 
