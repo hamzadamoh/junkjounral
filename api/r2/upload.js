@@ -18,12 +18,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Base64 image data is required' });
     }
 
-    // Get R2 credentials from environment
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    const bucketName = process.env.R2_BUCKET_NAME;
-    const publicDomain = process.env.R2_PUBLIC_DOMAIN; // Optional: custom domain for public URLs
+    // Get R2 credentials from environment and sanitize (remove newlines/whitespace)
+    const accountId = (process.env.R2_ACCOUNT_ID || '').trim().replace(/[\r\n]/g, '');
+    const accessKeyId = (process.env.R2_ACCESS_KEY_ID || '').trim().replace(/[\r\n]/g, '');
+    const secretAccessKey = (process.env.R2_SECRET_ACCESS_KEY || '').trim().replace(/[\r\n]/g, '');
+    const bucketName = (process.env.R2_BUCKET_NAME || '').trim().replace(/[\r\n]/g, '');
+    const publicDomain = (process.env.R2_PUBLIC_DOMAIN || '').trim().replace(/[\r\n]/g, ''); // Optional: custom domain for public URLs
 
     if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
       console.error('[R2] Missing credentials:', {
@@ -36,6 +36,15 @@ export default async function handler(req, res) {
         error: 'R2 credentials not configured. Please set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME in Vercel environment variables.' 
       });
     }
+
+    // Debug: Log credential lengths (not values) to help diagnose issues
+    console.log('[R2] Credential check:', {
+      accountIdLength: accountId.length,
+      accessKeyIdLength: accessKeyId.length,
+      secretAccessKeyLength: secretAccessKey.length,
+      bucketNameLength: bucketName.length,
+      publicDomainLength: publicDomain?.length || 0,
+    });
 
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(base64, 'base64');
