@@ -46,6 +46,8 @@ async function getAccessToken() {
 
 async function uploadFile(filename, base64Data, folderId, accessToken) {
   try {
+    console.log(`[Google Drive API] Uploading file "${filename}" to folder ID: ${folderId}`);
+    
     const base64Content = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
     const buffer = Buffer.from(base64Content, 'base64');
 
@@ -53,6 +55,8 @@ async function uploadFile(filename, base64Data, folderId, accessToken) {
       name: filename,
       parents: [folderId],
     };
+    
+    console.log('[Google Drive API] File metadata:', JSON.stringify(metadata, null, 2));
 
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
     
@@ -66,7 +70,12 @@ async function uploadFile(filename, base64Data, folderId, accessToken) {
       Buffer.from(`\r\n--${boundary}--\r\n`),
     ]);
 
-    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    // Add supportsAllDrives parameter to work with shared drives and folders
+    const url = new URL('https://www.googleapis.com/upload/drive/v3/files');
+    url.searchParams.set('uploadType', 'multipart');
+    url.searchParams.set('supportsAllDrives', 'true');
+    
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -97,6 +106,17 @@ async function uploadFile(filename, base64Data, folderId, accessToken) {
     }
 
     const data = await response.json();
+    console.log('[Google Drive API] File uploaded successfully. File ID:', data.id);
+    console.log('[Google Drive API] File parents:', data.parents || 'none');
+    
+    if (data.parents && data.parents.length > 0) {
+      if (data.parents.includes(folderId)) {
+        console.log('[Google Drive API] ✅ File uploaded to correct folder');
+      } else {
+        console.log('[Google Drive API] ⚠️ File parent does not match expected folder ID');
+      }
+    }
+    
     return data.id;
   } catch (error) {
     console.error('[Google Drive API] Error uploading file:', error);
