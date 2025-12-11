@@ -115,18 +115,30 @@ async function getAccessToken() {
   return null;
 }
 
-async function createFolder(folderName, accessToken) {
+async function createFolder(folderName, accessToken, parentFolderId = null) {
   try {
+    // If parentFolderId is provided, create folder inside it (uses user's storage)
+    // Otherwise, create in service account's root (uses service account's limited storage)
+    const folderMetadata = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    };
+    
+    // Add parent folder if provided (this makes it use the user's storage quota)
+    if (parentFolderId) {
+      folderMetadata.parents = [parentFolderId];
+      console.log(`[Google Drive API] Creating folder inside parent folder: ${parentFolderId}`);
+    } else {
+      console.log('[Google Drive API] Creating folder in service account root (may have limited storage)');
+    }
+    
     const response = await fetch('https://www.googleapis.com/drive/v3/files', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: folderName,
-        mimeType: 'application/vnd.google-apps.folder',
-      }),
+      body: JSON.stringify(folderMetadata),
     });
 
     if (!response.ok) {
@@ -148,7 +160,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { folderName } = req.body;
+    const { folderName, parentFolderId } = req.body;
 
     if (!folderName || typeof folderName !== 'string' || folderName.trim() === '') {
       return res.status(400).json({ error: 'Folder name is required' });
@@ -184,7 +196,18 @@ export default async function handler(req, res) {
       });
     }
 
-    const folderId = await createFolder(folderName.trim(), accessToken);
+    // Use parent folder from environment variable or request body
+    // This should be the ID of a folder in your personal Drive that you've shared with the service account
+    const parentId = parentFolderId || process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || null;
+    
+    if (parentId) {
+      console.log(`[Google Drive API] Using parent folder ID: ${parentId} (will use your storage quota)`);
+    } else {
+      console.log('[Google Drive API] No parent folder specified - creating in service account root (limited storage)');
+      console.log('[Google Drive API] To use your storage quota, set GOOGLE_DRIVE_PARENT_FOLDER_ID in Vercel environment variables');
+    }
+    
+    const folderId = await createFolder(folderName.trim(), accessToken, parentId);
     if (!folderId) {
       return res.status(500).json({ error: 'Failed to create folder' });
     }
