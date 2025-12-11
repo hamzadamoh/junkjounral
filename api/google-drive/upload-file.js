@@ -93,6 +93,10 @@ async function uploadFile(filename, base64Data, folderId, accessToken) {
       try {
         const errorJson = JSON.parse(errorText);
         if (errorJson.error?.errors?.some(e => e.reason === 'storageQuotaExceeded')) {
+          const errorMessage = errorJson.error?.message || '';
+          if (errorMessage.includes('Service Accounts do not have storage quota')) {
+            throw new Error('Service accounts cannot use personal Drive storage. You must use an OAuth2 access token instead. See instructions in the error details.');
+          }
           throw new Error('Google Drive storage quota exceeded. Please free up space in your Google Drive or upgrade your storage plan.');
         }
         if (errorJson.error?.errors?.some(e => e.reason === 'insufficientFilePermissions')) {
@@ -158,6 +162,17 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[Google Drive API] ❌ Error:', error);
+    
+    // Check for service account storage quota error
+    if (error.message && error.message.includes('Service Accounts do not have storage quota')) {
+      return res.status(403).json({ 
+        error: 'Service account storage limitation',
+        message: 'Service accounts cannot use personal Google Drive storage. You must use an OAuth2 access token instead.',
+        solution: 'Get an OAuth2 access token from Google OAuth Playground and set it as GOOGLE_DRIVE_ACCESS_TOKEN in Vercel environment variables.',
+        instructions: '1. Go to https://developers.google.com/oauthplayground\n2. Select "Drive API v3"\n3. Authorize and get access token\n4. Add it to Vercel as GOOGLE_DRIVE_ACCESS_TOKEN',
+        details: error.message
+      });
+    }
     
     // Check for storage quota error
     if (error.message && error.message.includes('storageQuotaExceeded')) {

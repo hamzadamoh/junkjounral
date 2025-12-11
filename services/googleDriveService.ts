@@ -53,6 +53,7 @@ export async function uploadImagesToGoogleDrive(
 
     // Step 2: Upload images one at a time
     const uploadedFiles: Array<{ id: string; name: string; url: string }> = [];
+    let serviceAccountError: string | null = null;
 
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
@@ -80,6 +81,16 @@ export async function uploadImagesToGoogleDrive(
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }));
           console.error(`[Google Drive] Failed to upload image ${i + 1}:`, errorData);
+          
+          // Check if it's a service account limitation
+          if (errorData.error === 'Service account storage limitation' || 
+              errorData.message?.includes('Service Accounts do not have storage quota')) {
+            console.error(`[Google Drive] ⚠️ Service account limitation: ${errorData.message}`);
+            // Store this error to show user (only store once)
+            if (!serviceAccountError) {
+              serviceAccountError = errorData.message || 'Service accounts cannot use personal Drive storage. Please use an OAuth2 access token instead.';
+            }
+          }
           
           // Check if it's a storage quota error
           if (errorData.error === 'Google Drive storage quota exceeded' || 
@@ -113,12 +124,30 @@ export async function uploadImagesToGoogleDrive(
 
     // Check if all uploads failed
     if (uploadedFiles.length === 0 && images.length > 0) {
+      let errorMessage = 'All uploads failed. ';
+      
+      // Check if it's a service account limitation
+      if (serviceAccountError) {
+        errorMessage = 'Service accounts cannot use personal Google Drive storage. ';
+        errorMessage += 'You must use an OAuth2 access token instead.\n\n';
+        errorMessage += 'Instructions:\n';
+        errorMessage += '1. Go to https://developers.google.com/oauthplayground\n';
+        errorMessage += '2. In the left panel, find and select "Drive API v3"\n';
+        errorMessage += '3. Click "Authorize APIs" and sign in with your Google account\n';
+        errorMessage += '4. Click "Exchange authorization code for tokens"\n';
+        errorMessage += '5. Copy the "Access token"\n';
+        errorMessage += '6. Add it to Vercel as GOOGLE_DRIVE_ACCESS_TOKEN environment variable\n';
+        errorMessage += '7. Redeploy your application';
+      } else {
+        errorMessage += 'This may be due to Google Drive storage quota being exceeded. Please free up space in your Google Drive or upgrade your storage plan.';
+      }
+      
       return {
         success: false,
         folderId,
         folderUrl,
         uploadedFiles: [],
-        error: 'All uploads failed. This may be due to Google Drive storage quota being exceeded. Please free up space in your Google Drive or upgrade your storage plan.',
+        error: errorMessage,
       };
     }
 
