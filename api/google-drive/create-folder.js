@@ -75,13 +75,17 @@ async function getAccessToken() {
       
       console.log('[Google Drive API] Private key format validated');
       console.log('[Google Drive API] Creating JWT client with email:', clientEmail);
+      console.log('[Google Drive API] Private key to pass (first 100 chars):', formattedPrivateKey.substring(0, 100));
+      console.log('[Google Drive API] Private key to pass (last 100 chars):', formattedPrivateKey.substring(formattedPrivateKey.length - 100));
+      console.log('[Google Drive API] Private key is empty?', formattedPrivateKey.length === 0);
       
-      const jwtClient = new google.auth.JWT(
-        clientEmail,
-        null,
-        formattedPrivateKey,
-        ['https://www.googleapis.com/auth/drive']
-      );
+      // Create JWT client - the key parameter should be the private key string
+      // According to googleapis docs: new JWT(email, keyFile, key, scopes, subject)
+      const jwtClient = new google.auth.JWT({
+        email: clientEmail,
+        key: formattedPrivateKey,
+        scopes: ['https://www.googleapis.com/auth/drive']
+      });
       
       console.log('[Google Drive API] Authorizing JWT client...');
       try {

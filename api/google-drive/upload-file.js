@@ -15,14 +15,23 @@ async function getAccessToken() {
   
   if (clientEmail && privateKey) {
     try {
-      const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+      // Handle both escaped and actual newlines
+      let formattedPrivateKey = privateKey.trim();
+      if (formattedPrivateKey.includes('\\n')) {
+        formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
+      }
+      
+      // Ensure proper ending
+      if (formattedPrivateKey.endsWith('-----END PRIVATE KEY-----')) {
+        formattedPrivateKey += '\n';
+      }
+      
       const { google } = await import('googleapis');
-      const jwtClient = new google.auth.JWT(
-        clientEmail,
-        null,
-        formattedPrivateKey,
-        ['https://www.googleapis.com/auth/drive']
-      );
+      const jwtClient = new google.auth.JWT({
+        email: clientEmail,
+        key: formattedPrivateKey,
+        scopes: ['https://www.googleapis.com/auth/drive']
+      });
       const tokens = await jwtClient.authorize();
       return tokens.access_token;
     } catch (error) {
