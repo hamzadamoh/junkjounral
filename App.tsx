@@ -31,7 +31,7 @@ import { generateJournalPage as generateWithPollinations } from './services/poll
 import { generateJournalPage as generateWithReplicate } from './services/replicateService';
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
-import { uploadImageToWordPress } from './services/imageHostingService';
+import { uploadImageToWordPress, uploadImagesToWordPress, WordPressUploadResult } from './services/imageHostingService';
 import { uploadImagesToR2 } from './services/r2Service';
 import ArcaneSplitter from './components/ArcaneSplitter';
 
@@ -99,11 +99,20 @@ const App: React.FC = () => {
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const [isUploadingToR2, setIsUploadingToR2] = useState<boolean>(false);
+  const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false);
   const [showR2Modal, setShowR2Modal] = useState<boolean>(false);
   const [r2ModalData, setR2ModalData] = useState<{
     title: string;
     message: string;
     folderUrl?: string;
+    urls?: string[];
+    type: 'success' | 'error';
+  } | null>(null);
+  const [showWpModal, setShowWpModal] = useState<boolean>(false);
+  const [wpModalData, setWpModalData] = useState<{
+    title: string;
+    message: string;
+    mediaLibraryUrl?: string;
     urls?: string[];
     type: 'success' | 'error';
   } | null>(null);
@@ -2158,6 +2167,73 @@ const App: React.FC = () => {
     }
   };
 
+  const uploadToWordPress = async () => {
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    
+    if (completedImages.length === 0) {
+      alert('No completed images to upload');
+      return;
+    }
+
+    try {
+      setIsUploadingToWordPress(true);
+      addLog(`[WordPress] Preparing to upload ${completedImages.length} images...`, 'log');
+
+      // Prepare images for upload
+      const imagesToUpload = completedImages.map(img => ({
+        url: img.url!,
+        originalUrl: img.originalUrl,
+      }));
+
+      // Upload to WordPress with progress callback
+      const result = await uploadImagesToWordPress(
+        imagesToUpload,
+        (uploaded, total) => {
+          addLog(`[WordPress] Uploading ${uploaded}/${total} images...`, 'log');
+        }
+      );
+
+      addLog(`[WordPress] ✅ Successfully uploaded ${result.uploadedImages.length} images!`, 'success');
+      if (result.failed > 0) {
+        addLog(`[WordPress] ⚠️ ${result.failed} images failed to upload`, 'warn');
+      }
+      
+      // Copy URLs to clipboard if possible
+      const urls = result.uploadedImages.map(img => img.url).join('\n');
+      if (navigator.clipboard && urls) {
+        try {
+          await navigator.clipboard.writeText(urls);
+          addLog(`[WordPress] 📋 URLs copied to clipboard!`, 'success');
+        } catch (clipError) {
+          console.warn('Failed to copy to clipboard:', clipError);
+        }
+      }
+      
+      // Show success modal
+      setWpModalData({
+        title: 'Upload Successful!',
+        message: `Successfully uploaded ${result.uploadedImages.length} images to WordPress. ${result.failed > 0 ? `(${result.failed} failed)` : ''} All URLs are public and permanent.`,
+        mediaLibraryUrl: result.folderUrl,
+        urls: result.uploadedImages.map(img => img.url),
+        type: 'success',
+      });
+      setShowWpModal(true);
+    } catch (error: any) {
+      console.error('Error uploading to WordPress:', error);
+      addLog(`[WordPress] ❌ Error: ${error.message}`, 'error');
+      
+      // Show error modal
+      setWpModalData({
+        title: 'Upload Failed',
+        message: error.message || 'Unknown error occurred',
+        type: 'error',
+      });
+      setShowWpModal(true);
+    } finally {
+      setIsUploadingToWordPress(false);
+    }
+  };
+
   const downloadAllAsPdf = async () => {
     try {
       const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
@@ -3561,7 +3637,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 </button>
                 <button 
                   onClick={uploadToR2}
-                  disabled={isUploadingToR2}
+                  disabled={isUploadingToR2 || isUploadingToWordPress}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                   title="Upload all images to Cloudflare R2 (images will be shuffled, renamed, and converted to JPG)"
                 >
@@ -3572,6 +3648,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   ) : (
                     <>
                       <Link size={18} /> Upload to R2 ({completedCount})
+                    </>
+                  )}
+                </button>
+                <button 
+                  onClick={uploadToWordPress}
+                  disabled={isUploadingToWordPress || isUploadingToR2}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                  title="Upload all images to WordPress/Hostinger (images will be shuffled, renamed, and converted to JPG)"
+                >
+                  {isUploadingToWordPress ? (
+                    <>
+                      <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
+                    </>
+                  ) : (
+                    <>
+                      <Link size={18} /> Upload to WordPress ({completedCount})
                     </>
                   )}
                 </button>
@@ -4081,6 +4173,184 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     setR2ModalData(null);
                   }}
                   className={`flex-1 ${r2ModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gothic-gold hover:bg-amber-600 text-black'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WordPress Upload Modal */}
+      {showWpModal && wpModalData && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full bg-gothic-800/95 backdrop-blur-sm border-2 border-blue-500/30 rounded-xl p-8 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-2xl font-serif ${wpModalData.type === 'success' ? 'text-blue-400' : 'text-red-400'}`}>
+                {wpModalData.title}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowWpModal(false);
+                  setWpModalData(null);
+                }}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-slate-200">{wpModalData.message}</p>
+
+              {wpModalData.type === 'success' && wpModalData.mediaLibraryUrl && (
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 WordPress Media Library:</p>
+                  <a
+                    href={wpModalData.mediaLibraryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 break-all text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <Link size={16} />
+                    {wpModalData.mediaLibraryUrl}
+                  </a>
+                  <p className="text-green-400 text-xs mt-2">✅ Images are stored on your Hostinger WordPress site!</p>
+                </div>
+              )}
+
+              {wpModalData.type === 'success' && wpModalData.urls && wpModalData.urls.length > 0 && (
+                <>
+                  {/* Public URLs Notice */}
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                    <p className="text-green-400 text-sm font-medium mb-1">✅ Public URLs - Permanent Links</p>
+                    <p className="text-slate-300 text-xs">
+                      These URLs are hosted on your WordPress/Hostinger site and are permanent. Share them directly with customers!
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-slate-300 text-sm font-medium">Image URLs ({wpModalData.urls.length}):</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(wpModalData.urls?.join('\n') || '');
+                              addLog('[WordPress] 📋 URLs copied to clipboard!', 'success');
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                            }
+                          }}
+                          className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 transition-colors"
+                        >
+                          <Copy size={14} />
+                          Copy All
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {wpModalData.urls.map((url, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 break-all text-xs flex-1"
+                        >
+                          {url}
+                        </a>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              addLog(`[WordPress] 📋 URL ${index + 1} copied!`, 'success');
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-blue-400 transition-colors p-1"
+                          title="Copy URL"
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                {wpModalData.type === 'success' && wpModalData.urls && wpModalData.urls.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        // Download as text file
+                        const content = wpModalData.urls?.join('\n') || '';
+                        const blob = new Blob([content], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `wordpress-urls-${Date.now()}.txt`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        addLog('[WordPress] 📄 URLs file downloaded!', 'success');
+                      }}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText size={18} />
+                      Download URLs (.txt)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Download as HTML file
+                        const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <title>WordPress Image URLs</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #1e1e1e; color: #fff; }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .url { margin: 10px 0; padding: 10px; background: #2d2d2d; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h1>WordPress Image URLs (${wpModalData.urls?.length || 0} images)</h1>
+  <p>All URLs are hosted on your WordPress/Hostinger site and are permanent.</p>
+  ${wpModalData.urls?.map((url, i) => `
+    <div class="url">
+      <strong>Image ${i + 1}:</strong><br>
+      <a href="${url}" target="_blank">${url}</a>
+    </div>
+  `).join('')}
+</body>
+</html>`;
+                        const blob = new Blob([htmlContent], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `wordpress-urls-${Date.now()}.html`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        addLog('[WordPress] 📄 HTML file downloaded!', 'success');
+                      }}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText size={18} />
+                      Download URLs (.html)
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    setShowWpModal(false);
+                    setWpModalData(null);
+                  }}
+                  className={`flex-1 ${wpModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-blue-500 hover:bg-blue-600 text-white'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
                 >
                   Close
                 </button>
