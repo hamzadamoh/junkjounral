@@ -4009,7 +4009,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                       </div>
                     ))}
                   </div>
-                </div>
+                </>
               )}
 
               <div className="flex gap-3 pt-4">
@@ -4084,7 +4084,6 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   Close
                 </button>
               </div>
-              )}
             </div>
           </div>
         </div>
