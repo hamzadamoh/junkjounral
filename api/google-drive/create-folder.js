@@ -11,63 +11,46 @@ async function getAccessToken() {
     return oauthToken;
   }
 
-  // Option 2: Refresh token (permanent solution)
+  // Option 2: Refresh token (requires OAuth consent screen - will fallback to service account if fails)
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   
   if (refreshToken && clientId && clientSecret) {
-    console.log('[Google Drive API] Using refresh token to get access token');
-    console.log('[Google Drive API] Client ID exists:', !!clientId);
-    console.log('[Google Drive API] Client Secret exists:', !!clientSecret);
-    console.log('[Google Drive API] Refresh token exists:', !!refreshToken);
-    console.log('[Google Drive API] Client ID length:', clientId ? clientId.length : 0);
-    console.log('[Google Drive API] Client Secret length:', clientSecret ? clientSecret.length : 0);
-    console.log('[Google Drive API] Refresh token length:', refreshToken ? refreshToken.length : 0);
-    
+    console.log('[Google Drive API] Attempting OAuth2 refresh token...');
     try {
-      const response = await fetch('https://oauth2.googleapis.com/token', {
+      const tokenUrl = 'https://oauth2.googleapis.com/token';
+      const requestBody = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      });
+      
+      const response = await fetch(tokenUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token',
-        }),
+        body: requestBody,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Google Drive API] Failed to refresh token:', errorText);
-        
-        // Parse error for better messaging
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.error === 'unauthorized_client') {
-            throw new Error('Unauthorized client. Make sure:\n1. Client ID and Client Secret match the ones used to get the refresh token\n2. OAuth consent screen is properly configured\n3. The refresh token was obtained with the same OAuth client credentials');
-          } else if (errorJson.error === 'invalid_grant') {
-            throw new Error('Invalid refresh token. The token may have been revoked or expired. You need to get a new refresh token from OAuth Playground.');
-          }
-        } catch (parseError) {
-          // If parsing fails, use original error
+      if (response.ok) {
+        const tokenData = await response.json();
+        if (tokenData.access_token) {
+          console.log('[Google Drive API] ✅ Successfully refreshed access token');
+          return tokenData.access_token;
         }
-        
-        throw new Error(`Failed to refresh token: ${response.status} ${errorText}`);
-      }
-
-      const tokenData = await response.json();
-      if (tokenData.access_token) {
-        console.log('[Google Drive API] ✅ Successfully refreshed access token');
-        return tokenData.access_token;
       } else {
-        throw new Error('No access token in refresh response');
+        const errorText = await response.text();
+        console.warn('[Google Drive API] ⚠️ OAuth2 refresh failed:', errorText);
+        console.warn('[Google Drive API] ⚠️ Falling back to service account...');
+        // Don't throw - fall through to service account
       }
     } catch (error) {
-      console.error('[Google Drive API] ❌ Error refreshing token:', error);
-      throw error;
+      console.warn('[Google Drive API] ⚠️ OAuth2 error:', error.message);
+      console.warn('[Google Drive API] ⚠️ Falling back to service account...');
+      // Don't throw - fall through to service account
     }
   }
 
