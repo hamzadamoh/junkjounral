@@ -20,6 +20,9 @@ import {
   AlertCircle,
   Trash2,
   Sparkles,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
 } from 'lucide-react';
 import {
   SlicedImage,
@@ -49,6 +52,8 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [previewSlice, setPreviewSlice] = useState<AnalyzedSlice | null>(null);
   const [copiedPrompts, setCopiedPrompts] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSlices, setSelectedSlices] = useState<Set<string>>(new Set());
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -226,6 +231,85 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   // Delete a single slice
   const handleDeleteSlice = useCallback((sliceId: string) => {
     setSlices(prev => prev.filter(s => s.id !== sliceId));
+    setSelectedSlices(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(sliceId);
+      return newSet;
+    });
+  }, []);
+
+  // Delete selected slices
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedSlices.size === 0) return;
+    if (confirm(`Delete ${selectedSlices.size} selected slice(s)?`)) {
+      setSlices(prev => prev.filter(s => !selectedSlices.has(s.id)));
+      setSelectedSlices(new Set());
+    }
+  }, [selectedSlices]);
+
+  // Toggle slice selection
+  const handleToggleSelect = useCallback((sliceId: string) => {
+    setSelectedSlices(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sliceId)) {
+        newSet.delete(sliceId);
+      } else {
+        newSet.add(sliceId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Select all / Deselect all
+  const handleSelectAll = useCallback(() => {
+    if (selectedSlices.size === slices.length) {
+      setSelectedSlices(new Set());
+    } else {
+      setSelectedSlices(new Set(slices.map(s => s.id)));
+    }
+  }, [selectedSlices.size, slices]);
+
+  // Move slice up
+  const handleMoveUp = useCallback((index: number) => {
+    if (index === 0) return;
+    setSlices(prev => {
+      const newSlices = [...prev];
+      [newSlices[index - 1], newSlices[index]] = [newSlices[index], newSlices[index - 1]];
+      return newSlices;
+    });
+  }, []);
+
+  // Move slice down
+  const handleMoveDown = useCallback((index: number) => {
+    setSlices(prev => {
+      if (index === prev.length - 1) return prev;
+      const newSlices = [...prev];
+      [newSlices[index], newSlices[index + 1]] = [newSlices[index + 1], newSlices[index]];
+      return newSlices;
+    });
+  }, []);
+
+  // Drag and drop handlers for slice reordering
+  const handleSliceDragStart = useCallback((index: number) => {
+    setDraggedIndex(index);
+  }, []);
+
+  const handleSliceDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    setSlices(prev => {
+      const newSlices = [...prev];
+      const draggedSlice = newSlices[draggedIndex];
+      newSlices.splice(draggedIndex, 1);
+      newSlices.splice(index, 0, draggedSlice);
+      return newSlices;
+    });
+    setDraggedIndex(index);
+  }, [draggedIndex]);
+
+  const handleSliceDragEnd = useCallback(() => {
+    setDraggedIndex(null);
   }, []);
   
   // Delete a grid and all its slices
@@ -342,9 +426,34 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
                     <span className="font-medium text-purple-400">{analyzedCount}</span> analyzed
                   </>
                 )}
+                {selectedSlices.size > 0 && (
+                  <>
+                    <span>•</span>
+                    <span className="font-medium text-blue-400">{selectedSlices.size}</span> selected
+                  </>
+                )}
               </div>
               
               <div className="flex flex-wrap gap-2">
+                {/* Selection Controls */}
+                <button
+                  onClick={handleSelectAll}
+                  className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-white
+                    flex items-center gap-2 transition-colors"
+                >
+                  {selectedSlices.size === slices.length ? 'Deselect All' : 'Select All'}
+                </button>
+                
+                {selectedSlices.size > 0 && (
+                  <button
+                    onClick={handleDeleteSelected}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white
+                      flex items-center gap-2 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Selected ({selectedSlices.size})
+                  </button>
+                )}
                 {hasApiKey ? (
                   <button
                     onClick={handleAnalyzeAll}
@@ -449,11 +558,62 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
             
             {/* Slices Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {slices.map((slice) => (
+              {slices.map((slice, index) => (
                 <div
                   key={slice.id}
-                  className="group relative bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-purple-500/50 transition-colors"
+                  draggable
+                  onDragStart={() => handleSliceDragStart(index)}
+                  onDragOver={(e) => handleSliceDragOver(e, index)}
+                  onDragEnd={handleSliceDragEnd}
+                  className={`group relative bg-slate-800 rounded-lg overflow-hidden border transition-colors
+                    ${selectedSlices.has(slice.id) 
+                      ? 'border-blue-500 ring-2 ring-blue-500/50' 
+                      : 'border-slate-700 hover:border-purple-500/50'}
+                    ${draggedIndex === index ? 'opacity-50' : ''}
+                  `}
                 >
+                  {/* Selection Checkbox */}
+                  <div className="absolute top-2 left-2 z-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedSlices.has(slice.id)}
+                      onChange={() => handleToggleSelect(slice.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Reorder Controls */}
+                  <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveUp(index);
+                      }}
+                      disabled={index === 0}
+                      className="p-1 bg-slate-900/80 rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move Up"
+                    >
+                      <ChevronUp className="w-4 h-4 text-white" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveDown(index);
+                      }}
+                      disabled={index === slices.length - 1}
+                      className="p-1 bg-slate-900/80 rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move Down"
+                    >
+                      <ChevronDown className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+
+                  {/* Drag Handle */}
+                  <div className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-move">
+                    <GripVertical className="w-5 h-5 text-slate-400" />
+                  </div>
+
                   {/* Image */}
                   <div className="aspect-square relative">
                     <img
@@ -541,8 +701,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
             {/* Clear All Button */}
             <button
               onClick={() => {
-                setSourceImages([]);
-                setSlices([]);
+                if (confirm(`Clear all ${slices.length} slices and ${sourceImages.length} grids?`)) {
+                  setSourceImages([]);
+                  setSlices([]);
+                  setSelectedSlices(new Set());
+                }
               }}
               className="w-full py-3 px-4 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
             >

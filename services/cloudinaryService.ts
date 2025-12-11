@@ -6,6 +6,7 @@
 export interface CloudinaryUploadResult {
   success: boolean;
   folderName?: string;
+  folderUrl?: string;
   uploadedFiles?: Array<{
     id: string;
     name: string;
@@ -96,74 +97,108 @@ export async function uploadImagesToCloudinary(
   onProgress?: (uploaded: number, total: number) => void
 ): Promise<CloudinaryUploadResult> {
   try {
-    console.log(`[Cloudinary] Starting upload of ${images.length} images to folder: "${folderName}"`);
+    console.log(`[Cloudinary] Starting parallel upload of ${images.length} images to folder: "${folderName}"`);
 
     // Shuffle images to mix them up (since Midjourney generates 4 images per prompt)
     const shuffledImages = shuffleArray(images);
     console.log(`[Cloudinary] Shuffled ${images.length} images to randomize order`);
 
-    const uploadedFiles: Array<{ id: string; name: string; url: string; secureUrl: string }> = [];
-    let uploadedCount = 0;
+    // Step 1: Convert all images to JPG in parallel
+    console.log(`[Cloudinary] Converting ${shuffledImages.length} images to JPG format...`);
+    const conversionPromises = shuffledImages.map((image, index) => 
+      convertToJpg(image.url).then(jpgBase64 => ({
+        image,
+        jpgBase64,
+        index,
+      })).catch(error => {
+        console.error(`[Cloudinary] Error converting image ${index + 1}:`, error);
+        return null;
+      })
+    );
 
-    // Upload images one by one
-    for (const image of shuffledImages) {
-      try {
-        // Convert image to JPG format
-        console.log(`[Cloudinary] Converting image ${uploadedCount + 1}/${shuffledImages.length} to JPG...`);
-        const jpgBase64 = await convertToJpg(image.url);
+    const convertedImages = await Promise.all(conversionPromises);
+    const validConvertedImages = convertedImages.filter((item): item is { image: { id: string; url: string; prompt?: string }; jpgBase64: string; index: number } => item !== null);
+    
+    console.log(`[Cloudinary] ✅ Converted ${validConvertedImages.length}/${shuffledImages.length} images to JPG`);
 
-        // Generate random filename
-        const filename = generateRandomFilename();
+    if (validConvertedImages.length === 0) {
+      throw new Error('Failed to convert any images to JPG');
+    }
 
-        // Upload to Cloudinary
-        const uploadResponse = await fetch('/api/cloudinary/upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            folder: folderName,
-            filename: filename,
-            base64: jpgBase64,
-            format: 'jpg', // Use JPG format
-          }),
-        });
-
+    // Step 2: Upload all images to Cloudinary in parallel
+    console.log(`[Cloudinary] Uploading ${validConvertedImages.length} images in parallel...`);
+    
+    let completedCount = 0;
+    const uploadPromises = validConvertedImages.map(({ image, jpgBase64, index }) => {
+      const filename = generateRandomFilename();
+      
+      return fetch('/api/cloudinary/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          folder: folderName,
+          filename: filename,
+          base64: jpgBase64,
+          format: 'jpg',
+        }),
+      })
+      .then(async (uploadResponse) => {
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }));
           throw new Error(errorData.error || `Failed to upload image: ${uploadResponse.statusText}`);
         }
 
         const uploadData = await uploadResponse.json();
+        completedCount++;
         
-        uploadedFiles.push({
+        if (onProgress) {
+          onProgress(completedCount, validConvertedImages.length);
+        }
+
+        console.log(`[Cloudinary] Uploaded ${completedCount}/${validConvertedImages.length}: ${filename}`);
+
+        return {
           id: uploadData.public_id || uploadData.secure_url,
           name: filename,
           url: uploadData.url || uploadData.secure_url,
           secureUrl: uploadData.secure_url,
-        });
+        };
+      })
+      .catch((error) => {
+        console.error(`[Cloudinary] Error uploading image ${index + 1}:`, error);
+        return null;
+      });
+    });
 
-        uploadedCount++;
-        if (onProgress) {
-          onProgress(uploadedCount, images.length);
+    // Wait for all uploads to complete (successful or failed)
+    const uploadResults = await Promise.allSettled(uploadPromises);
+    const uploadedFiles = uploadResults
+      .map((result) => {
+        if (result.status === 'fulfilled' && result.value !== null) {
+          return result.value;
         }
-
-        console.log(`[Cloudinary] Uploaded ${uploadedCount}/${images.length}: ${filename}`);
-      } catch (error: any) {
-        console.error(`[Cloudinary] Error uploading image ${image.id}:`, error);
-        // Continue with other images even if one fails
-      }
-    }
+        return null;
+      })
+      .filter((file): file is { id: string; name: string; url: string; secureUrl: string } => file !== null);
 
     if (uploadedFiles.length === 0) {
       throw new Error('Failed to upload any images');
     }
 
-    console.log(`[Cloudinary] ✅ Successfully uploaded ${uploadedFiles.length}/${images.length} images`);
+    console.log(`[Cloudinary] ✅ Successfully uploaded ${uploadedFiles.length}/${validConvertedImages.length} images`);
+
+    // Generate folder URL (Cloudinary Media Library folder view)
+    // Note: This links to the folder in Cloudinary's console (requires login)
+    const sanitizedFolder = folderName.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+    // Cloudinary folder URL format: https://cloudinary.com/console/media_library/folders/[folder_path]
+    const folderUrl = `https://cloudinary.com/console/media_library/folders/${encodeURIComponent(sanitizedFolder)}`;
 
     return {
       success: true,
       folderName,
+      folderUrl,
       uploadedFiles,
     };
   } catch (error: any) {

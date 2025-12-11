@@ -99,6 +99,14 @@ const App: React.FC = () => {
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const [isUploadingToCloudinary, setIsUploadingToCloudinary] = useState<boolean>(false);
+  const [showCloudinaryModal, setShowCloudinaryModal] = useState<boolean>(false);
+  const [cloudinaryModalData, setCloudinaryModalData] = useState<{
+    title: string;
+    message: string;
+    folderUrl?: string;
+    urls?: string[];
+    type: 'success' | 'error';
+  } | null>(null);
   
   // --- Refs ---
   const hasCheckedAuth = useRef<boolean>(false);
@@ -2108,28 +2116,40 @@ const App: React.FC = () => {
         addLog(`[Cloudinary] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
         addLog(`[Cloudinary] 📁 Folder: ${result.folderName}`, 'success');
         
-        // Create a text area with all the URLs for easy copying
-        const urls = result.uploadedFiles?.map(f => f.secureUrl).join('\n') || '';
-        const urlsText = `✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images to Cloudinary!\n\nFolder: ${folderName}\n\nPermanent URLs (copy these for your Etsy PDF):\n\n${urls}`;
-        
         // Copy URLs to clipboard if possible
+        const urls = result.uploadedFiles?.map(f => f.secureUrl).join('\n') || '';
         if (navigator.clipboard && urls) {
           try {
-            await navigator.clipboard.writeText(result.uploadedFiles?.map(f => f.secureUrl).join('\n') || '');
+            await navigator.clipboard.writeText(urls);
             addLog(`[Cloudinary] 📋 URLs copied to clipboard!`, 'success');
           } catch (clipError) {
             console.warn('Failed to copy to clipboard:', clipError);
           }
         }
         
-        alert(urlsText);
+        // Show success modal
+        setCloudinaryModalData({
+          title: 'Upload Successful!',
+          message: `Successfully uploaded ${result.uploadedFiles?.length || 0} images to Cloudinary.`,
+          folderUrl: result.folderUrl,
+          urls: result.uploadedFiles?.map(f => f.secureUrl) || [],
+          type: 'success',
+        });
+        setShowCloudinaryModal(true);
       } else {
         throw new Error(result.error || 'Upload failed');
       }
     } catch (error: any) {
       console.error('Error uploading to Cloudinary:', error);
       addLog(`[Cloudinary] ❌ Error: ${error.message}`, 'error');
-      alert(`Failed to upload to Cloudinary: ${error.message}`);
+      
+      // Show error modal
+      setCloudinaryModalData({
+        title: 'Upload Failed',
+        message: error.message || 'Unknown error occurred',
+        type: 'error',
+      });
+      setShowCloudinaryModal(true);
     } finally {
       setIsUploadingToCloudinary(false);
     }
@@ -3884,6 +3904,122 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cloudinary Upload Modal */}
+      {showCloudinaryModal && cloudinaryModalData && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full bg-gothic-800/95 backdrop-blur-sm border-2 border-gothic-gold/30 rounded-xl p-8 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-2xl font-serif ${cloudinaryModalData.type === 'success' ? 'text-gothic-gold' : 'text-red-400'}`}>
+                {cloudinaryModalData.title}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowCloudinaryModal(false);
+                  setCloudinaryModalData(null);
+                }}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-slate-200">{cloudinaryModalData.message}</p>
+
+              {cloudinaryModalData.type === 'success' && cloudinaryModalData.folderUrl && (
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 View Folder in Cloudinary:</p>
+                  <a
+                    href={cloudinaryModalData.folderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gothic-gold hover:text-amber-400 break-all text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <Link size={16} />
+                    Open Folder (requires Cloudinary login)
+                  </a>
+                  <p className="text-slate-500 text-xs mt-2">Folder: {cloudinaryModalData.folderUrl.split('/').pop()}</p>
+                </div>
+              )}
+
+              {cloudinaryModalData.type === 'success' && cloudinaryModalData.urls && cloudinaryModalData.urls.length > 0 && (
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 max-h-64 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-slate-300 text-sm font-medium">Image URLs ({cloudinaryModalData.urls.length}):</p>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(cloudinaryModalData.urls?.join('\n') || '');
+                          addLog('[Cloudinary] 📋 URLs copied to clipboard!', 'success');
+                        } catch (error) {
+                          console.error('Failed to copy:', error);
+                        }
+                      }}
+                      className="text-gothic-gold hover:text-amber-400 text-sm flex items-center gap-1 transition-colors"
+                    >
+                      <Copy size={14} />
+                      Copy All
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {cloudinaryModalData.urls.map((url, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-gothic-gold hover:text-amber-400 break-all text-xs flex-1"
+                        >
+                          {url}
+                        </a>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              addLog(`[Cloudinary] 📋 URL ${index + 1} copied!`, 'success');
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-gothic-gold transition-colors p-1"
+                          title="Copy URL"
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                {cloudinaryModalData.type === 'success' && cloudinaryModalData.folderUrl && (
+                  <a
+                    href={cloudinaryModalData.folderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 bg-gothic-gold hover:bg-amber-600 text-black font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Folder size={18} />
+                    Open Folder
+                  </a>
+                )}
+                <button
+                  onClick={() => {
+                    setShowCloudinaryModal(false);
+                    setCloudinaryModalData(null);
+                  }}
+                  className={`flex-1 ${cloudinaryModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gothic-gold hover:bg-amber-600 text-black'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
