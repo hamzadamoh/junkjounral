@@ -32,11 +32,14 @@ async function getAccessToken() {
       if (formattedPrivateKey.includes('\\n')) {
         formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
         console.log('[Google Drive API] Converted \\n to actual newlines');
+      } else if (formattedPrivateKey.includes('\n')) {
+        console.log('[Google Drive API] Private key already contains actual newlines (multi-line format)');
       }
       
       // Ensure it ends with a newline after END PRIVATE KEY
       if (formattedPrivateKey.endsWith('-----END PRIVATE KEY-----')) {
         formattedPrivateKey += '\n';
+        console.log('[Google Drive API] Added trailing newline after END PRIVATE KEY');
       }
       
       // Also handle if it already has newlines (Vercel might convert them)
