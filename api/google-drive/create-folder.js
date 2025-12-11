@@ -18,6 +18,13 @@ async function getAccessToken() {
   
   if (refreshToken && clientId && clientSecret) {
     console.log('[Google Drive API] Using refresh token to get access token');
+    console.log('[Google Drive API] Client ID exists:', !!clientId);
+    console.log('[Google Drive API] Client Secret exists:', !!clientSecret);
+    console.log('[Google Drive API] Refresh token exists:', !!refreshToken);
+    console.log('[Google Drive API] Client ID length:', clientId ? clientId.length : 0);
+    console.log('[Google Drive API] Client Secret length:', clientSecret ? clientSecret.length : 0);
+    console.log('[Google Drive API] Refresh token length:', refreshToken ? refreshToken.length : 0);
+    
     try {
       const response = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -35,6 +42,19 @@ async function getAccessToken() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[Google Drive API] Failed to refresh token:', errorText);
+        
+        // Parse error for better messaging
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error === 'unauthorized_client') {
+            throw new Error('Unauthorized client. Make sure:\n1. Client ID and Client Secret match the ones used to get the refresh token\n2. OAuth consent screen is properly configured\n3. The refresh token was obtained with the same OAuth client credentials');
+          } else if (errorJson.error === 'invalid_grant') {
+            throw new Error('Invalid refresh token. The token may have been revoked or expired. You need to get a new refresh token from OAuth Playground.');
+          }
+        } catch (parseError) {
+          // If parsing fails, use original error
+        }
+        
         throw new Error(`Failed to refresh token: ${response.status} ${errorText}`);
       }
 

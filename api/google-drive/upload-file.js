@@ -35,6 +35,19 @@ async function getAccessToken() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[Google Drive API] Failed to refresh token:', errorText);
+        
+        // Parse error for better messaging
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error === 'unauthorized_client') {
+            throw new Error('Unauthorized client. Make sure Client ID and Client Secret match the ones used to get the refresh token, and OAuth consent screen is properly configured.');
+          } else if (errorJson.error === 'invalid_grant') {
+            throw new Error('Invalid refresh token. The token may have been revoked. Get a new refresh token from OAuth Playground.');
+          }
+        } catch (parseError) {
+          // If parsing fails, use original error
+        }
+        
         throw new Error(`Failed to refresh token: ${response.status} ${errorText}`);
       }
 
