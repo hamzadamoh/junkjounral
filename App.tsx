@@ -32,7 +32,7 @@ import { generateJournalPage as generateWithReplicate } from './services/replica
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
-import { uploadImagesToGoogleDrive } from './services/googleDriveService';
+import { uploadImagesToCloudinary } from './services/cloudinaryService';
 import ArcaneSplitter from './components/ArcaneSplitter';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
@@ -98,7 +98,7 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
-  const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
+  const [isUploadingToCloudinary, setIsUploadingToCloudinary] = useState<boolean>(false);
   
   // --- Refs ---
   const hasCheckedAuth = useRef<boolean>(false);
@@ -2070,7 +2070,7 @@ const App: React.FC = () => {
     }
   };
 
-  const uploadToGoogleDrive = async () => {
+  const uploadToCloudinary = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
     
     if (completedImages.length === 0) {
@@ -2079,14 +2079,14 @@ const App: React.FC = () => {
     }
 
     // Prompt for folder name
-    const folderName = prompt('Enter a name for the Google Drive folder:');
+    const folderName = prompt('Enter a name for the Cloudinary folder:');
     if (!folderName || folderName.trim() === '') {
       return; // User cancelled or entered empty name
     }
 
     try {
-      setIsUploadingToGoogleDrive(true);
-      addLog(`[Google Drive] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
+      setIsUploadingToCloudinary(true);
+      addLog(`[Cloudinary] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
 
       // Prepare images for upload
       const imagesToUpload = completedImages.map(img => ({
@@ -2095,34 +2095,43 @@ const App: React.FC = () => {
         prompt: img.prompt || '',
       }));
 
-      // Upload to Google Drive with progress callback
-      const result = await uploadImagesToGoogleDrive(
+      // Upload to Cloudinary with progress callback
+      const result = await uploadImagesToCloudinary(
         folderName.trim(), 
         imagesToUpload,
         (uploaded, total) => {
-          addLog(`[Google Drive] Uploading ${uploaded}/${total} images...`, 'log');
+          addLog(`[Cloudinary] Uploading ${uploaded}/${total} images...`, 'log');
         }
       );
 
       if (result.success) {
-        addLog(`[Google Drive] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
-        addLog(`[Google Drive] 📁 Folder: ${result.folderUrl}`, 'success');
+        addLog(`[Cloudinary] ✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images!`, 'success');
+        addLog(`[Cloudinary] 📁 Folder: ${result.folderName}`, 'success');
         
-        // Open folder in new tab
-        if (result.folderUrl) {
-          window.open(result.folderUrl, '_blank');
+        // Create a text area with all the URLs for easy copying
+        const urls = result.uploadedFiles?.map(f => f.secureUrl).join('\n') || '';
+        const urlsText = `✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images to Cloudinary!\n\nFolder: ${folderName}\n\nPermanent URLs (copy these for your Etsy PDF):\n\n${urls}`;
+        
+        // Copy URLs to clipboard if possible
+        if (navigator.clipboard && urls) {
+          try {
+            await navigator.clipboard.writeText(result.uploadedFiles?.map(f => f.secureUrl).join('\n') || '');
+            addLog(`[Cloudinary] 📋 URLs copied to clipboard!`, 'success');
+          } catch (clipError) {
+            console.warn('Failed to copy to clipboard:', clipError);
+          }
         }
         
-        alert(`✅ Successfully uploaded ${result.uploadedFiles?.length || 0} images to Google Drive!\n\nFolder: ${folderName}\n\nClick OK to open the folder.`);
+        alert(urlsText);
       } else {
         throw new Error(result.error || 'Upload failed');
       }
     } catch (error: any) {
-      console.error('Error uploading to Google Drive:', error);
-      addLog(`[Google Drive] ❌ Error: ${error.message}`, 'error');
-      alert(`Failed to upload to Google Drive: ${error.message}`);
+      console.error('Error uploading to Cloudinary:', error);
+      addLog(`[Cloudinary] ❌ Error: ${error.message}`, 'error');
+      alert(`Failed to upload to Cloudinary: ${error.message}`);
     } finally {
-      setIsUploadingToGoogleDrive(false);
+      setIsUploadingToCloudinary(false);
     }
   };
 
@@ -3528,18 +3537,18 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   <FileText size={18} /> Download PDF ({completedCount})
                 </button>
                 <button 
-                  onClick={uploadToGoogleDrive}
-                  disabled={isUploadingToGoogleDrive}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title="Upload all images to Google Drive"
+                  onClick={uploadToCloudinary}
+                  disabled={isUploadingToCloudinary}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                  title="Upload all images to Cloudinary (images will be shuffled, renamed, and converted to JPG)"
                 >
-                  {isUploadingToGoogleDrive ? (
+                  {isUploadingToCloudinary ? (
                     <>
                       <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
                     </>
                   ) : (
                     <>
-                      <Folder size={18} /> Upload to Drive ({completedCount})
+                      <Link size={18} /> Upload to Cloudinary ({completedCount})
                     </>
                   )}
                 </button>

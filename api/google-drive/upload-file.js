@@ -139,12 +139,40 @@ async function uploadFile(filename, base64Data, folderId, accessToken) {
         if (errorJson.error?.errors?.some(e => e.reason === 'storageQuotaExceeded')) {
           const errorMessage = errorJson.error?.message || '';
           if (errorMessage.includes('Service Accounts do not have storage quota')) {
-            throw new Error('Service accounts cannot use personal Drive storage. You must use an OAuth2 access token instead. See instructions in the error details.');
+            const serviceAccountEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
+            const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+            
+            let detailedError = '❌ Service accounts cannot use personal Drive storage.\n\n';
+            detailedError += 'SOLUTION 1 (Recommended): Share the parent folder with the service account\n';
+            detailedError += '1. Go to Google Drive and open the folder (ID: ' + (parentFolderId || 'your parent folder') + ')\n';
+            if (serviceAccountEmail) {
+              detailedError += '2. Right-click the folder → Share → Add "' + serviceAccountEmail + '"\n';
+            } else {
+              detailedError += '2. Right-click the folder → Share → Add your service account email\n';
+            }
+            detailedError += '3. Give it "Editor" permission\n';
+            detailedError += '4. Click "Send"\n\n';
+            detailedError += 'SOLUTION 2: Fix OAuth2 (uses your personal storage automatically)\n';
+            detailedError += '1. Go to Google Cloud Console → OAuth consent screen\n';
+            detailedError += '2. Make sure the app is "Published" (not "Testing")\n';
+            detailedError += '3. Verify Client ID/Secret in Vercel match Google Cloud Console\n';
+            detailedError += '4. Get a new refresh token from OAuth Playground\n\n';
+            detailedError += 'SOLUTION 3: Use a temporary OAuth2 access token\n';
+            detailedError += 'Set GOOGLE_DRIVE_ACCESS_TOKEN in Vercel (expires in ~1 hour)';
+            
+            throw new Error(detailedError);
           }
           throw new Error('Google Drive storage quota exceeded. Please free up space in your Google Drive or upgrade your storage plan.');
         }
         if (errorJson.error?.errors?.some(e => e.reason === 'insufficientFilePermissions')) {
-          throw new Error('Insufficient permissions. Make sure the service account has Editor access to the folder.');
+          const serviceAccountEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
+          let errorMsg = 'Insufficient permissions. ';
+          if (serviceAccountEmail) {
+            errorMsg += 'Make sure the folder is shared with "' + serviceAccountEmail + '" with "Editor" permission.';
+          } else {
+            errorMsg += 'Make sure the service account has Editor access to the folder.';
+          }
+          throw new Error(errorMsg);
         }
       } catch (parseError) {
         // If parsing fails, use the original error

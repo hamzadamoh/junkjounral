@@ -190,8 +190,48 @@ async function createFolder(folderName, accessToken, parentFolderId = null) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to create folder: ${response.status} ${error}`);
+      const errorText = await response.text();
+      console.error('[Google Drive API] Create folder error response:', errorText);
+      
+      // Check for specific error types
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.errors?.some(e => e.reason === 'storageQuotaExceeded')) {
+          const errorMessage = errorJson.error?.message || '';
+          if (errorMessage.includes('Service Accounts do not have storage quota')) {
+            const serviceAccountEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
+            const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+            
+            let detailedError = '❌ Service accounts cannot use personal Drive storage.\n\n';
+            detailedError += 'SOLUTION: Share the parent folder with the service account\n';
+            detailedError += '1. Go to Google Drive and open the folder (ID: ' + (parentFolderId || 'your parent folder') + ')\n';
+            if (serviceAccountEmail) {
+              detailedError += '2. Right-click the folder → Share → Add "' + serviceAccountEmail + '"\n';
+            } else {
+              detailedError += '2. Right-click the folder → Share → Add your service account email\n';
+            }
+            detailedError += '3. Give it "Editor" permission\n';
+            detailedError += '4. Click "Send"\n\n';
+            detailedError += 'Alternatively, fix OAuth2 to use your personal storage automatically.';
+            
+            throw new Error(detailedError);
+          }
+        }
+        if (errorJson.error?.errors?.some(e => e.reason === 'notFound')) {
+          const serviceAccountEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
+          let errorMsg = 'Parent folder not found or not accessible. ';
+          if (serviceAccountEmail) {
+            errorMsg += 'Make sure the parent folder is shared with "' + serviceAccountEmail + '" with "Editor" permission.';
+          } else {
+            errorMsg += 'Make sure the service account has access to the parent folder.';
+          }
+          throw new Error(errorMsg);
+        }
+      } catch (parseError) {
+        // If parsing fails, use the original error
+      }
+      
+      throw new Error(`Failed to create folder: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
