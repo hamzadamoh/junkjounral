@@ -33,6 +33,7 @@ import { generateJournalPage as generateWithTtapi } from './services/ttapiServic
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress, uploadImagesToWordPress, WordPressUploadResult } from './services/imageHostingService';
 import { uploadImagesToR2 } from './services/r2Service';
+import { uploadImagesToImageKit, ImageKitUploadResult } from './services/imagekitService';
 import ArcaneSplitter from './components/ArcaneSplitter';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
@@ -113,6 +114,15 @@ const App: React.FC = () => {
     title: string;
     message: string;
     mediaLibraryUrl?: string;
+    urls?: string[];
+    type: 'success' | 'error';
+  } | null>(null);
+  const [isUploadingToImageKit, setIsUploadingToImageKit] = useState<boolean>(false);
+  const [showImageKitModal, setShowImageKitModal] = useState<boolean>(false);
+  const [imageKitModalData, setImageKitModalData] = useState<{
+    title: string;
+    message: string;
+    folderUrl?: string;
     urls?: string[];
     type: 'success' | 'error';
   } | null>(null);
@@ -1966,13 +1976,13 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Error downloading image:', error);
       // Fallback to simple base64 download
-      const link = document.createElement('a');
-      link.href = img.url;
+    const link = document.createElement('a');
+    link.href = img.url;
       const paddedIndex = String(index + 1).padStart(3, '0');
       link.download = `image_${paddedIndex}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     }
   };
 
@@ -2231,6 +2241,85 @@ const App: React.FC = () => {
       setShowWpModal(true);
     } finally {
       setIsUploadingToWordPress(false);
+    }
+  };
+
+  const uploadToImageKit = async () => {
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    
+    if (completedImages.length === 0) {
+      alert('No completed images to upload');
+      return;
+    }
+
+    // Prompt for folder name
+    const folderName = prompt('Enter a name for the ImageKit folder:');
+    if (!folderName || folderName.trim() === '') {
+      return; // User cancelled or entered empty name
+    }
+
+    try {
+      setIsUploadingToImageKit(true);
+      addLog(`[ImageKit] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
+
+      // Prepare images for upload
+      const imagesToUpload = completedImages.map(img => ({
+        url: img.url!,
+        originalUrl: img.originalUrl,
+      }));
+
+      // Upload to ImageKit with progress callback
+      const result = await uploadImagesToImageKit(
+        folderName.trim(),
+        imagesToUpload,
+        (uploaded, total) => {
+          addLog(`[ImageKit] Uploading ${uploaded}/${total} images...`, 'log');
+        }
+      );
+
+      if (result.success) {
+        addLog(`[ImageKit] ✅ Successfully uploaded ${result.uploadedFiles.length} images!`, 'success');
+        if (result.failed > 0) {
+          addLog(`[ImageKit] ⚠️ ${result.failed} images failed to upload`, 'warn');
+        }
+        addLog(`[ImageKit] 📁 Folder URL: ${result.folderUrl}`, 'success');
+        
+        // Copy URLs to clipboard if possible
+        const urls = result.uploadedFiles.map(f => f.url).join('\n');
+        if (navigator.clipboard && urls) {
+          try {
+            await navigator.clipboard.writeText(urls);
+            addLog(`[ImageKit] 📋 URLs copied to clipboard!`, 'success');
+          } catch (clipError) {
+            console.warn('Failed to copy to clipboard:', clipError);
+          }
+        }
+        
+        // Show success modal
+        setImageKitModalData({
+          title: 'Upload Successful!',
+          message: `Successfully uploaded ${result.uploadedFiles.length} images to ImageKit. ${result.failed > 0 ? `(${result.failed} failed)` : ''} All URLs are public and optimized via CDN.`,
+          folderUrl: result.folderUrl,
+          urls: result.uploadedFiles.map(f => f.url),
+          type: 'success',
+        });
+        setShowImageKitModal(true);
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error: any) {
+      console.error('Error uploading to ImageKit:', error);
+      addLog(`[ImageKit] ❌ Error: ${error.message}`, 'error');
+      
+      // Show error modal
+      setImageKitModalData({
+        title: 'Upload Failed',
+        message: error.message || 'Unknown error occurred',
+        type: 'error',
+      });
+      setShowImageKitModal(true);
+    } finally {
+      setIsUploadingToImageKit(false);
     }
   };
 
@@ -3637,7 +3726,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 </button>
                 <button 
                   onClick={uploadToR2}
-                  disabled={isUploadingToR2 || isUploadingToWordPress}
+                  disabled={isUploadingToR2 || isUploadingToWordPress || isUploadingToImageKit}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                   title="Upload all images to Cloudflare R2 (images will be shuffled, renamed, and converted to JPG)"
                 >
@@ -3653,7 +3742,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 </button>
                 <button 
                   onClick={uploadToWordPress}
-                  disabled={isUploadingToWordPress || isUploadingToR2}
+                  disabled={isUploadingToWordPress || isUploadingToR2 || isUploadingToImageKit}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                   title="Upload all images to WordPress/Hostinger (images will be shuffled, renamed, and converted to JPG)"
                 >
@@ -3664,6 +3753,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   ) : (
                     <>
                       <Link size={18} /> Upload to WordPress ({completedCount})
+                    </>
+                  )}
+                </button>
+                <button 
+                  onClick={uploadToImageKit}
+                  disabled={isUploadingToImageKit || isUploadingToR2 || isUploadingToWordPress}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                  title="Upload all images to ImageKit (images will be shuffled, renamed, converted to JPG, and optimized via CDN)"
+                >
+                  {isUploadingToImageKit ? (
+                    <>
+                      <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
+                    </>
+                  ) : (
+                    <>
+                      <Link size={18} /> Upload to ImageKit ({completedCount})
                     </>
                   )}
                 </button>
@@ -4102,8 +4207,8 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     ))}
                     </div>
                   </div>
-                </>
-              )}
+          </>
+        )}
 
               <div className="flex gap-3 pt-4">
                 {r2ModalData.type === 'success' && r2ModalData.urls && r2ModalData.urls.length > 0 && (
@@ -4351,6 +4456,184 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     setWpModalData(null);
                   }}
                   className={`flex-1 ${wpModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-blue-500 hover:bg-blue-600 text-white'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ImageKit Upload Modal */}
+      {showImageKitModal && imageKitModalData && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full bg-gothic-800/95 backdrop-blur-sm border-2 border-emerald-500/30 rounded-xl p-8 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-2xl font-serif ${imageKitModalData.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {imageKitModalData.title}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowImageKitModal(false);
+                  setImageKitModalData(null);
+                }}
+                className="text-slate-400 hover:text-white transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-slate-200">{imageKitModalData.message}</p>
+
+              {imageKitModalData.type === 'success' && imageKitModalData.folderUrl && (
+                <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 ImageKit Folder URL:</p>
+                  <a
+                    href={imageKitModalData.folderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 break-all text-sm flex items-center gap-2 transition-colors"
+                  >
+                    <Link size={16} />
+                    {imageKitModalData.folderUrl}
+                  </a>
+                  <p className="text-green-400 text-xs mt-2">✅ Images are optimized and served via ImageKit CDN!</p>
+                </div>
+              )}
+
+              {imageKitModalData.type === 'success' && imageKitModalData.urls && imageKitModalData.urls.length > 0 && (
+                <>
+                  {/* Public URLs Notice */}
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                    <p className="text-green-400 text-sm font-medium mb-1">✅ CDN-Optimized URLs - Fast & Global</p>
+                    <p className="text-slate-300 text-xs">
+                      These URLs are served via ImageKit's global CDN with automatic optimization. Share them directly with customers!
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-slate-300 text-sm font-medium">Image URLs ({imageKitModalData.urls.length}):</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(imageKitModalData.urls?.join('\n') || '');
+                              addLog('[ImageKit] 📋 URLs copied to clipboard!', 'success');
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                            }
+                          }}
+                          className="text-emerald-400 hover:text-emerald-300 text-sm flex items-center gap-1 transition-colors"
+                        >
+                          <Copy size={14} />
+                          Copy All
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {imageKitModalData.urls.map((url, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 break-all text-xs flex-1"
+                        >
+                          {url}
+                        </a>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              addLog(`[ImageKit] 📋 URL ${index + 1} copied!`, 'success');
+                            } catch (error) {
+                              console.error('Failed to copy:', error);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-emerald-400 transition-colors p-1"
+                          title="Copy URL"
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                {imageKitModalData.type === 'success' && imageKitModalData.urls && imageKitModalData.urls.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        // Download as text file
+                        const content = imageKitModalData.urls?.join('\n') || '';
+                        const blob = new Blob([content], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `imagekit-urls-${Date.now()}.txt`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        addLog('[ImageKit] 📄 URLs file downloaded!', 'success');
+                      }}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText size={18} />
+                      Download URLs (.txt)
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Download as HTML file
+                        const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <title>ImageKit Image URLs</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #1e1e1e; color: #fff; }
+    a { color: #34d399; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .url { margin: 10px 0; padding: 10px; background: #2d2d2d; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h1>ImageKit Image URLs (${imageKitModalData.urls?.length || 0} images)</h1>
+  <p>All URLs are served via ImageKit CDN with automatic optimization.</p>
+  ${imageKitModalData.urls?.map((url, i) => `
+    <div class="url">
+      <strong>Image ${i + 1}:</strong><br>
+      <a href="${url}" target="_blank">${url}</a>
+    </div>
+  `).join('')}
+</body>
+</html>`;
+                        const blob = new Blob([htmlContent], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `imagekit-urls-${Date.now()}.html`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        addLog('[ImageKit] 📄 HTML file downloaded!', 'success');
+                      }}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText size={18} />
+                      Download URLs (.html)
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    setShowImageKitModal(false);
+                    setImageKitModalData(null);
+                  }}
+                  className={`flex-1 ${imageKitModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
                 >
                   Close
                 </button>
