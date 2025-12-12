@@ -164,16 +164,31 @@ export async function uploadImagesToImageKit(
   console.log(`[ImageKit] Shuffled ${shuffledImages.length} images to randomize order`);
   
   // Convert all images to JPG
+  // Note: If images are from external URLs (like cdn.ttapi.io), CORS may block them
+  // In that case, we fall back to the base64 data URL which is already stored
   console.log(`[ImageKit] Converting ${shuffledImages.length} images to JPG format...`);
   const convertedImages: string[] = [];
   for (const img of shuffledImages) {
     try {
-      const sourceUrl = img.originalUrl || img.url;
-      const jpgBase64 = await convertToJpg(sourceUrl);
-      convertedImages.push(jpgBase64);
+      // If the url is already a base64 data URL, use it directly
+      if (img.url.startsWith('data:')) {
+        convertedImages.push(img.url);
+      } else {
+        // Try to convert from URL (may fail due to CORS)
+        const sourceUrl = img.originalUrl || img.url;
+        const jpgBase64 = await convertToJpg(sourceUrl);
+        convertedImages.push(jpgBase64);
+      }
     } catch (error) {
-      console.warn(`[ImageKit] Failed to convert image, using original:`, error);
-      convertedImages.push(img.url);
+      // CORS error - fall back to base64 url if available
+      if (img.url.startsWith('data:')) {
+        console.log(`[ImageKit] Using existing base64 data (CORS blocked external URL)`);
+        convertedImages.push(img.url);
+      } else {
+        console.warn(`[ImageKit] Failed to convert image, skipping:`, error);
+        // Skip this image - we can't process it
+        continue;
+      }
     }
   }
   console.log(`[ImageKit] ✅ Converted ${convertedImages.length}/${shuffledImages.length} images to JPG`);
