@@ -615,118 +615,103 @@ const App: React.FC = () => {
       const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPromptToUse));
       
       if (settings.imageService === 'ttapi') {
-        // Parallel processing for Ttapi with 3 concurrent requests
-        const maxConcurrent = 3;
-        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts with ${maxConcurrent} concurrent requests (${settings.midjourneyMode} mode)...`);
+        // Sequential processing for Ttapi HOLD accounts (one request at a time)
+        // HOLD accounts use YOUR single Midjourney account, so parallel requests will fail
+        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts sequentially (${settings.midjourneyMode} mode)...`);
         
-        // Process in batches of 3 concurrent requests
-        for (let batchStart = 0; batchStart < promptsToProcess.length; batchStart += maxConcurrent) {
-          const batchEnd = Math.min(batchStart + maxConcurrent, promptsToProcess.length);
-          const batchPrompts = promptsToProcess.slice(batchStart, batchEnd);
+        for (let promptIndex = 0; promptIndex < promptsToProcess.length; promptIndex++) {
+          const prompt = promptsToProcess[promptIndex];
           
-          addLog(`[Ttapi Bulk] Starting batch ${Math.floor(batchStart / maxConcurrent) + 1}/${Math.ceil(promptsToProcess.length / maxConcurrent)} (prompts ${batchStart + 1}-${batchEnd})...`);
-          
-          // Create promises for this batch
-          const batchPromises = batchPrompts.map(async (prompt, batchIndex) => {
-            const promptIndex = batchStart + batchIndex;
-            try {
-              // Apply moodboard and SREF if provided
-              let finalPrompt = prompt.trim();
-              
-              // Add moodboard if provided
-              if (bulkMoodboard.trim()) {
-                let moodboardId = bulkMoodboard.trim();
-                moodboardId = moodboardId.replace(/^--p\s*/i, '').trim();
-                moodboardId = moodboardId.replace(/^m/, '').trim();
-                finalPrompt += ` --p m${moodboardId}`;
-              }
-              
-              // Add SREF if provided
-              if (bulkSrefCode.trim()) {
-                finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
-              }
-              
-              // Add aspect ratio
-              if (settings.aspectRatio) {
-                finalPrompt += ` --ar ${settings.aspectRatio}`;
-              }
-              
-              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] 🚀 Starting (keeping ${imagesPerPromptToUse} of 4): "${prompt.substring(0, 50)}..."`);
-              
-              // Create a dummy theme for bulk prompt mode
-              const dummyTheme: Theme = {
-                id: 'bulk-prompt',
-                name: 'Bulk Prompt',
-                description: 'Bulk prompt import',
-                thumbnail: '',
-                basePrompt: prompt,
-                styleKeywords: []
-              };
-              
-              const result = await generateWithTtapi(
-                dummyTheme,
-                settings,
-                undefined, // parametersForMJ
-                settings.aspectRatio || '1:1', // aspectRatio
-                settings.midjourneyMode || 'fast', // processMode
-                undefined, // onProgress
-                promptIndex, // variationIndex
-                finalPrompt.trim() || undefined // customPrompt
-              );
-              
-              // Extract results
-              const originalUrls = (result as any)?.originalUrls as string[] | undefined;
-              const originalGridUrl = (result as any)?.originalGridUrl as string | undefined;
-              const isGrid = (result as any)?.isGrid as boolean | undefined;
-              const allBase64Urls = Array.isArray(result) ? result : (result ? [result] : []);
-              const base64Urls = allBase64Urls.slice(0, imagesPerPromptToUse);
-              
-              // Update placeholder images
-              const startIndex = promptIndex * imagesPerPromptToUse;
-              const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
-              
-              if (base64Urls.length > 0) {
-                for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
-                  updatedImages[startIndex + i].url = base64Urls[i];
-                  if (isGrid && originalGridUrl) {
-                    updatedImages[startIndex + i].originalUrl = originalGridUrl;
-                    (updatedImages[startIndex + i] as any).gridSliceIndex = i;
-                  } else if (originalUrls && originalUrls[i]) {
-                    updatedImages[startIndex + i].originalUrl = originalUrls[i];
-                  }
-                  updatedImages[startIndex + i].status = 'completed';
-                  updatedImages[startIndex + i].prompt = finalPrompt;
-                }
-              }
-              
-              setGeneratedImages([...updatedImages]);
-              setCurrentProgress(prev => Math.min(prev + base64Urls.length, actualTotal));
-              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${base64Urls.length} images)`, 'success');
-              
-              return { success: true, promptIndex };
-            } catch (error: any) {
-              console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
-              const startIndex = promptIndex * imagesPerPromptToUse;
-              const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
-              
-              for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
-                updatedImages[i].status = 'error';
-                updatedImages[i].prompt = prompt;
-              }
-              setGeneratedImages([...updatedImages]);
-              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
-              
-              return { success: false, promptIndex, error: error.message };
+          try {
+            // Apply moodboard and SREF if provided
+            let finalPrompt = prompt.trim();
+            
+            // Add moodboard if provided
+            if (bulkMoodboard.trim()) {
+              let moodboardId = bulkMoodboard.trim();
+              moodboardId = moodboardId.replace(/^--p\s*/i, '').trim();
+              moodboardId = moodboardId.replace(/^m/, '').trim();
+              finalPrompt += ` --p m${moodboardId}`;
             }
-          });
+            
+            // Add SREF if provided
+            if (bulkSrefCode.trim()) {
+              finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
+            }
+            
+            // Add aspect ratio
+            if (settings.aspectRatio) {
+              finalPrompt += ` --ar ${settings.aspectRatio}`;
+            }
+            
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] 🚀 Starting (keeping ${imagesPerPromptToUse} of 4): "${prompt.substring(0, 50)}..."`);
+            
+            // Create a dummy theme for bulk prompt mode
+            const dummyTheme: Theme = {
+              id: 'bulk-prompt',
+              name: 'Bulk Prompt',
+              description: 'Bulk prompt import',
+              thumbnail: '',
+              basePrompt: prompt,
+              styleKeywords: []
+            };
+            
+            const result = await generateWithTtapi(
+              dummyTheme,
+              settings,
+              undefined, // parametersForMJ
+              settings.aspectRatio || '1:1', // aspectRatio
+              settings.midjourneyMode || 'fast', // processMode
+              undefined, // onProgress
+              promptIndex, // variationIndex
+              finalPrompt.trim() || undefined // customPrompt
+            );
+            
+            // Extract results
+            const originalUrls = (result as any)?.originalUrls as string[] | undefined;
+            const originalGridUrl = (result as any)?.originalGridUrl as string | undefined;
+            const isGrid = (result as any)?.isGrid as boolean | undefined;
+            const allBase64Urls = Array.isArray(result) ? result : (result ? [result] : []);
+            const base64Urls = allBase64Urls.slice(0, imagesPerPromptToUse);
+            
+            // Update placeholder images
+            const startIndex = promptIndex * imagesPerPromptToUse;
+            const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
+            
+            if (base64Urls.length > 0) {
+              for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
+                updatedImages[startIndex + i].url = base64Urls[i];
+                if (isGrid && originalGridUrl) {
+                  updatedImages[startIndex + i].originalUrl = originalGridUrl;
+                  (updatedImages[startIndex + i] as any).gridSliceIndex = i;
+                } else if (originalUrls && originalUrls[i]) {
+                  updatedImages[startIndex + i].originalUrl = originalUrls[i];
+                }
+                updatedImages[startIndex + i].status = 'completed';
+                updatedImages[startIndex + i].prompt = finalPrompt;
+              }
+            }
+            
+            setGeneratedImages([...updatedImages]);
+            setCurrentProgress(prev => Math.min(prev + base64Urls.length, actualTotal));
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${base64Urls.length} images)`, 'success');
+            
+          } catch (error: any) {
+            console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
+            const startIndex = promptIndex * imagesPerPromptToUse;
+            const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
+            
+            for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
+              updatedImages[i].status = 'error';
+              updatedImages[i].prompt = prompt;
+            }
+            setGeneratedImages([...updatedImages]);
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
+          }
           
-          // Wait for all requests in this batch to complete
-          await Promise.allSettled(batchPromises);
-          
-          // Small delay between batches to avoid overwhelming the queue
-          if (batchEnd < promptsToProcess.length) {
-            addLog(`[Ttapi Bulk] Batch complete. Waiting 2s before next batch...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          // Small delay between requests to let Midjourney breathe
+          if (promptIndex < promptsToProcess.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
       } else {
