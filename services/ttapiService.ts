@@ -397,13 +397,27 @@ const sendTaskToTtapi = async (
     throw new Error(error);
   }
 
-  const data = {
-    prompt: prompt,
-    getUImages: true,  // Request 4 individual images instead of grid (per Ttapi docs)
-    process_mode: processMode  // 'fast' or 'relax' mode
-  };
-
+  // Check if this is a HOLD account (hold.ttapi.io domain)
   const baseUrl = getTtapiBaseUrl();
+  const isHoldAccount = baseUrl.includes('hold.ttapi.io');
+  
+  const data: any = {
+    prompt: prompt,
+    getUImages: true  // Request 4 individual images instead of grid (per Ttapi docs)
+  };
+  
+  // For HOLD accounts, process_mode might not work as expected
+  // Some HOLD accounts may need the account to be manually set to relax mode in Discord
+  // Try sending it anyway, but if it fails, we'll handle it in the error handler
+  if (processMode && processMode !== 'fast') {
+    // Only send process_mode if it's not 'fast' (fast is usually default)
+    // For HOLD accounts, relax mode might need to be set in Discord settings
+    data.process_mode = processMode;
+    if (isHoldAccount) {
+      console.log(`[Ttapi] HOLD account detected. Note: relax mode may need to be enabled in Discord settings.`);
+    }
+  }
+
   const url = `${baseUrl}/midjourney/v1/imagine`;
   console.log(`[Ttapi] Request URL: ${url}`);
   console.log(`[Ttapi] Request data:`, JSON.stringify(data, null, 2));
@@ -452,6 +466,8 @@ const sendTaskToTtapi = async (
         const isQueueFull = apiMessage.toLowerCase().includes('queue is full') || 
                            apiMessage.toLowerCase().includes('queue full') ||
                            apiMessage.toLowerCase().includes('try again later');
+        const isNoAccounts = apiMessage.toLowerCase().includes('no available accounts') ||
+                            apiMessage.toLowerCase().includes('no available account');
         
         // Handle specific error cases
         if (response.status === 402) {
@@ -466,6 +482,13 @@ const sendTaskToTtapi = async (
             ? `Ttapi API error: Queue is full. Will retry with exponential backoff.`
             : `Ttapi API error: Rate limit exceeded. Will retry with new task.`;
           throw new Error('QUEUE_FULL_RETRY');
+        } else if (response.status === 400 && isNoAccounts && isHoldAccount && processMode === 'relax') {
+          // HOLD account + relax mode + "No available accounts" error
+          // This likely means the HOLD account doesn't support process_mode parameter for relax
+          // or the account needs to be manually set to relax mode in Discord
+          errorMessage = `Ttapi HOLD account error: Relax mode not available via API.`;
+          errorDetail = `For HOLD accounts, you may need to manually enable relax mode in your Midjourney Discord settings. Alternatively, the account may not support relax mode via API parameter. Try using fast mode or check your TTAPI account settings.`;
+          throw new Error('HOLD_RELAX_MODE_NOT_SUPPORTED');
         } else {
           errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
           errorMessage = `Ttapi HTTP error: ${response.status} - ${errorDetail}`;

@@ -707,18 +707,20 @@ const App: React.FC = () => {
           } catch (error: any) {
             console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
             
-            // Check if it's a "No available accounts" error in relax mode
             const errorMessage = error.message || '';
             const isNoAccountsError = errorMessage.includes('No available accounts') || 
-                                     errorMessage.includes('no available accounts');
+                                     errorMessage.includes('no available accounts') ||
+                                     errorMessage.includes('HOLD_RELAX_MODE_NOT_SUPPORTED');
             const isRelaxMode = settings.midjourneyMode === 'relax';
             
             if (isNoAccountsError && isRelaxMode && !shouldUseFastMode) {
-              // First time seeing this error - switch to fast mode and retry this prompt
-              shouldUseFastMode = true;
-              addLog(`[Bulk Prompt ${promptIndex + 1}] ⚠️ Relax mode failed: "No available accounts". Switching to fast mode and retrying...`, 'log');
+              // HOLD account relax mode issue - provide helpful message
+              addLog(`[Bulk Prompt ${promptIndex + 1}] ⚠️ HOLD account: Relax mode not available via API.`, 'log');
+              addLog(`[Bulk Prompt ${promptIndex + 1}] 💡 Solution: Enable relax mode in your Midjourney Discord settings, or switch to fast mode in the app.`, 'log');
+              addLog(`[Bulk Prompt ${promptIndex + 1}] 🔄 Attempting without process_mode parameter (using account's default mode)...`, 'log');
               
-              // Retry this prompt with fast mode
+              // Try again without process_mode - let the account use whatever mode it's set to
+              shouldUseFastMode = true; // This will make it skip process_mode
               promptIndex--; // Go back one to retry this prompt
               continue;
             }
