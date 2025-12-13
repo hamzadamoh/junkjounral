@@ -66,6 +66,7 @@ const App: React.FC = () => {
   const [bulkPrompts, setBulkPrompts] = useState<string>(''); // Bulk prompts text (each paragraph is a prompt)
   const [bulkMoodboard, setBulkMoodboard] = useState<string>(''); // Moodboard for all bulk prompts
   const [bulkSrefCode, setBulkSrefCode] = useState<string>(''); // SREF code for all bulk prompts
+  const [bulkImagesPerPrompt, setBulkImagesPerPrompt] = useState<1 | 2 | 4>(4); // Images per prompt for Midjourney
   const [showArcaneSplitter, setShowArcaneSplitter] = useState<boolean>(false); // Show Arcane Splitter for grid image processing
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
@@ -593,9 +594,12 @@ const App: React.FC = () => {
       
       addLog(`[Bulk Prompt Mode] Detected ${totalPrompts} prompt${totalPrompts !== 1 ? 's' : ''}. Generating images for each...`);
       
-      // For Ttapi: each prompt generates 4 images, so we need to adjust
-      const imagesPerPrompt = settings.imageService === 'ttapi' ? 4 : 1;
-      const totalImagesToGenerate = totalPrompts * imagesPerPrompt;
+      // For Ttapi: use the user-selected images per prompt (1, 2, or 4)
+      // For other services: always 1 image per prompt
+      const imagesPerPromptToUse = settings.imageService === 'ttapi' ? bulkImagesPerPrompt : 1;
+      const totalImagesToGenerate = totalPrompts * imagesPerPromptToUse;
+      
+      addLog(`[Bulk Prompt Mode] Using ${imagesPerPromptToUse} image(s) per prompt. Total: ${totalImagesToGenerate} images.`);
       const actualTotal = Math.min(totalImagesToGenerate, total);
       
       // Update placeholder images to match actual count
@@ -605,7 +609,7 @@ const App: React.FC = () => {
       // Generate images for each prompt
       // For Ttapi: process sequentially with delays to avoid queue overflow
       // For other services: process in parallel
-      const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPrompt));
+      const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPromptToUse));
       
       if (settings.imageService === 'ttapi') {
         // Sequential processing for Ttapi to avoid queue overflow
@@ -645,9 +649,13 @@ const App: React.FC = () => {
             finalPrompt += ` --ar ${settings.aspectRatio}`;
           }
           
-          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating: "${prompt.substring(0, 60)}..."`);
+          // Add --repeat parameter for 1 or 2 images (Midjourney uses this for fewer than 4 images)
+          if (imagesPerPromptToUse < 4) {
+            finalPrompt += ` --repeat ${imagesPerPromptToUse}`;
+          }
           
-          // Ttapi generates 4 images per prompt
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating ${imagesPerPromptToUse} image(s): "${prompt.substring(0, 50)}..."`);
+          
           // Create a dummy theme for bulk prompt mode
           const dummyTheme: Theme = {
             id: 'bulk-prompt',
@@ -679,9 +687,9 @@ const App: React.FC = () => {
           const isGrid = (result as any)?.isGrid as boolean | undefined;
           const base64Urls = Array.isArray(result) ? result : (result ? [result] : []);
           
-          // Update all 4 placeholder images for this prompt
-          const startIndex = promptIndex * 4;
-          const endIndex = Math.min(startIndex + 4, actualTotal);
+          // Update placeholder images for this prompt (based on imagesPerPromptToUse)
+          const startIndex = promptIndex * imagesPerPromptToUse;
+          const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
           
           if (base64Urls.length > 0) {
             // Multiple images returned
@@ -705,8 +713,8 @@ const App: React.FC = () => {
           addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${endIndex - startIndex} images)`, 'success');
         } catch (error: any) {
           console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
-          const startIndex = promptIndex * 4;
-          const endIndex = Math.min(startIndex + 4, actualTotal);
+          const startIndex = promptIndex * imagesPerPromptToUse;
+          const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
           
           for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
             updatedImages[i].status = 'error';
@@ -2634,8 +2642,12 @@ const App: React.FC = () => {
       const detectedPrompts = parsePrompts(bulkPrompts);
       
       // Handle prompts generated from Arcane Splitter
-      const handleArcaneSplitterPrompts = (prompts: string[]) => {
+      const handleArcaneSplitterPrompts = (prompts: string[], imagesPerPrompt?: number) => {
         setBulkPrompts(prompts.join('\n\n'));
+        // Store the images per prompt preference if provided
+        if (imagesPerPrompt) {
+          setBulkImagesPerPrompt(imagesPerPrompt);
+        }
         setShowArcaneSplitter(false);
       };
       
@@ -2752,6 +2764,31 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               />
               <p className="text-xs text-slate-500 mt-2">
                 Enter the Midjourney style reference code or URL. This will be applied to all prompts as the --sref parameter. Optional.
+              </p>
+            </div>
+
+            {/* Images Per Prompt Selector */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-3">
+                Images Per Prompt (Midjourney)
+              </label>
+              <div className="flex gap-2">
+                {([1, 2, 4] as const).map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setBulkImagesPerPrompt(num)}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                      bulkImagesPerPrompt === num
+                        ? 'bg-gothic-gold text-black'
+                        : 'bg-gothic-900 border border-slate-600 text-slate-300 hover:border-gothic-gold/50'
+                    }`}
+                  >
+                    {num} image{num !== 1 ? 's' : ''}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-2">
+                How many images Midjourney will generate per prompt. 4 = grid, 1-2 = individual images (uses --repeat).
               </p>
             </div>
 

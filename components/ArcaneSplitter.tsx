@@ -36,7 +36,7 @@ import {
 import { analyzeAllImages, analyzeSingleSlice, hasOpenAIKey } from '../services/oracleService';
 
 interface ArcaneSplitterProps {
-  onPromptsGenerated?: (prompts: string[]) => void;
+  onPromptsGenerated?: (prompts: string[], imagesPerPrompt?: number) => void;
   onClose?: () => void;
 }
 
@@ -54,6 +54,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [error, setError] = useState<string | null>(null);
   const [selectedSlices, setSelectedSlices] = useState<Set<string>>(new Set());
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [imagesPerPrompt, setImagesPerPrompt] = useState<1 | 2 | 4>(4); // Midjourney images per prompt
   const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -217,9 +218,9 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   // Use prompts in bulk mode
   const handleUsePrompts = useCallback(() => {
     const prompts = slices.filter(s => s.prompt).map(s => s.prompt!);
-    onPromptsGenerated?.(prompts);
+    onPromptsGenerated?.(prompts, imagesPerPrompt);
     onClose?.();
-  }, [slices, onPromptsGenerated, onClose]);
+  }, [slices, onPromptsGenerated, onClose, imagesPerPrompt]);
   
   // Download single slice
   const handleDownloadSlice = useCallback((slice: AnalyzedSlice) => {
@@ -676,14 +677,36 @@ NO text, NO explanation - ONLY the JSON array.`
                     </button>
                     
                     {onPromptsGenerated && (
-                      <button
-                        onClick={handleUsePrompts}
-                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium text-white
-                          flex items-center gap-2 transition-colors"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        Use in Bulk Mode
-                      </button>
+                      <>
+                        {/* Images Per Prompt Selector */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+                          <span className="text-xs text-slate-400">Images/Prompt:</span>
+                          <div className="flex gap-1">
+                            {([1, 2, 4] as const).map((num) => (
+                              <button
+                                key={num}
+                                onClick={() => setImagesPerPrompt(num)}
+                                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                                  imagesPerPrompt === num
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                }`}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={handleUsePrompts}
+                          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium text-white
+                            flex items-center gap-2 transition-colors"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          Use in Bulk Mode ({analyzedCount * imagesPerPrompt} images)
+                        </button>
+                      </>
                     )}
                   </>
                 )}
