@@ -59,6 +59,8 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [imagesPerPrompt, setImagesPerPrompt] = useState<1 | 2 | 4>(4); // Midjourney images per prompt
   const [etsyUrl, setEtsyUrl] = useState<string>(''); // Etsy listing URL
   const [isFetchingEtsy, setIsFetchingEtsy] = useState(false); // Loading state for Etsy fetch
+  const [etsySliceGrids, setEtsySliceGrids] = useState(true); // Whether to slice Etsy images as grids
+  const [etsyFetchProgress, setEtsyFetchProgress] = useState({ current: 0, total: 0 }); // Progress for Etsy fetch
   const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +174,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     const listingId = listingIdMatch[1];
 
     setIsFetchingEtsy(true);
+    setEtsyFetchProgress({ current: 0, total: 0 });
     setError(null);
 
     try {
@@ -194,18 +197,16 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       }
 
       console.log(`[ArcaneSplitter] Found ${images.length} images in Etsy listing`);
+      setEtsyFetchProgress({ current: 0, total: images.length });
 
-      // Fetch each image and add as a slice (not as a grid - these are individual product images)
-      const newSlices: Array<AnalyzedSlice & { gridId?: string }> = [];
-      const etsyGridId = `etsy-${listingId}-${Date.now()}`;
+      // Get all image URLs
+      const imageUrls = images
+        .map((img: any) => img.url_fullxfull || img.url_570xN || img.url_170x135)
+        .filter(Boolean);
 
-      for (let i = 0; i < images.length; i++) {
-        const img = images[i];
-        // Use the largest available image (url_fullxfull is typically 1500x1500+)
-        const imageUrl = img.url_fullxfull || img.url_570xN || img.url_170x135;
-
-        if (!imageUrl) continue;
-
+      // Fetch ALL images in parallel for speed
+      let completedCount = 0;
+      const fetchPromises = imageUrls.map(async (imageUrl: string, i: number) => {
         try {
           // Fetch image via proxy to avoid CORS
           const imgResponse = await fetch(`/api/ttapi/image?url=${encodeURIComponent(imageUrl)}`);
@@ -215,39 +216,77 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
           });
-
-          newSlices.push({
-            id: `etsy-${listingId}-img-${i}-${Date.now()}`,
-            base64,
-            row: Math.floor(i / 4),
-            col: i % 4,
-            name: `Etsy Image ${i + 1}`,
-            isAnalyzing: false,
-            gridId: etsyGridId,
-          });
-
-          console.log(`[ArcaneSplitter] Loaded Etsy image ${i + 1}/${images.length}`);
+          
+          completedCount++;
+          setEtsyFetchProgress({ current: completedCount, total: images.length });
+          
+          return { index: i, base64, success: true };
         } catch (imgErr) {
           console.error(`[ArcaneSplitter] Failed to load Etsy image ${i + 1}:`, imgErr);
+          completedCount++;
+          setEtsyFetchProgress({ current: completedCount, total: images.length });
+          return { index: i, base64: null, success: false };
         }
-      }
+      });
 
-      if (newSlices.length === 0) {
+      const results = await Promise.all(fetchPromises);
+      const successfulResults = results.filter(r => r.success && r.base64);
+
+      if (successfulResults.length === 0) {
         throw new Error('Failed to load any images from the listing');
       }
 
-      // Add to slices (don't treat as grid - these are individual images)
-      setSlices(prev => [...prev, ...newSlices]);
+      console.log(`[ArcaneSplitter] Loaded ${successfulResults.length}/${images.length} Etsy images`);
+
+      // If slicing is enabled, treat each image as a grid and slice it
+      if (etsySliceGrids) {
+        console.log(`[ArcaneSplitter] Slicing ${successfulResults.length} Etsy images as 4×3 grids...`);
+        
+        for (const result of successfulResults) {
+          const etsyGridId = `etsy-${listingId}-grid-${result.index}-${Date.now()}`;
+          
+          // Add to source images for tracking
+          setSourceImages(prev => [...prev, { id: etsyGridId, base64: result.base64! }]);
+          
+          // Slice the image as a 4×3 grid
+          try {
+            const config: GridConfig = { rows: 3, cols: 4 };
+            const slicedImages = await sliceGridImage(result.base64!, config, autoCrop);
+            const newSlices = slicedImages.map(s => ({ ...s, isAnalyzing: false, gridId: etsyGridId }));
+            
+            setSlices(prev => [...prev, ...newSlices]);
+            console.log(`[ArcaneSplitter] Sliced Etsy image ${result.index + 1} into ${slicedImages.length} pieces`);
+          } catch (sliceErr) {
+            console.error(`[ArcaneSplitter] Failed to slice Etsy image ${result.index + 1}:`, sliceErr);
+          }
+        }
+      } else {
+        // Add as individual images (no slicing)
+        const etsyGroupId = `etsy-${listingId}-${Date.now()}`;
+        const newSlices: Array<AnalyzedSlice & { gridId?: string }> = successfulResults.map((result, i) => ({
+          id: `etsy-${listingId}-img-${result.index}-${Date.now()}`,
+          base64: result.base64!,
+          row: Math.floor(i / 4),
+          col: i % 4,
+          name: `Etsy Image ${result.index + 1}`,
+          isAnalyzing: false,
+          gridId: etsyGroupId,
+        }));
+        
+        setSlices(prev => [...prev, ...newSlices]);
+      }
+
       setEtsyUrl(''); // Clear input
-      console.log(`[ArcaneSplitter] Added ${newSlices.length} Etsy images`);
+      console.log(`[ArcaneSplitter] Etsy import complete!`);
 
     } catch (err: any) {
       console.error('[ArcaneSplitter] Etsy fetch error:', err);
       setError(err.message || 'Failed to fetch Etsy listing');
     } finally {
       setIsFetchingEtsy(false);
+      setEtsyFetchProgress({ current: 0, total: 0 });
     }
-  }, [etsyUrl]);
+  }, [etsyUrl, etsySliceGrids, autoCrop]);
   
   // Analyze all slices with GPT-4 Vision
   // NOTE: Does NOT auto-navigate to generation - user can sort first, then click "Use in Bulk Mode"
@@ -659,38 +698,60 @@ NO text, NO explanation - ONLY the JSON array.`
         </div>
 
         {/* Etsy Listing Import */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2">
-              <ShoppingBag className="w-4 h-4 text-orange-400" />
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <ShoppingBag className="w-4 h-4 text-orange-400" />
+              </div>
+              <input
+                type="text"
+                value={etsyUrl}
+                onChange={(e) => setEtsyUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFetchEtsyListing()}
+                placeholder="Paste Etsy listing URL (e.g., https://www.etsy.com/listing/1234567890/...)"
+                className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
+                disabled={isFetchingEtsy}
+              />
             </div>
-            <input
-              type="text"
-              value={etsyUrl}
-              onChange={(e) => setEtsyUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleFetchEtsyListing()}
-              placeholder="Paste Etsy listing URL (e.g., https://www.etsy.com/listing/1234567890/...)"
-              className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
-              disabled={isFetchingEtsy}
-            />
+            <button
+              onClick={handleFetchEtsyListing}
+              disabled={isFetchingEtsy || !etsyUrl.trim()}
+              className="px-4 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg text-white font-medium flex items-center gap-2 transition-colors whitespace-nowrap"
+            >
+              {isFetchingEtsy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {etsyFetchProgress.total > 0 
+                    ? `${etsyFetchProgress.current}/${etsyFetchProgress.total}` 
+                    : 'Loading...'}
+                </>
+              ) : (
+                <>
+                  <Link className="w-4 h-4" />
+                  Import
+                </>
+              )}
+            </button>
           </div>
-          <button
-            onClick={handleFetchEtsyListing}
-            disabled={isFetchingEtsy || !etsyUrl.trim()}
-            className="px-4 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg text-white font-medium flex items-center gap-2 transition-colors"
-          >
-            {isFetchingEtsy ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Fetching...
-              </>
-            ) : (
-              <>
-                <Link className="w-4 h-4" />
-                Import
-              </>
-            )}
-          </button>
+          
+          {/* Slice as grids toggle */}
+          <div className="flex items-center gap-3 text-sm">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={etsySliceGrids}
+                onChange={(e) => setEtsySliceGrids(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-orange-500 focus:ring-orange-500/50"
+              />
+              <span className="text-slate-300">Slice as 4×3 grids</span>
+            </label>
+            <span className="text-slate-500 text-xs">
+              {etsySliceGrids 
+                ? '(Each image → 12 slices)' 
+                : '(Import as individual images)'}
+            </span>
+          </div>
         </div>
         
         {/* Sliced Images Grid */}
