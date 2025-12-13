@@ -376,13 +376,17 @@ const sendUpscaleToTtapi = async (
 
 /**
  * Sends a task to ttapi.io Midjourney
+ * @param prompt - The prompt to send to Midjourney
+ * @param processMode - 'fast' or 'relax' mode (defaults to 'fast')
  */
 const sendTaskToTtapi = async (
-  prompt: string
+  prompt: string,
+  processMode: string = 'fast'
 ): Promise<string | null> => {
   console.log(`[Ttapi] ===== Starting sendTaskToTtapi =====`);
   console.log(`[Ttapi] Prompt length: ${prompt.length}`);
   console.log(`[Ttapi] Prompt preview: ${prompt.substring(0, 150)}...`);
+  console.log(`[Ttapi] Process mode: ${processMode}`);
   
   const apiKey = getTtapiApiKey();
   console.log(`[Ttapi] API key retrieved: ${apiKey ? `Yes (length: ${apiKey.length})` : 'NO - MISSING!'}`);
@@ -395,7 +399,8 @@ const sendTaskToTtapi = async (
 
   const data = {
     prompt: prompt,
-    getUImages: true  // Request 4 individual images instead of grid (per Ttapi docs)
+    getUImages: true,  // Request 4 individual images instead of grid (per Ttapi docs)
+    process_mode: processMode  // 'fast' or 'relax' mode
   };
 
   const baseUrl = getTtapiBaseUrl();
@@ -1526,7 +1531,7 @@ export const generateJournalPage = async (
     
     while (!jobId && retryCount <= maxRetries) {
       try {
-        jobId = await sendTaskToTtapi(prompt);
+        jobId = await sendTaskToTtapi(prompt, processMode);
         if (!jobId) {
           throw new Error('Failed to create ttapi.io task: No job ID returned');
         }
@@ -1603,7 +1608,7 @@ export const generateJournalPage = async (
           // Resend the prompt as a completely new task
           console.log(`[Ttapi] 🔄 Resending prompt as new task (attempt ${pollingRetryCount}/${maxPollingRetries})...`);
           try {
-            currentJobId = await sendTaskToTtapi(prompt);
+            currentJobId = await sendTaskToTtapi(prompt, processMode);
             if (!currentJobId) {
               throw new Error('Failed to create new task after rate limit');
             }
