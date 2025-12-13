@@ -402,7 +402,8 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       const descList = slices.map((s, i) => `${i}:${descriptions.get(s.id) || 'unknown'}`).join('; ');
       
       // Calculate max_tokens needed: roughly 4 chars per number + comma + space
-      const maxTokensNeeded = Math.max(500, slices.length * 5);
+      // For 60 images: need ~300 chars for array, add buffer for safety
+      const maxTokensNeeded = Math.max(800, slices.length * 8);
       
       console.log(`[ArcaneSplitter] Sorting ${slices.length} images, requesting ${maxTokensNeeded} max_tokens`);
       
