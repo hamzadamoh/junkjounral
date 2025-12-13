@@ -406,15 +406,17 @@ const sendTaskToTtapi = async (
     getUImages: true  // Request 4 individual images instead of grid (per Ttapi docs)
   };
   
-  // For HOLD accounts, process_mode might not work as expected
-  // Some HOLD accounts may need the account to be manually set to relax mode in Discord
-  // Try sending it anyway, but if it fails, we'll handle it in the error handler
-  if (processMode && processMode !== 'fast') {
-    // Only send process_mode if it's not 'fast' (fast is usually default)
-    // For HOLD accounts, relax mode might need to be set in Discord settings
+  // For HOLD accounts, process_mode parameter is NOT supported by the API
+  // The account uses whatever mode it's set to in Discord settings
+  // So we never send process_mode for HOLD accounts
+  if (!isHoldAccount && processMode && processMode !== 'fast') {
+    // Only send process_mode for non-HOLD accounts (PPU mode)
+    // For HOLD accounts, the account must be manually set to relax/fast mode in Discord
     data.process_mode = processMode;
-    if (isHoldAccount) {
-      console.log(`[Ttapi] HOLD account detected. Note: relax mode may need to be enabled in Discord settings.`);
+  } else if (isHoldAccount) {
+    console.log(`[Ttapi] HOLD account detected. Using account's Discord mode setting (process_mode parameter not sent).`);
+    if (processMode === 'relax') {
+      console.log(`[Ttapi] ⚠️ Note: Make sure your Midjourney account is set to relax mode in Discord (/settings).`);
     }
   }
 
@@ -484,16 +486,12 @@ const sendTaskToTtapi = async (
           throw new Error('QUEUE_FULL_RETRY');
         } else if (response.status === 400 && isNoAccounts) {
           // "No available accounts" - account is likely busy processing another job
-          // For HOLD accounts with relax mode, it might also mean relax mode isn't supported via API
-          if (isHoldAccount && processMode === 'relax') {
-            errorMessage = `Ttapi HOLD account error: Relax mode not available via API.`;
-            errorDetail = `For HOLD accounts, you may need to manually enable relax mode in your Midjourney Discord settings. Alternatively, the account may not support relax mode via API parameter. Try using fast mode or check your TTAPI account settings.`;
-            throw new Error('HOLD_RELAX_MODE_NOT_SUPPORTED');
-          } else {
-            // Account is busy - throw retryable error
-            errorMessage = `Ttapi API error: Account is busy (no available accounts). Will retry with exponential backoff.`;
-            throw new Error('NO_ACCOUNTS_RETRY');
+          // For HOLD accounts, this usually means the account is busy or there's a connection issue
+          errorMessage = `Ttapi API error: Account is busy (no available accounts). Will retry with exponential backoff.`;
+          if (isHoldAccount) {
+            console.warn(`[Ttapi] HOLD account: If this persists, check your TTAPI dashboard and Discord for active jobs.`);
           }
+          throw new Error('NO_ACCOUNTS_RETRY');
         } else {
           errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
           errorMessage = `Ttapi HTTP error: ${response.status} - ${errorDetail}`;
