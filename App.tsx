@@ -21,7 +21,9 @@ import {
   Table,
   Scissors,
   Upload,
-  Folder
+  Folder,
+  Square,
+  CheckSquare
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -93,6 +95,7 @@ const App: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<GeneratedImage | null>(null);
   const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [consoleLogs, setConsoleLogs] = useState<Array<{ id: string; message: string; timestamp: number; type: 'log' | 'error' | 'success' }>>([]);
   const [showSidebar, setShowSidebar] = useState<boolean>(false);
   const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any }>>([]);
@@ -1977,6 +1980,118 @@ const App: React.FC = () => {
     }
   };
 
+  // Toggle image selection
+  const toggleImageSelection = (imageId: string) => {
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(imageId)) {
+        newSet.delete(imageId);
+      } else {
+        newSet.add(imageId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/deselect all completed images
+  const toggleSelectAll = () => {
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    if (selectedImages.size === completedImages.length) {
+      // All selected, deselect all
+      setSelectedImages(new Set());
+    } else {
+      // Select all completed images
+      setSelectedImages(new Set(completedImages.map(img => img.id)));
+    }
+  };
+
+  // Download only selected images as ZIP
+  const downloadSelectedAsZip = async () => {
+    try {
+      const selectedImagesArray = generatedImages.filter(
+        img => selectedImages.has(img.id) && img.status === 'completed' && img.url
+      );
+      
+      if (selectedImagesArray.length === 0) {
+        alert('No images selected for download');
+        return;
+      }
+
+      const zip = new JSZip();
+      
+      // Show loading state
+      addLog(`[Download] Preparing ${selectedImagesArray.length} selected images for download...`);
+
+      // Shuffle images to randomize order
+      const shuffledImages = shuffleArray(selectedImagesArray);
+
+      // Import splitGridImage for grid images
+      const { splitGridImage } = await import('./services/ttapiService');
+      
+      for (let i = 0; i < shuffledImages.length; i++) {
+        const img = shuffledImages[i];
+        try {
+          let blob: Blob;
+          const gridSliceIndex = (img as any).gridSliceIndex as number | undefined;
+          
+          // Check if this is a grid image that needs to be split fresh
+          if (img.originalUrl && gridSliceIndex !== undefined) {
+            try {
+              const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`;
+              const slices = await splitGridImage(proxyUrl);
+              if (slices[gridSliceIndex]) {
+                blob = await (await fetch(slices[gridSliceIndex])).blob();
+              } else {
+                blob = await (await fetch(img.url)).blob();
+              }
+            } catch (error) {
+              console.warn(`Failed to split grid for image ${i + 1}, using base64:`, error);
+              blob = await (await fetch(img.url)).blob();
+            }
+          } else if (img.originalUrl) {
+            try {
+              const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
+              if (response.ok) {
+                blob = await response.blob();
+              } else {
+                blob = await (await fetch(img.url)).blob();
+              }
+            } catch (error) {
+              blob = await (await fetch(img.url)).blob();
+            }
+          } else {
+            blob = await (await fetch(img.url)).blob();
+          }
+          
+          // Generate random filename
+          const randomName = `image_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.png`;
+          zip.file(randomName, blob);
+        } catch (error) {
+          console.error(`Failed to add image ${i + 1} to ZIP:`, error);
+        }
+      }
+
+      // Generate and download ZIP
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `selected_images_${Date.now()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      addLog(`[Download] ✅ Downloaded ${shuffledImages.length} selected images as ZIP`, 'success');
+      
+      // Clear selection after download
+      setSelectedImages(new Set());
+    } catch (error: any) {
+      console.error('Failed to download selected images:', error);
+      addLog(`[Download] ❌ Failed to download: ${error.message}`, 'error');
+    }
+  };
+
   const downloadAllAsZip = async () => {
     try {
       const zip = new JSZip();
@@ -3583,12 +3698,44 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
           <div className="flex gap-3 flex-wrap">
             {completedCount > 0 && (
               <>
+                {/* Selection Controls */}
+                <button 
+                  onClick={toggleSelectAll}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    selectedImages.size === completedCount 
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                      : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                  }`}
+                  title={selectedImages.size === completedCount ? "Deselect all images" : "Select all images"}
+                >
+                  {selectedImages.size === completedCount ? (
+                    <>
+                      <Check size={18} /> Deselect All
+                    </>
+                  ) : (
+                    <>
+                      <Square size={18} /> Select All ({completedCount})
+                    </>
+                  )}
+                </button>
+                
+                {/* Download Selected - only show when images are selected */}
+                {selectedImages.size > 0 && (
+                  <button 
+                    onClick={downloadSelectedAsZip}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+                    title="Download only selected images as ZIP"
+                  >
+                    <Archive size={18} /> Download Selected ({selectedImages.size})
+                  </button>
+                )}
+                
                 <button 
                   onClick={downloadAllAsZip}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
                   title="Download all images as ZIP file"
                 >
-                  <Archive size={18} /> Download ZIP ({completedCount})
+                  <Archive size={18} /> Download All ({completedCount})
                 </button>
                 <button 
                   onClick={downloadAllAsPdf}
@@ -3619,6 +3766,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             onClick={() => {
               setStep(2);
               setGeneratedImages([]);
+              setSelectedImages(new Set());
               setStatus(GenerationStatus.IDLE);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
@@ -3637,10 +3785,28 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
           ) : (
             generatedImages.map((img, idx) => {
               const actualIndex = idx;
+              const isSelected = selectedImages.has(img.id);
               return (
-          <div key={img.id} className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
+          <div key={img.id} className={`bg-white rounded-xl overflow-hidden shadow-lg border-2 transition-all ${
+            isSelected ? 'border-purple-500 ring-2 ring-purple-300' : 'border-gray-200'
+          }`}>
             {/* Image Container */}
             <div className="relative bg-gray-100 aspect-square flex items-center justify-center">
+              {/* Selection Checkbox - only show for completed images */}
+              {img.status === 'completed' && img.url && (
+                <button
+                  onClick={() => toggleImageSelection(img.id)}
+                  className={`absolute top-3 left-3 z-10 p-1.5 rounded-lg transition-all ${
+                    isSelected 
+                      ? 'bg-purple-600 text-white shadow-lg' 
+                      : 'bg-white/90 text-gray-600 hover:bg-white hover:text-purple-600 shadow'
+                  }`}
+                  title={isSelected ? "Deselect image" : "Select image"}
+                >
+                  {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                </button>
+              )}
+              
               {img.status === 'generating' ? (
                 <div className="flex flex-col items-center justify-center p-8">
                   <div className="w-16 h-16 border-4 border-gothic-gold border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -3655,7 +3821,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             <img 
               src={img.url} 
                   alt={`Variation ${img.variationNumber || idx + 1}`} 
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover transition-opacity ${isSelected ? 'opacity-90' : ''}`}
+                  onClick={() => img.status === 'completed' && toggleImageSelection(img.id)}
+                  style={{ cursor: img.status === 'completed' ? 'pointer' : 'default' }}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-gray-400">
