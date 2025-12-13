@@ -322,79 +322,32 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [isSortingBySimilarity, setIsSortingBySimilarity] = useState(false);
   const [sortProgress, setSortProgress] = useState({ completed: 0, total: 0, phase: '' });
 
-  // Sort slices by visual similarity using AI
+  // Sort slices by visual similarity using the generated prompts
   const handleSortBySimilarity = useCallback(async () => {
     if (slices.length < 2 || !hasApiKey) return;
     
+    // Check if all images have been analyzed
+    const unanalyzedCount = slices.filter(s => !s.prompt).length;
+    if (unanalyzedCount > 0) {
+      setError(`Please analyze all images first! ${unanalyzedCount} image(s) not analyzed yet. Click "Analyze All" first.`);
+      return;
+    }
+    
     setIsSortingBySimilarity(true);
-    setSortProgress({ completed: 0, total: slices.length, phase: 'Analyzing' });
+    setSortProgress({ completed: 0, total: slices.length, phase: 'Sorting' });
     setError(null);
     
     try {
-      // Step 1: Get AI descriptions for each image (if not already analyzed)
-      // Process in parallel batches of 5 for speed
+      // Use the detailed prompts for accurate sorting
+      // Extract key visual elements from each prompt (first 80 chars for better context)
       const descriptions: Map<string, string> = new Map();
-      const BATCH_SIZE = 5;
+      slices.forEach((slice, idx) => {
+        // Use the full prompt but truncate for the sorting request
+        const prompt = slice.prompt || `image-${idx}`;
+        descriptions.set(slice.id, prompt.substring(0, 80));
+      });
       
-      for (let batchStart = 0; batchStart < slices.length; batchStart += BATCH_SIZE) {
-        const batch = slices.slice(batchStart, batchStart + BATCH_SIZE);
-        
-        await Promise.all(batch.map(async (slice, batchIdx) => {
-          const globalIdx = batchStart + batchIdx;
-          
-          if (slice.prompt) {
-            // Use existing prompt - extract key terms only (first 50 chars)
-            descriptions.set(slice.id, slice.prompt.substring(0, 50));
-          } else if (slice.visualDescription) {
-            descriptions.set(slice.id, slice.visualDescription.substring(0, 50));
-          } else {
-            // Need to analyze this image - use very brief description
-            try {
-              const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
-                },
-                body: JSON.stringify({
-                  model: 'gpt-4o-mini',
-                  messages: [
-                    {
-                      role: 'system',
-                      content: 'Describe in 5-10 words: main subject, dominant color. Example: "red fox, autumn forest, orange"'
-                    },
-                    {
-                      role: 'user',
-                      content: [
-                        { type: 'text', text: 'Brief description:' },
-                        { type: 'image_url', image_url: { url: slice.base64, detail: 'low' } }
-                      ]
-                    }
-                  ],
-                  max_tokens: 30,
-                  temperature: 0.2,
-                }),
-              });
-              
-              if (response.ok) {
-                const data = await response.json();
-                const desc = data.choices?.[0]?.message?.content || `img${globalIdx}`;
-                descriptions.set(slice.id, desc.substring(0, 50));
-              } else {
-                descriptions.set(slice.id, `img${globalIdx}`);
-              }
-            } catch {
-              descriptions.set(slice.id, `img${globalIdx}`);
-            }
-          }
-        }));
-        
-        setSortProgress({ 
-          completed: Math.min(batchStart + BATCH_SIZE, slices.length), 
-          total: slices.length, 
-          phase: 'Analyzing' 
-        });
-      }
+      console.log(`[ArcaneSplitter] Sorting ${slices.length} images using their prompts`);
       
       setSortProgress({ completed: slices.length, total: slices.length, phase: 'Grouping' });
       
@@ -671,20 +624,20 @@ NO text, NO explanation - ONLY the JSON array.`
                       )}
                     </button>
                     
-                    {slices.length >= 2 && (
+                    {slices.length >= 2 && analyzedCount === slices.length && (
                       <button
                         onClick={handleSortBySimilarity}
                         disabled={isSortingBySimilarity || isAnalyzing}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium text-white
                           disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                        title="Group visually similar images together using AI"
+                        title="Group visually similar images together based on their prompts"
                       >
                         {isSortingBySimilarity ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
                             {sortProgress.phase === 'Grouping' 
-                              ? 'Grouping...' 
-                              : `${sortProgress.phase}... (${sortProgress.completed}/${sortProgress.total})`}
+                              ? 'Grouping by prompts...' 
+                              : `${sortProgress.phase}...`}
                           </>
                         ) : (
                           <>
