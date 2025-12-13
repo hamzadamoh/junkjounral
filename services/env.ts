@@ -185,3 +185,24 @@ export const getImageKitConfig = () => {
   }
 };
 
+export const getEtsyApiKey = (): string => {
+  // Check process.env first (for Node.js/Jest environments)
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_ETSY_API_KEY) {
+    return process.env.VITE_ETSY_API_KEY;
+  }
+  
+  // Check globalThis mock (for Jest test environment)
+  if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_ETSY_API_KEY) {
+    return (globalThis as any).import.meta.env.VITE_ETSY_API_KEY;
+  }
+  
+  // Fallback to import.meta.env (for Vite production/dev)
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore - import.meta is available in Vite but not in Jest
+  try {
+    return (import.meta.env?.VITE_ETSY_API_KEY as string) || '';
+  } catch {
+    return '';
+  }
+};
+

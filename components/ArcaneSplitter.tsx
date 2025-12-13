@@ -23,6 +23,8 @@ import {
   ChevronUp,
   ChevronDown,
   GripVertical,
+  Link,
+  ShoppingBag,
 } from 'lucide-react';
 import {
   SlicedImage,
@@ -55,6 +57,8 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [selectedSlices, setSelectedSlices] = useState<Set<string>>(new Set());
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [imagesPerPrompt, setImagesPerPrompt] = useState<1 | 2 | 4>(4); // Midjourney images per prompt
+  const [etsyUrl, setEtsyUrl] = useState<string>(''); // Etsy listing URL
+  const [isFetchingEtsy, setIsFetchingEtsy] = useState(false); // Loading state for Etsy fetch
   const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +151,103 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
   }, [handlePaste]);
-  
+
+  // Fetch images from Etsy listing
+  const handleFetchEtsyListing = useCallback(async () => {
+    if (!etsyUrl.trim()) {
+      setError('Please enter an Etsy listing URL');
+      return;
+    }
+
+    // Extract listing ID from URL
+    // Formats: 
+    // - https://www.etsy.com/listing/1234567890/product-name
+    // - https://www.etsy.com/uk/listing/1234567890/product-name
+    const listingIdMatch = etsyUrl.match(/listing\/(\d+)/);
+    if (!listingIdMatch) {
+      setError('Invalid Etsy URL. Please use a listing URL like: https://www.etsy.com/listing/1234567890/...');
+      return;
+    }
+
+    const listingId = listingIdMatch[1];
+
+    setIsFetchingEtsy(true);
+    setError(null);
+
+    try {
+      console.log(`[ArcaneSplitter] Fetching Etsy listing: ${listingId}`);
+
+      // Use the Vercel proxy to avoid CORS issues
+      const response = await fetch(`/api/etsy/listing?listingId=${listingId}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[ArcaneSplitter] Etsy API error:', errorData);
+        throw new Error(errorData.error || `Etsy API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const images = data.results || [];
+
+      if (images.length === 0) {
+        throw new Error('No images found in this listing');
+      }
+
+      console.log(`[ArcaneSplitter] Found ${images.length} images in Etsy listing`);
+
+      // Fetch each image and add as a slice (not as a grid - these are individual product images)
+      const newSlices: Array<AnalyzedSlice & { gridId?: string }> = [];
+      const etsyGridId = `etsy-${listingId}-${Date.now()}`;
+
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        // Use the largest available image (url_fullxfull is typically 1500x1500+)
+        const imageUrl = img.url_fullxfull || img.url_570xN || img.url_170x135;
+
+        if (!imageUrl) continue;
+
+        try {
+          // Fetch image via proxy to avoid CORS
+          const imgResponse = await fetch(`/api/ttapi/image?url=${encodeURIComponent(imageUrl)}`);
+          const blob = await imgResponse.blob();
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+
+          newSlices.push({
+            id: `etsy-${listingId}-img-${i}-${Date.now()}`,
+            base64,
+            row: Math.floor(i / 4),
+            col: i % 4,
+            name: `Etsy Image ${i + 1}`,
+            isAnalyzing: false,
+            gridId: etsyGridId,
+          });
+
+          console.log(`[ArcaneSplitter] Loaded Etsy image ${i + 1}/${images.length}`);
+        } catch (imgErr) {
+          console.error(`[ArcaneSplitter] Failed to load Etsy image ${i + 1}:`, imgErr);
+        }
+      }
+
+      if (newSlices.length === 0) {
+        throw new Error('Failed to load any images from the listing');
+      }
+
+      // Add to slices (don't treat as grid - these are individual images)
+      setSlices(prev => [...prev, ...newSlices]);
+      setEtsyUrl(''); // Clear input
+      console.log(`[ArcaneSplitter] Added ${newSlices.length} Etsy images`);
+
+    } catch (err: any) {
+      console.error('[ArcaneSplitter] Etsy fetch error:', err);
+      setError(err.message || 'Failed to fetch Etsy listing');
+    } finally {
+      setIsFetchingEtsy(false);
+    }
+  }, [etsyUrl]);
   
   // Analyze all slices with GPT-4 Vision
   // NOTE: Does NOT auto-navigate to generation - user can sort first, then click "Use in Bulk Mode"
@@ -556,6 +656,41 @@ NO text, NO explanation - ONLY the JSON array.`
               </div>
             </div>
           )}
+        </div>
+
+        {/* Etsy Listing Import */}
+        <div className="flex gap-2">
+          <div className="flex-1 relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2">
+              <ShoppingBag className="w-4 h-4 text-orange-400" />
+            </div>
+            <input
+              type="text"
+              value={etsyUrl}
+              onChange={(e) => setEtsyUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFetchEtsyListing()}
+              placeholder="Paste Etsy listing URL (e.g., https://www.etsy.com/listing/1234567890/...)"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
+              disabled={isFetchingEtsy}
+            />
+          </div>
+          <button
+            onClick={handleFetchEtsyListing}
+            disabled={isFetchingEtsy || !etsyUrl.trim()}
+            className="px-4 py-3 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg text-white font-medium flex items-center gap-2 transition-colors"
+          >
+            {isFetchingEtsy ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Fetching...
+              </>
+            ) : (
+              <>
+                <Link className="w-4 h-4" />
+                Import
+              </>
+            )}
+          </button>
         </div>
         
         {/* Sliced Images Grid */}
