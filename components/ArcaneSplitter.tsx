@@ -317,6 +317,142 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     setSourceImages(prev => prev.filter(g => g.id !== gridId));
     setSlices(prev => prev.filter(s => s.gridId !== gridId));
   }, []);
+
+  // State for similarity sorting
+  const [isSortingBySimilarity, setIsSortingBySimilarity] = useState(false);
+  const [sortProgress, setSortProgress] = useState({ completed: 0, total: 0 });
+
+  // Sort slices by visual similarity using AI
+  const handleSortBySimilarity = useCallback(async () => {
+    if (slices.length < 2 || !hasApiKey) return;
+    
+    setIsSortingBySimilarity(true);
+    setSortProgress({ completed: 0, total: slices.length });
+    setError(null);
+    
+    try {
+      // Step 1: Get AI descriptions for each image (if not already analyzed)
+      const descriptions: Map<string, string> = new Map();
+      
+      for (let i = 0; i < slices.length; i++) {
+        const slice = slices[i];
+        setSortProgress({ completed: i, total: slices.length });
+        
+        if (slice.prompt) {
+          // Use existing prompt as description
+          descriptions.set(slice.id, slice.prompt);
+        } else if (slice.visualDescription) {
+          descriptions.set(slice.id, slice.visualDescription);
+        } else {
+          // Need to analyze this image
+          try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'Describe this image in 20-30 words focusing on: main subject, colors, style, mood. Be concise.'
+                  },
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'text', text: 'Describe this image briefly:' },
+                      { type: 'image_url', image_url: { url: slice.base64, detail: 'low' } }
+                    ]
+                  }
+                ],
+                max_tokens: 100,
+                temperature: 0.3,
+              }),
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              const desc = data.choices?.[0]?.message?.content || '';
+              descriptions.set(slice.id, desc);
+            } else {
+              descriptions.set(slice.id, `image-${i}`);
+            }
+          } catch {
+            descriptions.set(slice.id, `image-${i}`);
+          }
+        }
+      }
+      
+      setSortProgress({ completed: slices.length, total: slices.length });
+      
+      // Step 2: Ask AI to group and sort the descriptions
+      const descList = slices.map((s, i) => `${i}: ${descriptions.get(s.id) || 'unknown'}`).join('\n');
+      
+      const sortResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `You are an image organizer. Given a list of image descriptions, output the indices sorted so that visually similar images are grouped together.
+              
+Rules:
+- Group images with similar subjects together (e.g., all animals, all landscapes, all portraits)
+- Within groups, sort by similar colors/mood
+- Output ONLY a JSON array of numbers, e.g., [3, 7, 1, 0, 5, 2, 6, 4]
+- The array must contain all indices from 0 to N-1 exactly once
+- No explanation, just the JSON array`
+            },
+            {
+              role: 'user',
+              content: `Sort these ${slices.length} images by visual similarity:\n\n${descList}\n\nOutput the sorted indices as a JSON array:`
+            }
+          ],
+          max_tokens: 200,
+          temperature: 0.1,
+        }),
+      });
+      
+      if (!sortResponse.ok) {
+        throw new Error('Failed to get sorting order from AI');
+      }
+      
+      const sortData = await sortResponse.json();
+      const sortText = sortData.choices?.[0]?.message?.content || '';
+      
+      // Parse the JSON array from the response
+      const jsonMatch = sortText.match(/\[[\d,\s]+\]/);
+      if (!jsonMatch) {
+        throw new Error('Could not parse sorting order');
+      }
+      
+      const sortOrder: number[] = JSON.parse(jsonMatch[0]);
+      
+      // Validate the sort order
+      if (sortOrder.length !== slices.length || 
+          !sortOrder.every((n, i, arr) => typeof n === 'number' && n >= 0 && n < slices.length && arr.indexOf(n) === i)) {
+        throw new Error('Invalid sorting order received');
+      }
+      
+      // Apply the sort order
+      const sortedSlices = sortOrder.map(i => slices[i]);
+      setSlices(sortedSlices);
+      
+      console.log('[ArcaneSplitter] Sorted by similarity:', sortOrder);
+    } catch (err: any) {
+      console.error('[ArcaneSplitter] Similarity sort error:', err);
+      setError(err.message || 'Failed to sort by similarity');
+    } finally {
+      setIsSortingBySimilarity(false);
+    }
+  }, [slices, hasApiKey]);
   
   const analyzedCount = slices.filter(s => s.prompt).length;
   
@@ -455,24 +591,48 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
                   </button>
                 )}
                 {hasApiKey ? (
-                  <button
-                    onClick={handleAnalyzeAll}
-                    disabled={isAnalyzing}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
-                      disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Consulting Oracle... ({analysisProgress.completed}/{analysisProgress.total})
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="w-4 h-4" />
-                        Analyze All
-                      </>
+                  <>
+                    <button
+                      onClick={handleAnalyzeAll}
+                      disabled={isAnalyzing || isSortingBySimilarity}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
+                        disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Consulting Oracle... ({analysisProgress.completed}/{analysisProgress.total})
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4" />
+                          Analyze All
+                        </>
+                      )}
+                    </button>
+                    
+                    {slices.length >= 2 && (
+                      <button
+                        onClick={handleSortBySimilarity}
+                        disabled={isSortingBySimilarity || isAnalyzing}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium text-white
+                          disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                        title="Group visually similar images together using AI"
+                      >
+                        {isSortingBySimilarity ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Sorting... ({sortProgress.completed}/{sortProgress.total})
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Sort by Similarity
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
+                  </>
                 ) : (
                   <div className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-400">
                     Set VITE_OPENAI_API_KEY to enable AI analysis
