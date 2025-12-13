@@ -402,8 +402,9 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       const descList = slices.map((s, i) => `${i}:${descriptions.get(s.id) || 'unknown'}`).join('; ');
       
       // Calculate max_tokens needed: roughly 4 chars per number + comma + space
-      // For 60 images: need ~300 chars for array, add buffer for safety
-      const maxTokensNeeded = Math.max(800, slices.length * 8);
+      // For 84 images: need ~420 chars for array, add generous buffer
+      // Token ~= 4 chars, so 84 indices * 4 chars / 4 = 84 tokens minimum, but add 3x buffer
+      const maxTokensNeeded = Math.max(1000, slices.length * 12);
       
       console.log(`[ArcaneSplitter] Sorting ${slices.length} images, requesting ${maxTokensNeeded} max_tokens`);
       
@@ -464,50 +465,41 @@ NO text, NO explanation - ONLY the JSON array.`
       
       console.log(`[ArcaneSplitter] Parsed ${sortOrder.length} indices (expected ${slices.length})`);
       
-      // Validate the sort order
-      const uniqueIndices = new Set(sortOrder);
-      const validIndices = sortOrder.every(n => typeof n === 'number' && n >= 0 && n < slices.length);
+      // Filter out invalid indices first
+      sortOrder = sortOrder.filter(n => typeof n === 'number' && n >= 0 && n < slices.length);
+      console.log(`[ArcaneSplitter] After filtering invalid: ${sortOrder.length} valid indices`);
       
+      // Remove duplicates
+      const seen = new Set<number>();
+      const deduped: number[] = [];
+      for (const n of sortOrder) {
+        if (!seen.has(n)) {
+          seen.add(n);
+          deduped.push(n);
+        }
+      }
+      sortOrder = deduped;
+      
+      // Add any missing indices at the end
+      const missing: number[] = [];
+      for (let i = 0; i < slices.length; i++) {
+        if (!seen.has(i)) {
+          missing.push(i);
+          seen.add(i);
+        }
+      }
+      
+      if (missing.length > 0) {
+        console.log(`[ArcaneSplitter] Adding ${missing.length} missing indices: ${missing.slice(0, 10).join(',')}${missing.length > 10 ? '...' : ''}`);
+        sortOrder = [...sortOrder, ...missing];
+      }
+      
+      // Final validation
       if (sortOrder.length !== slices.length) {
-        console.error(`[ArcaneSplitter] Wrong count: got ${sortOrder.length}, expected ${slices.length}`);
-        // Try to fix: add missing indices at the end
-        const missing = [];
-        for (let i = 0; i < slices.length; i++) {
-          if (!uniqueIndices.has(i)) missing.push(i);
-        }
-        if (missing.length > 0 && sortOrder.length + missing.length === slices.length) {
-          console.log(`[ArcaneSplitter] Auto-fixing: adding missing indices ${missing.join(',')}`);
-          sortOrder = [...sortOrder, ...missing];
-        } else {
-          throw new Error(`Invalid sorting: got ${sortOrder.length} indices, expected ${slices.length}`);
-        }
+        throw new Error(`Failed to construct valid sort order: got ${sortOrder.length}, expected ${slices.length}`);
       }
       
-      if (!validIndices) {
-        throw new Error('Invalid sorting order: indices out of range');
-      }
-      
-      // Check for duplicates
-      if (uniqueIndices.size !== sortOrder.length) {
-        console.error('[ArcaneSplitter] Duplicate indices detected');
-        // Remove duplicates and add missing
-        const seen = new Set<number>();
-        const deduped: number[] = [];
-        for (const n of sortOrder) {
-          if (!seen.has(n)) {
-            seen.add(n);
-            deduped.push(n);
-          }
-        }
-        // Add missing
-        for (let i = 0; i < slices.length; i++) {
-          if (!seen.has(i)) {
-            deduped.push(i);
-          }
-        }
-        sortOrder = deduped;
-        console.log(`[ArcaneSplitter] Fixed to ${sortOrder.length} unique indices`);
-      }
+      console.log(`[ArcaneSplitter] Final sort order: ${sortOrder.length} indices`);
       
       // Apply the sort order
       const sortedSlices = sortOrder.map(i => slices[i]);
