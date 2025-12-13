@@ -482,13 +482,18 @@ const sendTaskToTtapi = async (
             ? `Ttapi API error: Queue is full. Will retry with exponential backoff.`
             : `Ttapi API error: Rate limit exceeded. Will retry with new task.`;
           throw new Error('QUEUE_FULL_RETRY');
-        } else if (response.status === 400 && isNoAccounts && isHoldAccount && processMode === 'relax') {
-          // HOLD account + relax mode + "No available accounts" error
-          // This likely means the HOLD account doesn't support process_mode parameter for relax
-          // or the account needs to be manually set to relax mode in Discord
-          errorMessage = `Ttapi HOLD account error: Relax mode not available via API.`;
-          errorDetail = `For HOLD accounts, you may need to manually enable relax mode in your Midjourney Discord settings. Alternatively, the account may not support relax mode via API parameter. Try using fast mode or check your TTAPI account settings.`;
-          throw new Error('HOLD_RELAX_MODE_NOT_SUPPORTED');
+        } else if (response.status === 400 && isNoAccounts) {
+          // "No available accounts" - account is likely busy processing another job
+          // For HOLD accounts with relax mode, it might also mean relax mode isn't supported via API
+          if (isHoldAccount && processMode === 'relax') {
+            errorMessage = `Ttapi HOLD account error: Relax mode not available via API.`;
+            errorDetail = `For HOLD accounts, you may need to manually enable relax mode in your Midjourney Discord settings. Alternatively, the account may not support relax mode via API parameter. Try using fast mode or check your TTAPI account settings.`;
+            throw new Error('HOLD_RELAX_MODE_NOT_SUPPORTED');
+          } else {
+            // Account is busy - throw retryable error
+            errorMessage = `Ttapi API error: Account is busy (no available accounts). Will retry with exponential backoff.`;
+            throw new Error('NO_ACCOUNTS_RETRY');
+          }
         } else {
           errorDetail = errorJson.error?.message || errorJson.message || JSON.stringify(errorJson);
           errorMessage = `Ttapi HTTP error: ${response.status} - ${errorDetail}`;
@@ -1560,7 +1565,7 @@ export const generateJournalPage = async (
         }
         break; // Success, exit retry loop
       } catch (error: any) {
-        // Check if it's a rate limit or queue full error
+        // Check if it's a rate limit, queue full, or "no available accounts" error
         const isRateLimit = error.message?.includes('RATE_LIMIT_RETRY') || 
                            error.message?.toLowerCase().includes('rate limit') ||
                            error.message?.includes('429');
@@ -1568,14 +1573,21 @@ export const generateJournalPage = async (
                            error.message?.toLowerCase().includes('queue is full') ||
                            error.message?.toLowerCase().includes('queue full') ||
                            error.message?.toLowerCase().includes('try again later');
+        const isNoAccounts = error.message?.includes('NO_ACCOUNTS_RETRY') ||
+                            error.message?.toLowerCase().includes('no available accounts') ||
+                            error.message?.toLowerCase().includes('no available account');
         
-        if ((isRateLimit || isQueueFull) && retryCount < maxRetries) {
+        // "No available accounts" usually means the account is busy - retry with delay
+        if ((isRateLimit || isQueueFull || isNoAccounts) && retryCount < maxRetries) {
           retryCount++;
-          // Exponential backoff: 5s, 10s, 20s for rate limits, longer for queue full
-          const baseDelay = isQueueFull ? baseRetryDelay * 2 : baseRetryDelay; // 10s base for queue full
+          // Exponential backoff: 5s, 10s, 20s for rate limits, longer for queue full/no accounts
+          const baseDelay = (isQueueFull || isNoAccounts) ? baseRetryDelay * 2 : baseRetryDelay; // 10s base for queue full/no accounts
           const retryDelay = baseDelay * Math.pow(2, retryCount - 1);
-          const errorType = isQueueFull ? 'queue full' : 'rate limit';
+          let errorType = isQueueFull ? 'queue full' : (isNoAccounts ? 'account busy' : 'rate limit');
           console.warn(`[Ttapi] ⚠️ ${errorType} detected during task creation (attempt ${retryCount}/${maxRetries}). Waiting ${retryDelay / 1000}s before resending as new task...`);
+          if (isNoAccounts) {
+            console.warn(`[Ttapi] 💡 Account may be processing another job. Retrying after delay...`);
+          }
           await new Promise(resolve => setTimeout(resolve, retryDelay));
           console.log(`[Ttapi] 🔄 Retrying task creation (attempt ${retryCount}/${maxRetries})...`);
           continue; // Retry
