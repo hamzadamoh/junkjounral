@@ -485,11 +485,15 @@ const sendTaskToTtapi = async (
             : `Ttapi API error: Rate limit exceeded. Will retry with new task.`;
           throw new Error('QUEUE_FULL_RETRY');
         } else if (response.status === 400 && isNoAccounts) {
-          // "No available accounts" - account is likely busy processing another job
-          // For HOLD accounts, this usually means the account is busy or there's a connection issue
+          // "No available accounts" - could be account busy, or TTAPI API validation issue
+          // For HOLD accounts with 0 fast hours set to "Only Relax", this is a known TTAPI API limitation
+          // The job may still be queued in Discord despite the API error
           errorMessage = `Ttapi API error: Account is busy (no available accounts). Will retry with exponential backoff.`;
           if (isHoldAccount) {
-            console.warn(`[Ttapi] HOLD account: If this persists, check your TTAPI dashboard and Discord for active jobs.`);
+            console.warn(`[Ttapi] HOLD account: "No available accounts" error detected.`);
+            console.warn(`[Ttapi] Known issue: HOLD accounts with 0 fast hours + "Only Relax" mode may trigger this error.`);
+            console.warn(`[Ttapi] Check your Discord - the job may still be queued despite the API error.`);
+            console.warn(`[Ttapi] If this persists, contact TTAPI support or try using the TTAPI dashboard directly.`);
           }
           throw new Error('NO_ACCOUNTS_RETRY');
         } else {

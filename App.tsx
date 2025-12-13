@@ -714,15 +714,15 @@ const App: React.FC = () => {
             const isRelaxMode = settings.midjourneyMode === 'relax';
             
             if (isNoAccountsError && isRelaxMode && !shouldUseFastMode) {
-              // HOLD account relax mode issue - provide helpful message
-              addLog(`[Bulk Prompt ${promptIndex + 1}] ⚠️ HOLD account: Relax mode not available via API.`, 'log');
-              addLog(`[Bulk Prompt ${promptIndex + 1}] 💡 Solution: Enable relax mode in your Midjourney Discord settings, or switch to fast mode in the app.`, 'log');
-              addLog(`[Bulk Prompt ${promptIndex + 1}] 🔄 Attempting without process_mode parameter (using account's default mode)...`, 'log');
+              // HOLD account relax mode issue - TTAPI API bug
+              addLog(`[Bulk Prompt ${promptIndex + 1}] ⚠️ TTAPI API Error: "No available accounts"`, 'error');
+              addLog(`[Bulk Prompt ${promptIndex + 1}] 🔍 This is a known TTAPI API bug with HOLD accounts (0 fast hours + "Only Relax" mode)`, 'log');
+              addLog(`[Bulk Prompt ${promptIndex + 1}] ✅ Your account works fine - manual Discord jobs complete successfully`, 'log');
+              addLog(`[Bulk Prompt ${promptIndex + 1}] 💡 Workaround: Use TTAPI dashboard directly, or contact TTAPI support about this API bug`, 'log');
+              addLog(`[Bulk Prompt ${promptIndex + 1}] 📧 Report this to TTAPI: HOLD account API returns "No available accounts" despite account being valid`, 'log');
               
-              // Try again without process_mode - let the account use whatever mode it's set to
-              shouldUseFastMode = true; // This will make it skip process_mode
-              promptIndex--; // Go back one to retry this prompt
-              continue;
+              // Don't retry - this is an API bug that won't be fixed by retrying
+              // The user needs to either use the dashboard or contact TTAPI support
             }
             
             // Regular error handling
