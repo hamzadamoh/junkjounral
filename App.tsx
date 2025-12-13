@@ -649,12 +649,10 @@ const App: React.FC = () => {
             finalPrompt += ` --ar ${settings.aspectRatio}`;
           }
           
-          // Add --repeat parameter for 1 or 2 images (Midjourney uses this for fewer than 4 images)
-          if (imagesPerPromptToUse < 4) {
-            finalPrompt += ` --repeat ${imagesPerPromptToUse}`;
-          }
+          // Note: We always generate a 4-image grid, but only KEEP the first N images based on imagesPerPromptToUse
+          // This avoids using --repeat which would generate duplicate prompts
           
-          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating ${imagesPerPromptToUse} image(s): "${prompt.substring(0, 50)}..."`);
+          addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating (keeping ${imagesPerPromptToUse} of 4): "${prompt.substring(0, 50)}..."`);
           
           // Create a dummy theme for bulk prompt mode
           const dummyTheme: Theme = {
@@ -685,14 +683,18 @@ const App: React.FC = () => {
           const originalUrls = (result as any)?.originalUrls as string[] | undefined;
           const originalGridUrl = (result as any)?.originalGridUrl as string | undefined;
           const isGrid = (result as any)?.isGrid as boolean | undefined;
-          const base64Urls = Array.isArray(result) ? result : (result ? [result] : []);
+          const allBase64Urls = Array.isArray(result) ? result : (result ? [result] : []);
+          
+          // Only keep the first N images based on user selection (1, 2, or 4)
+          // Midjourney always generates 4 images, but we only use what the user wants
+          const base64Urls = allBase64Urls.slice(0, imagesPerPromptToUse);
           
           // Update placeholder images for this prompt (based on imagesPerPromptToUse)
           const startIndex = promptIndex * imagesPerPromptToUse;
           const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
           
           if (base64Urls.length > 0) {
-            // Multiple images returned
+            // Multiple images returned - only use first N based on imagesPerPromptToUse
             for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
               updatedImages[startIndex + i].url = base64Urls[i];
               // Store original URL if available for high-quality downloads
@@ -2770,7 +2772,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             {/* Images Per Prompt Selector */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-3">
-                Images Per Prompt (Midjourney)
+                Images to Keep Per Prompt
               </label>
               <div className="flex gap-2">
                 {([1, 2, 4] as const).map((num) => (
@@ -2783,12 +2785,12 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                         : 'bg-gothic-900 border border-slate-600 text-slate-300 hover:border-gothic-gold/50'
                     }`}
                   >
-                    {num} image{num !== 1 ? 's' : ''}
+                    {num} of 4
                   </button>
                 ))}
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                How many images Midjourney will generate per prompt. 4 = grid, 1-2 = individual images (uses --repeat).
+                Midjourney generates 4 images per prompt. Choose how many to keep (saves time if you only need 1-2).
               </p>
             </div>
 

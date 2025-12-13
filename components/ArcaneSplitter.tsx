@@ -875,8 +875,8 @@ NO text, NO explanation - ONLY the JSON array.`
                     {onPromptsGenerated && (
                       <>
                         {/* Images Per Prompt Selector */}
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
-                          <span className="text-xs text-slate-400">Images/Prompt:</span>
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose how many to keep.">
+                          <span className="text-xs text-slate-400">Keep:</span>
                           <div className="flex gap-1">
                             {([1, 2, 4] as const).map((num) => (
                               <button
@@ -888,7 +888,7 @@ NO text, NO explanation - ONLY the JSON array.`
                                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                                 }`}
                               >
-                                {num}
+                                {num}/4
                               </button>
                             ))}
                           </div>
