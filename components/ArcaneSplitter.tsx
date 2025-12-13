@@ -149,6 +149,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   
   
   // Analyze all slices with GPT-4 Vision
+  // NOTE: Does NOT auto-navigate to generation - user can sort first, then click "Use in Bulk Mode"
   const handleAnalyzeAll = useCallback(async () => {
     if (slices.length === 0 || !hasApiKey) return;
     
@@ -169,15 +170,15 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
         return analyzed.map(s => ({ ...s, gridId: gridIdMap.get(s.id) }));
       });
       
-      // Notify parent of generated prompts
-      const prompts = analyzed.filter(s => s.prompt).map(s => s.prompt!);
-      onPromptsGenerated?.(prompts);
+      // Don't auto-navigate to generation - let user sort first if they want
+      // User can click "Use in Bulk Mode" when ready
+      console.log(`[ArcaneSplitter] Analysis complete! ${analyzed.filter(s => s.prompt).length} prompts generated. You can now sort by similarity or use prompts.`);
     } catch (err: any) {
       setError(err.message || 'Analysis failed');
     } finally {
       setIsAnalyzing(false);
     }
-  }, [slices, hasApiKey, onPromptsGenerated]);
+  }, [slices, hasApiKey]);
   
   // Analyze single slice
   const handleAnalyzeSingle = useCallback(async (sliceId: string) => {
