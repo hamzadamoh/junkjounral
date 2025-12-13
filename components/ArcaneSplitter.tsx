@@ -320,75 +320,91 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
 
   // State for similarity sorting
   const [isSortingBySimilarity, setIsSortingBySimilarity] = useState(false);
-  const [sortProgress, setSortProgress] = useState({ completed: 0, total: 0 });
+  const [sortProgress, setSortProgress] = useState({ completed: 0, total: 0, phase: '' });
 
   // Sort slices by visual similarity using AI
   const handleSortBySimilarity = useCallback(async () => {
     if (slices.length < 2 || !hasApiKey) return;
     
     setIsSortingBySimilarity(true);
-    setSortProgress({ completed: 0, total: slices.length });
+    setSortProgress({ completed: 0, total: slices.length, phase: 'Analyzing' });
     setError(null);
     
     try {
       // Step 1: Get AI descriptions for each image (if not already analyzed)
+      // Process in parallel batches of 5 for speed
       const descriptions: Map<string, string> = new Map();
+      const BATCH_SIZE = 5;
       
-      for (let i = 0; i < slices.length; i++) {
-        const slice = slices[i];
-        setSortProgress({ completed: i, total: slices.length });
+      for (let batchStart = 0; batchStart < slices.length; batchStart += BATCH_SIZE) {
+        const batch = slices.slice(batchStart, batchStart + BATCH_SIZE);
         
-        if (slice.prompt) {
-          // Use existing prompt as description
-          descriptions.set(slice.id, slice.prompt);
-        } else if (slice.visualDescription) {
-          descriptions.set(slice.id, slice.visualDescription);
-        } else {
-          // Need to analyze this image
-          try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
-              },
-              body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                  {
-                    role: 'system',
-                    content: 'Describe this image in 20-30 words focusing on: main subject, colors, style, mood. Be concise.'
-                  },
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'text', text: 'Describe this image briefly:' },
-                      { type: 'image_url', image_url: { url: slice.base64, detail: 'low' } }
-                    ]
-                  }
-                ],
-                max_tokens: 100,
-                temperature: 0.3,
-              }),
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              const desc = data.choices?.[0]?.message?.content || '';
-              descriptions.set(slice.id, desc);
-            } else {
-              descriptions.set(slice.id, `image-${i}`);
+        await Promise.all(batch.map(async (slice, batchIdx) => {
+          const globalIdx = batchStart + batchIdx;
+          
+          if (slice.prompt) {
+            // Use existing prompt - extract key terms only (first 50 chars)
+            descriptions.set(slice.id, slice.prompt.substring(0, 50));
+          } else if (slice.visualDescription) {
+            descriptions.set(slice.id, slice.visualDescription.substring(0, 50));
+          } else {
+            // Need to analyze this image - use very brief description
+            try {
+              const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${import.meta.env.VITE_OPENAI_API_KEY}`,
+                },
+                body: JSON.stringify({
+                  model: 'gpt-4o-mini',
+                  messages: [
+                    {
+                      role: 'system',
+                      content: 'Describe in 5-10 words: main subject, dominant color. Example: "red fox, autumn forest, orange"'
+                    },
+                    {
+                      role: 'user',
+                      content: [
+                        { type: 'text', text: 'Brief description:' },
+                        { type: 'image_url', image_url: { url: slice.base64, detail: 'low' } }
+                      ]
+                    }
+                  ],
+                  max_tokens: 30,
+                  temperature: 0.2,
+                }),
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                const desc = data.choices?.[0]?.message?.content || `img${globalIdx}`;
+                descriptions.set(slice.id, desc.substring(0, 50));
+              } else {
+                descriptions.set(slice.id, `img${globalIdx}`);
+              }
+            } catch {
+              descriptions.set(slice.id, `img${globalIdx}`);
             }
-          } catch {
-            descriptions.set(slice.id, `image-${i}`);
           }
-        }
+        }));
+        
+        setSortProgress({ 
+          completed: Math.min(batchStart + BATCH_SIZE, slices.length), 
+          total: slices.length, 
+          phase: 'Analyzing' 
+        });
       }
       
-      setSortProgress({ completed: slices.length, total: slices.length });
+      setSortProgress({ completed: slices.length, total: slices.length, phase: 'Grouping' });
       
-      // Step 2: Ask AI to group and sort the descriptions
-      const descList = slices.map((s, i) => `${i}: ${descriptions.get(s.id) || 'unknown'}`).join('\n');
+      // Step 2: For large sets, first categorize into groups, then sort within groups
+      const descList = slices.map((s, i) => `${i}:${descriptions.get(s.id) || 'unknown'}`).join('; ');
+      
+      // Calculate max_tokens needed: roughly 4 chars per number + comma + space
+      const maxTokensNeeded = Math.max(500, slices.length * 5);
+      
+      console.log(`[ArcaneSplitter] Sorting ${slices.length} images, requesting ${maxTokensNeeded} max_tokens`);
       
       const sortResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -401,51 +417,102 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           messages: [
             {
               role: 'system',
-              content: `You are an image organizer. Given a list of image descriptions, output the indices sorted so that visually similar images are grouped together.
-              
-Rules:
-- Group images with similar subjects together (e.g., all animals, all landscapes, all portraits)
-- Within groups, sort by similar colors/mood
-- Output ONLY a JSON array of numbers, e.g., [3, 7, 1, 0, 5, 2, 6, 4]
-- The array must contain all indices from 0 to N-1 exactly once
-- No explanation, just the JSON array`
+              content: `Sort image indices by visual similarity. Group similar subjects/colors together.
+
+CRITICAL: Output ONLY a JSON array with ALL ${slices.length} indices from 0 to ${slices.length - 1}, each appearing exactly once.
+Example for 5 images: [2,4,0,3,1]
+
+NO text, NO explanation - ONLY the JSON array.`
             },
             {
               role: 'user',
-              content: `Sort these ${slices.length} images by visual similarity:\n\n${descList}\n\nOutput the sorted indices as a JSON array:`
+              content: `Sort these ${slices.length} images:\n${descList}\n\nJSON array:`
             }
           ],
-          max_tokens: 200,
-          temperature: 0.1,
+          max_tokens: maxTokensNeeded,
+          temperature: 0.05,
         }),
       });
       
       if (!sortResponse.ok) {
+        const errText = await sortResponse.text();
+        console.error('[ArcaneSplitter] Sort API error:', errText);
         throw new Error('Failed to get sorting order from AI');
       }
       
       const sortData = await sortResponse.json();
       const sortText = sortData.choices?.[0]?.message?.content || '';
       
-      // Parse the JSON array from the response
-      const jsonMatch = sortText.match(/\[[\d,\s]+\]/);
+      console.log('[ArcaneSplitter] AI response:', sortText.substring(0, 200));
+      
+      // Parse the JSON array from the response - handle multiline
+      const cleanedText = sortText.replace(/\s+/g, '');
+      const jsonMatch = cleanedText.match(/\[[\d,]+\]/);
       if (!jsonMatch) {
-        throw new Error('Could not parse sorting order');
+        console.error('[ArcaneSplitter] Could not find JSON array in:', sortText);
+        throw new Error('Could not parse sorting order - AI response invalid');
       }
       
-      const sortOrder: number[] = JSON.parse(jsonMatch[0]);
+      let sortOrder: number[];
+      try {
+        sortOrder = JSON.parse(jsonMatch[0]);
+      } catch (parseErr) {
+        console.error('[ArcaneSplitter] JSON parse error:', parseErr);
+        throw new Error('Could not parse sorting order - invalid JSON');
+      }
+      
+      console.log(`[ArcaneSplitter] Parsed ${sortOrder.length} indices (expected ${slices.length})`);
       
       // Validate the sort order
-      if (sortOrder.length !== slices.length || 
-          !sortOrder.every((n, i, arr) => typeof n === 'number' && n >= 0 && n < slices.length && arr.indexOf(n) === i)) {
-        throw new Error('Invalid sorting order received');
+      const uniqueIndices = new Set(sortOrder);
+      const validIndices = sortOrder.every(n => typeof n === 'number' && n >= 0 && n < slices.length);
+      
+      if (sortOrder.length !== slices.length) {
+        console.error(`[ArcaneSplitter] Wrong count: got ${sortOrder.length}, expected ${slices.length}`);
+        // Try to fix: add missing indices at the end
+        const missing = [];
+        for (let i = 0; i < slices.length; i++) {
+          if (!uniqueIndices.has(i)) missing.push(i);
+        }
+        if (missing.length > 0 && sortOrder.length + missing.length === slices.length) {
+          console.log(`[ArcaneSplitter] Auto-fixing: adding missing indices ${missing.join(',')}`);
+          sortOrder = [...sortOrder, ...missing];
+        } else {
+          throw new Error(`Invalid sorting: got ${sortOrder.length} indices, expected ${slices.length}`);
+        }
+      }
+      
+      if (!validIndices) {
+        throw new Error('Invalid sorting order: indices out of range');
+      }
+      
+      // Check for duplicates
+      if (uniqueIndices.size !== sortOrder.length) {
+        console.error('[ArcaneSplitter] Duplicate indices detected');
+        // Remove duplicates and add missing
+        const seen = new Set<number>();
+        const deduped: number[] = [];
+        for (const n of sortOrder) {
+          if (!seen.has(n)) {
+            seen.add(n);
+            deduped.push(n);
+          }
+        }
+        // Add missing
+        for (let i = 0; i < slices.length; i++) {
+          if (!seen.has(i)) {
+            deduped.push(i);
+          }
+        }
+        sortOrder = deduped;
+        console.log(`[ArcaneSplitter] Fixed to ${sortOrder.length} unique indices`);
       }
       
       // Apply the sort order
       const sortedSlices = sortOrder.map(i => slices[i]);
       setSlices(sortedSlices);
       
-      console.log('[ArcaneSplitter] Sorted by similarity:', sortOrder);
+      console.log('[ArcaneSplitter] Successfully sorted by similarity');
     } catch (err: any) {
       console.error('[ArcaneSplitter] Similarity sort error:', err);
       setError(err.message || 'Failed to sort by similarity');
@@ -622,7 +689,9 @@ Rules:
                         {isSortingBySimilarity ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Sorting... ({sortProgress.completed}/{sortProgress.total})
+                            {sortProgress.phase === 'Grouping' 
+                              ? 'Grouping...' 
+                              : `${sortProgress.phase}... (${sortProgress.completed}/${sortProgress.total})`}
                           </>
                         ) : (
                           <>
