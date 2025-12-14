@@ -104,16 +104,52 @@ export async function uploadImagesToGoogleDrive(
   const convertedImages: string[] = [];
   for (const img of shuffledImages) {
     try {
-      const sourceUrl = img.originalUrl || img.url;
-      const jpgBase64 = await convertToJpg(sourceUrl);
-      convertedImages.push(jpgBase64);
+      // If url is already a base64 data URL, use it directly
+      if (img.url && img.url.startsWith('data:image')) {
+        // Already base64 - convert to JPG if needed
+        if (img.url.startsWith('data:image/jpeg') || img.url.startsWith('data:image/jpg')) {
+          convertedImages.push(img.url);
+        } else {
+          // Convert other formats to JPG
+          const jpgBase64 = await convertToJpg(img.url);
+          convertedImages.push(jpgBase64);
+        }
+      } else if (img.originalUrl) {
+        // Try to convert from original URL (external)
+        try {
+          const jpgBase64 = await convertToJpg(img.originalUrl);
+          convertedImages.push(jpgBase64);
+        } catch (corsError) {
+          // CORS blocked - fall back to base64 URL if available
+          console.warn(`[Google Drive] CORS blocked for ${img.originalUrl}, using base64 data`);
+          if (img.url && img.url.startsWith('data:image')) {
+            // Use the base64 data URL we already have
+            if (img.url.startsWith('data:image/jpeg') || img.url.startsWith('data:image/jpg')) {
+              convertedImages.push(img.url);
+            } else {
+              const jpgBase64 = await convertToJpg(img.url);
+              convertedImages.push(jpgBase64);
+            }
+          } else {
+            throw corsError; // Re-throw if no fallback available
+          }
+        }
+      } else {
+        // No originalUrl, use url directly
+        if (img.url && img.url.startsWith('data:image')) {
+          convertedImages.push(img.url);
+        } else {
+          throw new Error('No valid image data available');
+        }
+      }
     } catch (error) {
-      console.warn(`[Google Drive] Failed to convert image, using original:`, error);
-      // If conversion fails, try to use the base64 data directly if available
-      if (img.url.startsWith('data:image')) {
+      console.warn(`[Google Drive] Failed to convert image:`, error);
+      // Last resort: use the url as-is if it's base64
+      if (img.url && img.url.startsWith('data:image')) {
+        console.log(`[Google Drive] Using existing base64 data (conversion failed)`);
         convertedImages.push(img.url);
       } else {
-        console.warn(`[Google Drive] Skipping image (CORS blocked or invalid):`, error);
+        console.warn(`[Google Drive] Skipping image (no valid data available):`, error);
       }
     }
   }
@@ -133,6 +169,7 @@ export async function uploadImagesToGoogleDrive(
         clientId: config.clientId,
         clientSecret: config.clientSecret,
         refreshToken: config.refreshToken,
+        parentFolderId: config.parentFolderId, // Pass parent folder ID
       }),
     });
     

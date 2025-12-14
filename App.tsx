@@ -2277,12 +2277,25 @@ const App: React.FC = () => {
       setShowGoogleDriveModal(true);
     } catch (error: any) {
       console.error('Error uploading to Google Drive:', error);
-      addLog(`[Google Drive] ❌ Error: ${error.message}`, 'error');
+      
+      // Extract error message - check if it's from the API response
+      let errorMessage = error.message || 'Unknown error occurred';
+      if (error.message && error.message.includes('401')) {
+        // OAuth error - provide helpful guidance
+        errorMessage = 'Authentication failed. Please check your Google Drive credentials:\n\n' +
+          '1. Verify your Client ID, Client Secret, and Refresh Token are correct\n' +
+          '2. Make sure the refresh token was generated with the same Client ID\n' +
+          '3. If the refresh token is expired, generate a new one\n' +
+          '4. Check that your OAuth consent screen is properly configured\n\n' +
+          'See GOOGLE_DRIVE_SETUP.md for detailed instructions.';
+      }
+      
+      addLog(`[Google Drive] ❌ Error: ${errorMessage}`, 'error');
       
       // Show error modal
       setGoogleDriveModalData({
         title: 'Upload Failed',
-        message: error.message || 'Unknown error occurred',
+        message: errorMessage,
         type: 'error',
       });
       setShowGoogleDriveModal(true);

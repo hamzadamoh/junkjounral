@@ -51,21 +51,34 @@ This guide will help you set up Google Drive API credentials for the image uploa
 
 ## Step 5: Get Refresh Token
 
-You need to get a refresh token using OAuth 2.0 flow. Here are two methods:
+⚠️ **CRITICAL**: The refresh token MUST be generated using the **exact same Client ID and Client Secret** that you're using in your app. If you use different credentials, you'll get an "unauthorized_client" error.
 
 ### Method 1: Using OAuth 2.0 Playground (Easier)
 
-1. Go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
-2. Click the gear icon (⚙️) in the top right
-3. Check **"Use your own OAuth credentials"**
-4. Enter your **Client ID** and **Client Secret** from Step 3
-5. In the left panel, scroll down and find **"Drive API v3"**
-6. Expand it and check:
-   - `https://www.googleapis.com/auth/drive.file`
-7. Click **"Authorize APIs"**
-8. Sign in with your Google account and grant permissions
-9. Click **"Exchange authorization code for tokens"**
-10. Copy the **Refresh token** from the response (it looks like: `1//0abc123...`)
+1. **First, get your Client ID and Client Secret from Google Cloud Console:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Navigate to **APIs & Services** > **Credentials**
+   - Find your OAuth 2.0 Client ID (the one you created in Step 3)
+   - Click on it to view details
+   - Copy the **Client ID** and **Client Secret** (click "Show" to reveal the secret)
+
+2. **Generate the refresh token:**
+   - Go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)
+   - Click the gear icon (⚙️) in the top right
+   - Check **"Use your own OAuth credentials"**
+   - **IMPORTANT**: Enter the **exact same Client ID and Client Secret** you copied from Google Cloud Console
+   - In the left panel, scroll down and find **"Drive API v3"**
+   - Expand it and check:
+     - `https://www.googleapis.com/auth/drive.file`
+   - Click **"Authorize APIs"**
+   - Sign in with your Google account and grant permissions
+   - Click **"Exchange authorization code for tokens"**
+   - Copy the **Refresh token** from the response (it looks like: `1//0abc123...`)
+
+3. **Verify the credentials match:**
+   - The Client ID you used in OAuth Playground should match `VITE_GOOGLE_DRIVE_CLIENT_ID` in your `.env`
+   - The Client Secret you used in OAuth Playground should match `VITE_GOOGLE_DRIVE_CLIENT_SECRET` in your `.env`
+   - The refresh token you just generated should be used for `VITE_GOOGLE_DRIVE_REFRESH_TOKEN` in your `.env`
 
 ### Method 2: Using a Script (More Control)
 
@@ -154,14 +167,30 @@ VITE_GOOGLE_DRIVE_REFRESH_TOKEN=your_refresh_token_here
 
 ## Troubleshooting
 
+### "unauthorized_client" error (401 Unauthorized)
+This is the most common error and usually means:
+1. **Client ID and Client Secret don't match** - Double-check that you copied them correctly from Google Cloud Console
+2. **Refresh token was generated with a different Client ID** - The refresh token must be generated using the exact same Client ID you're using in your app
+3. **OAuth consent screen not configured** - Make sure you completed Step 4 above
+4. **Wrong OAuth client type** - Make sure you created a "Web application" OAuth client, not "Desktop" or "Other"
+
+**Solution:**
+- Go back to OAuth Playground (Method 1 in Step 5)
+- Make sure you enter the **exact same Client ID and Client Secret** from your Google Cloud Console
+- Generate a new refresh token
+- Update your environment variables with the new refresh token
+
 ### "Invalid client" error
 - Make sure your Client ID and Client Secret are correct
-- Check that you copied them without extra spaces
+- Check that you copied them without extra spaces or line breaks
+- Verify they match exactly what's shown in Google Cloud Console
 
 ### "Invalid grant" error
 - Your refresh token may have expired or been revoked
+- If your app is in "Testing" mode, refresh tokens expire after 7 days
 - Generate a new refresh token using Method 1 or 2 above
 - Make sure you're using the same Google account that authorized the app
+- **Solution:** Change your app's publishing status to "In production" to prevent refresh token expiration
 
 ### "Access denied" error
 - Make sure the OAuth consent screen is properly configured
@@ -171,7 +200,8 @@ VITE_GOOGLE_DRIVE_REFRESH_TOKEN=your_refresh_token_here
 ### "Redirect URI mismatch"
 - Make sure the redirect URI in your OAuth client matches exactly what you're using
 - For local development: `http://localhost:5173`
-- For production: your actual Vercel URL
+- For production: your actual Vercel URL (e.g., `https://junkjounral.vercel.app`)
+- Note: The redirect URI is only used during initial authorization - it doesn't need to match your app's domain for refresh tokens
 
 ## Security Notes
 

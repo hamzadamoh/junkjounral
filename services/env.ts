@@ -153,6 +153,7 @@ export const getGoogleDriveConfig = () => {
       clientId: process.env.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
       clientSecret: process.env.VITE_GOOGLE_DRIVE_CLIENT_SECRET || '',
       refreshToken: process.env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN || '',
+      parentFolderId: process.env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
   
@@ -163,6 +164,7 @@ export const getGoogleDriveConfig = () => {
       clientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
       clientSecret: env.VITE_GOOGLE_DRIVE_CLIENT_SECRET || '',
       refreshToken: env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN || '',
+      parentFolderId: env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
   
@@ -175,12 +177,14 @@ export const getGoogleDriveConfig = () => {
       clientId: (env?.VITE_GOOGLE_DRIVE_CLIENT_ID as string) || '',
       clientSecret: (env?.VITE_GOOGLE_DRIVE_CLIENT_SECRET as string) || '',
       refreshToken: (env?.VITE_GOOGLE_DRIVE_REFRESH_TOKEN as string) || '',
+      parentFolderId: (env?.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID as string) || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   } catch {
     return {
       clientId: '',
       clientSecret: '',
       refreshToken: '',
+      parentFolderId: '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
 };

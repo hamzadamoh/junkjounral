@@ -7,13 +7,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { folderName, clientId, clientSecret, refreshToken } = req.body;
+    const { folderName, clientId, clientSecret, refreshToken, parentFolderId } = req.body;
 
     if (!folderName || !clientId || !clientSecret || !refreshToken) {
       return res.status(400).json({ 
         error: 'Missing required parameters: folderName, clientId, clientSecret, refreshToken' 
       });
     }
+
+    // Use provided parent folder ID or default
+    const targetParentFolderId = parentFolderId || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU';
 
     // Get access token using refresh token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -31,9 +34,32 @@ export default async function handler(req, res) {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error('[Google Drive] Token refresh error:', errorText);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: 'unknown_error', error_description: errorText };
+      }
+      
+      console.error('[Google Drive] Token refresh error:', errorData);
+      
+      // Provide helpful error messages
+      let errorMessage = 'Failed to refresh access token';
+      if (errorData.error === 'unauthorized_client') {
+        errorMessage = 'OAuth credentials are invalid. Please check:\n' +
+          '1. Client ID and Client Secret are correct\n' +
+          '2. Refresh token is valid (generate a new one if needed)\n' +
+          '3. OAuth consent screen is properly configured\n' +
+          '4. The refresh token was generated with the same Client ID';
+      } else if (errorData.error === 'invalid_grant') {
+        errorMessage = 'Refresh token is invalid or expired. Please generate a new refresh token.';
+      } else if (errorData.error_description) {
+        errorMessage = errorData.error_description;
+      }
+      
       return res.status(401).json({ 
-        error: 'Failed to refresh access token',
+        error: errorMessage,
+        errorCode: errorData.error,
         details: errorText 
       });
     }
@@ -41,7 +67,7 @@ export default async function handler(req, res) {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
 
-    // Create folder in Google Drive
+    // Create folder in Google Drive inside the parent folder
     const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
       method: 'POST',
       headers: {
@@ -51,6 +77,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         name: folderName,
         mimeType: 'application/vnd.google-apps.folder',
+        parents: [targetParentFolderId], // Create inside the specified parent folder
       }),
     });
 

@@ -31,9 +31,32 @@ export default async function handler(req, res) {
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
-      console.error('[Google Drive] Token refresh error:', errorText);
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: 'unknown_error', error_description: errorText };
+      }
+      
+      console.error('[Google Drive] Token refresh error:', errorData);
+      
+      // Provide helpful error messages
+      let errorMessage = 'Failed to refresh access token';
+      if (errorData.error === 'unauthorized_client') {
+        errorMessage = 'OAuth credentials are invalid. Please check:\n' +
+          '1. Client ID and Client Secret are correct\n' +
+          '2. Refresh token is valid (generate a new one if needed)\n' +
+          '3. OAuth consent screen is properly configured\n' +
+          '4. The refresh token was generated with the same Client ID';
+      } else if (errorData.error === 'invalid_grant') {
+        errorMessage = 'Refresh token is invalid or expired. Please generate a new refresh token.';
+      } else if (errorData.error_description) {
+        errorMessage = errorData.error_description;
+      }
+      
       return res.status(401).json({ 
-        error: 'Failed to refresh access token',
+        error: errorMessage,
+        errorCode: errorData.error,
         details: errorText 
       });
     }
@@ -45,8 +68,18 @@ export default async function handler(req, res) {
     const fileBuffer = Buffer.from(base64Data, 'base64');
     
     // Upload file to Google Drive using multipart upload
-    // Create multipart boundary
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    // According to Google Drive API docs, multipart format should be:
+    // --boundary
+    // Content-Type: application/json
+    // 
+    // {metadata}
+    // --boundary
+    // Content-Type: {mimeType}
+    // 
+    // {file data}
+    // --boundary--
+    
+    const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     
     // Create metadata part
     const metadata = {
@@ -54,15 +87,23 @@ export default async function handler(req, res) {
       parents: [folderId],
     };
     
-    // Build multipart body
+    const metadataJson = JSON.stringify(metadata);
+    
+    // Build multipart body according to Google's specification
+    const parts = [
+      `--${boundary}\r\n`,
+      `Content-Type: application/json; charset=UTF-8\r\n`,
+      `\r\n`,
+      `${metadataJson}\r\n`,
+      `--${boundary}\r\n`,
+      `Content-Type: ${mimeType || 'image/jpeg'}\r\n`,
+      `\r\n`,
+    ];
+    
     const multipartBody = Buffer.concat([
-      Buffer.from(`--${boundary}\r\n`),
-      Buffer.from('Content-Type: application/json\r\n\r\n'),
-      Buffer.from(JSON.stringify(metadata)),
-      Buffer.from(`\r\n--${boundary}\r\n`),
-      Buffer.from(`Content-Type: ${mimeType || 'image/jpeg'}\r\n\r\n`),
+      Buffer.from(parts.join(''), 'utf8'),
       fileBuffer,
-      Buffer.from(`\r\n--${boundary}--\r\n`),
+      Buffer.from(`\r\n--${boundary}--`, 'utf8'),
     ]);
 
     const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
@@ -70,7 +111,6 @@ export default async function handler(req, res) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': `multipart/related; boundary=${boundary}`,
-        'Content-Length': multipartBody.length.toString(),
       },
       body: multipartBody,
     });
