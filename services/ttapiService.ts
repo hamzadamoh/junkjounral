@@ -406,17 +406,19 @@ const sendTaskToTtapi = async (
     getUImages: true  // Request 4 individual images instead of grid (per Ttapi docs)
   };
   
-  // For HOLD accounts, process_mode parameter is NOT supported by the API
-  // The account uses whatever mode it's set to in Discord settings
-  // So we never send process_mode for HOLD accounts
-  if (!isHoldAccount && processMode && processMode !== 'fast') {
-    // Only send process_mode for non-HOLD accounts (PPU mode)
-    // For HOLD accounts, the account must be manually set to relax/fast mode in Discord
-    data.process_mode = processMode;
-  } else if (isHoldAccount) {
-    console.log(`[Ttapi] HOLD account detected. Using account's Discord mode setting (process_mode parameter not sent).`);
+  // Use 'mode' parameter (not 'process_mode') - per TTAPI documentation
+  // mode can be: 'fast', 'relax', or 'turbo'
+  // Default is 'fast' if not specified
+  // For HOLD accounts, --relax is also added to the prompt (done in generateJournalPage)
+  if (processMode && processMode !== 'fast') {
+    data.mode = processMode; // 'relax' or 'turbo'
+    console.log(`[Ttapi] Setting mode parameter to: ${processMode}`);
+  }
+  
+  if (isHoldAccount) {
+    console.log(`[Ttapi] HOLD account detected. Mode: ${processMode || 'fast'}`);
     if (processMode === 'relax') {
-      console.log(`[Ttapi] ⚠️ Note: Make sure your Midjourney account is set to relax mode in Discord (/settings).`);
+      console.log(`[Ttapi] Note: --relax has been added to the prompt for HOLD account relax mode.`);
     }
   }
 
@@ -1544,13 +1546,26 @@ export const generateJournalPage = async (
       prompt += ` ${parametersForMJ.trim()}`;
       console.log(`[Ttapi] Added Midjourney parameters: ${parametersForMJ.trim()}`);
     }
+    
+    // For HOLD accounts with relax mode, add --relax to the end of the prompt
+    // According to TTAPI docs, HOLD accounts need the mode specified in the prompt
+    const baseUrl = getTtapiBaseUrl();
+    const isHoldAccount = baseUrl.includes('hold.ttapi.io');
+    if (isHoldAccount && processMode === 'relax') {
+      prompt = prompt.trim();
+      // Make sure --relax isn't already in the prompt
+      if (!prompt.toLowerCase().includes('--relax')) {
+        prompt += ' --relax';
+        console.log(`[Ttapi] HOLD account: Added --relax to prompt for relax mode`);
+      }
+    }
 
     // Log the EXACT prompt being sent to Midjourney for debugging
     console.log(`[Ttapi] FULL PROMPT BEING SENT: "${prompt}"`);
     console.log(`[Ttapi] Full request body:`, JSON.stringify({
       prompt: prompt,
       aspect_ratio: aspectRatio,
-      process_mode: processMode
+      mode: processMode !== 'fast' ? processMode : undefined
     }, null, 2));
 
     // Send task to ttapi.io with retry logic for rate limits
