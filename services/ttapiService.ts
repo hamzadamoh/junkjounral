@@ -384,8 +384,8 @@ const sendTaskToTtapi = async (
   processMode: string = 'fast'
 ): Promise<string | null> => {
   console.log(`[Ttapi] ===== Starting sendTaskToTtapi =====`);
-  console.log(`[Ttapi] Prompt length: ${prompt.length}`);
-  console.log(`[Ttapi] Prompt preview: ${prompt.substring(0, 150)}...`);
+  console.log(`[Ttapi] Original prompt length: ${prompt.length}`);
+  console.log(`[Ttapi] Original prompt preview: ${prompt.substring(0, 150)}...`);
   console.log(`[Ttapi] Process mode: ${processMode}`);
   
   const apiKey = getTtapiApiKey();
@@ -400,9 +400,17 @@ const sendTaskToTtapi = async (
   // Check if this is a HOLD account (hold.ttapi.io domain)
   const baseUrl = getTtapiBaseUrl();
   const isHoldAccount = baseUrl.includes('hold.ttapi.io');
+
+  // Add negative prompt to exclude realistic style
+  // Append --no realistic to every prompt (avoid duplicates)
+  let promptWithNegative = prompt.trim();
+  if (!promptWithNegative.includes('--no realistic')) {
+    promptWithNegative += ' --no realistic';
+  }
+  console.log(`[Ttapi] Final prompt with negative prompt: ${promptWithNegative.substring(0, 200)}...`);
   
   const data: any = {
-    prompt: prompt,
+    prompt: promptWithNegative,
     getUImages: true  // Request 4 individual images instead of grid (per Ttapi docs)
   };
   
