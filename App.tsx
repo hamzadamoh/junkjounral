@@ -615,14 +615,24 @@ const App: React.FC = () => {
       const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPromptToUse));
       
       if (settings.imageService === 'ttapi') {
-        // Sequential processing for Ttapi HOLD account (one request at a time)
-        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts sequentially (${settings.midjourneyMode} mode)...`);
+        // Process in batches of 3 concurrent requests (Midjourney limit)
+        const maxConcurrent = 3;
+        const totalBatches = Math.ceil(promptsToProcess.length / maxConcurrent);
+        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (${settings.midjourneyMode} mode)...`);
         
         // Track if we've detected relax mode issues and should switch to fast
         let shouldUseFastMode = false;
         
-        for (let promptIndex = 0; promptIndex < promptsToProcess.length; promptIndex++) {
-          const prompt = promptsToProcess[promptIndex];
+        // Process prompts in batches
+        for (let batchStart = 0; batchStart < promptsToProcess.length; batchStart += maxConcurrent) {
+          const batchEnd = Math.min(batchStart + maxConcurrent, promptsToProcess.length);
+          const batchNumber = Math.floor(batchStart / maxConcurrent) + 1;
+          
+          addLog(`[Ttapi Bulk] 🚀 Starting batch ${batchNumber}/${totalBatches}: Processing ${batchEnd - batchStart} prompt(s) in parallel (prompts ${batchStart + 1}-${batchEnd} of ${promptsToProcess.length})...`, 'log');
+          
+          // Process this batch in parallel
+          const batchPromises = promptsToProcess.slice(batchStart, batchEnd).map(async (prompt, batchIndex) => {
+            const promptIndex = batchStart + batchIndex;
           
           try {
             // Apply moodboard and SREF if provided
@@ -703,6 +713,7 @@ const App: React.FC = () => {
             setGeneratedImages([...updatedImages]);
             setCurrentProgress(prev => Math.min(prev + base64Urls.length, actualTotal));
             addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${base64Urls.length} images)`, 'success');
+            return { success: true, promptIndex };
             
           } catch (error: any) {
             console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
@@ -735,10 +746,17 @@ const App: React.FC = () => {
             }
             setGeneratedImages([...updatedImages]);
             addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
+            return { success: false, promptIndex };
           }
+          });
           
-          // Small delay between requests to let Midjourney breathe
-          if (promptIndex < promptsToProcess.length - 1) {
+          // Wait for all requests in this batch to complete
+          const batchResults = await Promise.allSettled(batchPromises);
+          const batchCompleted = batchResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
+          addLog(`[Ttapi Bulk] ✅ Batch ${batchNumber}/${totalBatches} completed: ${batchCompleted}/${batchEnd - batchStart} prompts successful`, 'success');
+          
+          // Small delay between batches to avoid overwhelming the API
+          if (batchEnd < promptsToProcess.length) {
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
@@ -1496,11 +1514,11 @@ const App: React.FC = () => {
       
       // Process requests in batches of maxConcurrent
       const processRequest = async (requestIdx: number) => {
-        
         const startIdx = requestIdx * 4;
         const endIdx = Math.min(startIdx + 4, total);
         const imageRange = `${startIdx + 1}-${endIdx}`;
         
+        // Log immediately when request starts (all requests in batch start simultaneously)
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
           // For Image Theme Expansion mode: use the single image's styleRefUrl
@@ -1683,18 +1701,28 @@ const App: React.FC = () => {
       for (let batchStart = 0; batchStart < requestsNeeded; batchStart += maxConcurrent) {
         const batchEnd = Math.min(batchStart + maxConcurrent, requestsNeeded);
         const batchSize = batchEnd - batchStart;
+        const batchNumber = Math.floor(batchStart / maxConcurrent) + 1;
+        const totalBatches = Math.ceil(requestsNeeded / maxConcurrent);
         
-        if (isTtapi && batchStart > 0) {
-          addLog(`[${serviceName}] Processing batch ${Math.floor(batchStart / maxConcurrent) + 1} (requests ${batchStart + 1}-${batchEnd} of ${requestsNeeded})...`);
+        if (isTtapi) {
+          addLog(`[${serviceName}] 🚀 Starting batch ${batchNumber}/${totalBatches}: Processing ${batchSize} request(s) in parallel (requests ${batchStart + 1}-${batchEnd} of ${requestsNeeded})...`, 'log');
         }
         
-        // Process this batch in parallel
-        const batchPromises = Array.from({ length: batchSize }, (_, i) => 
-          processRequest(batchStart + i)
-        );
+        // Process this batch in parallel - all requests start simultaneously
+        // Create all promises at once - they all start executing immediately
+        const batchPromises: Promise<{ success: boolean; index: number; error?: any }>[] = [];
+        for (let i = 0; i < batchSize; i++) {
+          batchPromises.push(processRequest(batchStart + i));
+        }
         
+        // All promises are now running in parallel - wait for all to complete
         const batchResults = await Promise.allSettled(batchPromises);
         results.push(...batchResults);
+        
+        if (isTtapi) {
+          const batchCompleted = batchResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
+          addLog(`[${serviceName}] ✅ Batch ${batchNumber}/${totalBatches} completed: ${batchCompleted}/${batchSize} requests successful`, 'success');
+        }
         
         // Small delay between batches to avoid overwhelming the API
         if (batchEnd < requestsNeeded && isTtapi) {
