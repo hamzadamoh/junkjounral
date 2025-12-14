@@ -34,7 +34,7 @@ import { generateJournalPage as generateWithReplicate } from './services/replica
 import { generateJournalPage as generateWithTtapi } from './services/ttapiService';
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
-import { uploadImagesToImageKit, ImageKitUploadResult } from './services/imagekitService';
+import { uploadImagesToGoogleDrive, GoogleDriveUploadResult } from './services/googleDriveService';
 import ArcaneSplitter from './components/ArcaneSplitter';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
@@ -102,9 +102,9 @@ const App: React.FC = () => {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState<boolean>(false);
   const [styleRefUrl, setStyleRefUrl] = useState<string | null>(null);
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
-  const [isUploadingToImageKit, setIsUploadingToImageKit] = useState<boolean>(false);
-  const [showImageKitModal, setShowImageKitModal] = useState<boolean>(false);
-  const [imageKitModalData, setImageKitModalData] = useState<{
+  const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
+  const [showGoogleDriveModal, setShowGoogleDriveModal] = useState<boolean>(false);
+  const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
     message: string;
     folderUrl?: string;
@@ -2216,7 +2216,7 @@ const App: React.FC = () => {
     }
   };
 
-  const uploadToImageKit = async () => {
+  const uploadToGoogleDrive = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
     
     if (completedImages.length === 0) {
@@ -2225,14 +2225,14 @@ const App: React.FC = () => {
     }
 
     // Prompt for folder name
-    const folderName = prompt('Enter a name for the ImageKit folder:');
+    const folderName = prompt('Enter a name for the Google Drive folder:');
     if (!folderName || folderName.trim() === '') {
       return; // User cancelled or entered empty name
     }
 
     try {
-      setIsUploadingToImageKit(true);
-      addLog(`[ImageKit] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
+      setIsUploadingToGoogleDrive(true);
+      addLog(`[Google Drive] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
 
       // Prepare images for upload
       const imagesToUpload = completedImages.map(img => ({
@@ -2240,58 +2240,54 @@ const App: React.FC = () => {
         originalUrl: img.originalUrl,
       }));
 
-      // Upload to ImageKit with progress callback
-      const result = await uploadImagesToImageKit(
+      // Upload to Google Drive with progress callback
+      const result = await uploadImagesToGoogleDrive(
         folderName.trim(),
         imagesToUpload,
         (uploaded, total) => {
-          addLog(`[ImageKit] Uploading ${uploaded}/${total} images...`, 'log');
+          addLog(`[Google Drive] Uploading ${uploaded}/${total} images...`, 'log');
         }
       );
 
-      if (result.success) {
-        addLog(`[ImageKit] ✅ Successfully uploaded ${result.uploadedFiles.length} images!`, 'success');
-        if (result.failed > 0) {
-          addLog(`[ImageKit] ⚠️ ${result.failed} images failed to upload`, 'warn');
-        }
-        addLog(`[ImageKit] 📁 Folder URL: ${result.folderUrl}`, 'success');
-        
-        // Copy URLs to clipboard if possible
-        const urls = result.uploadedFiles.map(f => f.url).join('\n');
-        if (navigator.clipboard && urls) {
-          try {
-            await navigator.clipboard.writeText(urls);
-            addLog(`[ImageKit] 📋 URLs copied to clipboard!`, 'success');
-          } catch (clipError) {
-            console.warn('Failed to copy to clipboard:', clipError);
-          }
-        }
-        
-        // Show success modal
-        setImageKitModalData({
-          title: 'Upload Successful!',
-          message: `Successfully uploaded ${result.uploadedFiles.length} images to ImageKit. ${result.failed > 0 ? `(${result.failed} failed)` : ''} All URLs are public and optimized via CDN.`,
-          folderUrl: result.folderUrl,
-          urls: result.uploadedFiles.map(f => f.url),
-          type: 'success',
-        });
-        setShowImageKitModal(true);
-      } else {
-        throw new Error(result.error || 'Upload failed');
+      addLog(`[Google Drive] ✅ Successfully uploaded ${result.uploadedFiles.length} images!`, 'success');
+      if (result.failed > 0) {
+        addLog(`[Google Drive] ⚠️ ${result.failed} images failed to upload`, 'warn');
       }
+      addLog(`[Google Drive] 📁 Folder URL: ${result.folderUrl}`, 'success');
+      
+      // Copy URLs to clipboard if possible
+      const urls = result.uploadedFiles.map(f => f.url).join('\n');
+      if (navigator.clipboard && urls) {
+        try {
+          await navigator.clipboard.writeText(urls);
+          addLog(`[Google Drive] 📋 URLs copied to clipboard!`, 'success');
+        } catch (clipError) {
+          console.warn('Failed to copy to clipboard:', clipError);
+        }
+      }
+      
+      // Show success modal
+      setGoogleDriveModalData({
+        title: 'Upload Successful!',
+        message: `Successfully uploaded ${result.uploadedFiles.length} images to Google Drive. ${result.failed > 0 ? `(${result.failed} failed)` : ''} All images are stored in your Google Drive folder.`,
+        folderUrl: result.folderUrl,
+        urls: result.uploadedFiles.map(f => f.url),
+        type: 'success',
+      });
+      setShowGoogleDriveModal(true);
     } catch (error: any) {
-      console.error('Error uploading to ImageKit:', error);
-      addLog(`[ImageKit] ❌ Error: ${error.message}`, 'error');
+      console.error('Error uploading to Google Drive:', error);
+      addLog(`[Google Drive] ❌ Error: ${error.message}`, 'error');
       
       // Show error modal
-      setImageKitModalData({
+      setGoogleDriveModalData({
         title: 'Upload Failed',
         message: error.message || 'Unknown error occurred',
         type: 'error',
       });
-      setShowImageKitModal(true);
+      setShowGoogleDriveModal(true);
     } finally {
-      setIsUploadingToImageKit(false);
+      setIsUploadingToGoogleDrive(false);
     }
   };
 
@@ -3758,18 +3754,18 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   <FileText size={18} /> Download PDF ({completedCount})
                 </button>
                 <button 
-                  onClick={uploadToImageKit}
-                  disabled={isUploadingToImageKit}
+                  onClick={uploadToGoogleDrive}
+                  disabled={isUploadingToGoogleDrive}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title="Upload all images to ImageKit (images will be shuffled, renamed, converted to JPG, and optimized via CDN)"
+                  title="Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)"
                 >
-                  {isUploadingToImageKit ? (
+                  {isUploadingToGoogleDrive ? (
                     <>
                       <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
                     </>
                   ) : (
                     <>
-                      <Link size={18} /> Upload to ImageKit ({completedCount})
+                      <Link size={18} /> Upload to Google Drive ({completedCount})
                     </>
                   )}
                 </button>
@@ -4131,18 +4127,18 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
         </div>
       )}
 
-      {/* ImageKit Upload Modal */}
-      {showImageKitModal && imageKitModalData && (
+      {/* Google Drive Upload Modal */}
+      {showGoogleDriveModal && googleDriveModalData && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="max-w-2xl w-full bg-gothic-800/95 backdrop-blur-sm border-2 border-emerald-500/30 rounded-xl p-8 shadow-2xl animate-fade-in">
             <div className="flex items-center justify-between mb-6">
-              <h3 className={`text-2xl font-serif ${imageKitModalData.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {imageKitModalData.title}
+              <h3 className={`text-2xl font-serif ${googleDriveModalData.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {googleDriveModalData.title}
               </h3>
               <button
                 onClick={() => {
-                  setShowImageKitModal(false);
-                  setImageKitModalData(null);
+                  setShowGoogleDriveModal(false);
+                  setGoogleDriveModalData(null);
                 }}
                 className="text-slate-400 hover:text-white transition-colors p-1"
               >
@@ -4151,43 +4147,43 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             </div>
 
             <div className="space-y-4">
-              <p className="text-slate-200">{imageKitModalData.message}</p>
+              <p className="text-slate-200">{googleDriveModalData.message}</p>
 
-              {imageKitModalData.type === 'success' && imageKitModalData.folderUrl && (
+              {googleDriveModalData.type === 'success' && googleDriveModalData.folderUrl && (
                 <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
-                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 ImageKit Folder URL:</p>
+                  <p className="text-slate-300 mb-2 text-sm font-medium">📁 Google Drive Folder URL:</p>
                   <a
-                    href={imageKitModalData.folderUrl}
+                    href={googleDriveModalData.folderUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-emerald-400 hover:text-emerald-300 break-all text-sm flex items-center gap-2 transition-colors"
                   >
                     <Link size={16} />
-                    {imageKitModalData.folderUrl}
+                    {googleDriveModalData.folderUrl}
                   </a>
-                  <p className="text-green-400 text-xs mt-2">✅ Images are optimized and served via ImageKit CDN!</p>
+                  <p className="text-green-400 text-xs mt-2">✅ Images are stored in your Google Drive folder!</p>
                 </div>
               )}
 
-              {imageKitModalData.type === 'success' && imageKitModalData.urls && imageKitModalData.urls.length > 0 && (
+              {googleDriveModalData.type === 'success' && googleDriveModalData.urls && googleDriveModalData.urls.length > 0 && (
                 <>
                   {/* Public URLs Notice */}
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                    <p className="text-green-400 text-sm font-medium mb-1">✅ CDN-Optimized URLs - Fast & Global</p>
+                    <p className="text-green-400 text-sm font-medium mb-1">✅ Google Drive URLs</p>
                     <p className="text-slate-300 text-xs">
-                      These URLs are served via ImageKit's global CDN with automatic optimization. Share them directly with customers!
+                      These URLs link to your images in Google Drive. Make sure the folder is shared if you want to share these links with others.
                     </p>
                   </div>
 
                   <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 max-h-64 overflow-y-auto">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-slate-300 text-sm font-medium">Image URLs ({imageKitModalData.urls.length}):</p>
+                      <p className="text-slate-300 text-sm font-medium">Image URLs ({googleDriveModalData.urls.length}):</p>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={async () => {
                             try {
-                              await navigator.clipboard.writeText(imageKitModalData.urls?.join('\n') || '');
-                              addLog('[ImageKit] 📋 URLs copied to clipboard!', 'success');
+                              await navigator.clipboard.writeText(googleDriveModalData.urls?.join('\n') || '');
+                              addLog('[Google Drive] 📋 URLs copied to clipboard!', 'success');
                             } catch (error) {
                               console.error('Failed to copy:', error);
                             }
@@ -4200,7 +4196,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                       </div>
                     </div>
                     <div className="space-y-2">
-                      {imageKitModalData.urls.map((url, index) => (
+                      {googleDriveModalData.urls.map((url, index) => (
                       <div key={index} className="flex items-start gap-2">
                         <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
                         <a
@@ -4215,7 +4211,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(url);
-                              addLog(`[ImageKit] 📋 URL ${index + 1} copied!`, 'success');
+                              addLog(`[Google Drive] 📋 URL ${index + 1} copied!`, 'success');
                             } catch (error) {
                               console.error('Failed to copy:', error);
                             }
@@ -4233,20 +4229,20 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               )}
 
               <div className="flex gap-3 pt-4">
-                {imageKitModalData.type === 'success' && imageKitModalData.urls && imageKitModalData.urls.length > 0 && (
+                {googleDriveModalData.type === 'success' && googleDriveModalData.urls && googleDriveModalData.urls.length > 0 && (
                   <>
                     <button
                       onClick={() => {
                         // Download as text file
-                        const content = imageKitModalData.urls?.join('\n') || '';
+                        const content = googleDriveModalData.urls?.join('\n') || '';
                         const blob = new Blob([content], { type: 'text/plain' });
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = `imagekit-urls-${Date.now()}.txt`;
+                        link.download = `google-drive-urls-${Date.now()}.txt`;
                         link.click();
                         URL.revokeObjectURL(url);
-                        addLog('[ImageKit] 📄 URLs file downloaded!', 'success');
+                        addLog('[Google Drive] 📄 URLs file downloaded!', 'success');
                       }}
                       className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
@@ -4259,7 +4255,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                         const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
-  <title>ImageKit Image URLs</title>
+  <title>Google Drive Image URLs</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; background: #1e1e1e; color: #fff; }
     a { color: #34d399; text-decoration: none; }
@@ -4268,9 +4264,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
   </style>
 </head>
 <body>
-  <h1>ImageKit Image URLs (${imageKitModalData.urls?.length || 0} images)</h1>
-  <p>All URLs are served via ImageKit CDN with automatic optimization.</p>
-  ${imageKitModalData.urls?.map((url, i) => `
+  <h1>Google Drive Image URLs (${googleDriveModalData.urls?.length || 0} images)</h1>
+  <p>All images are stored in your Google Drive folder.</p>
+  ${googleDriveModalData.urls?.map((url, i) => `
     <div class="url">
       <strong>Image ${i + 1}:</strong><br>
       <a href="${url}" target="_blank">${url}</a>
@@ -4282,10 +4278,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = `imagekit-urls-${Date.now()}.html`;
+                        link.download = `google-drive-urls-${Date.now()}.html`;
                         link.click();
                         URL.revokeObjectURL(url);
-                        addLog('[ImageKit] 📄 HTML file downloaded!', 'success');
+                        addLog('[Google Drive] 📄 HTML file downloaded!', 'success');
                       }}
                       className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
@@ -4296,10 +4292,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 )}
                 <button
                   onClick={() => {
-                    setShowImageKitModal(false);
-                    setImageKitModalData(null);
+                    setShowGoogleDriveModal(false);
+                    setGoogleDriveModalData(null);
                   }}
-                  className={`flex-1 ${imageKitModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
+                  className={`flex-1 ${googleDriveModalData.type === 'success' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white'} text-white font-medium py-3 px-4 rounded-lg transition-colors`}
                 >
                   Close
                 </button>

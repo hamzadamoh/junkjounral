@@ -146,13 +146,13 @@ export const getSupabaseConfig = () => {
   }
 };
 
-export const getImageKitConfig = () => {
+export const getGoogleDriveConfig = () => {
   // Check process.env first
   if (typeof process !== 'undefined' && process.env) {
     return {
-      publicKey: process.env.VITE_IMAGEKIT_PUBLIC_KEY || '',
-      privateKey: process.env.VITE_IMAGEKIT_PRIVATE_KEY || '',
-      urlEndpoint: process.env.VITE_IMAGEKIT_URL_ENDPOINT || '',
+      clientId: process.env.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
+      clientSecret: process.env.VITE_GOOGLE_DRIVE_CLIENT_SECRET || '',
+      refreshToken: process.env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN || '',
     };
   }
   
@@ -160,9 +160,9 @@ export const getImageKitConfig = () => {
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env) {
     const env = (globalThis as any).import.meta.env;
     return {
-      publicKey: env.VITE_IMAGEKIT_PUBLIC_KEY || '',
-      privateKey: env.VITE_IMAGEKIT_PRIVATE_KEY || '',
-      urlEndpoint: env.VITE_IMAGEKIT_URL_ENDPOINT || '',
+      clientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
+      clientSecret: env.VITE_GOOGLE_DRIVE_CLIENT_SECRET || '',
+      refreshToken: env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN || '',
     };
   }
   
@@ -172,15 +172,15 @@ export const getImageKitConfig = () => {
   try {
     const env = import.meta.env;
     return {
-      publicKey: (env?.VITE_IMAGEKIT_PUBLIC_KEY as string) || '',
-      privateKey: (env?.VITE_IMAGEKIT_PRIVATE_KEY as string) || '',
-      urlEndpoint: (env?.VITE_IMAGEKIT_URL_ENDPOINT as string) || '',
+      clientId: (env?.VITE_GOOGLE_DRIVE_CLIENT_ID as string) || '',
+      clientSecret: (env?.VITE_GOOGLE_DRIVE_CLIENT_SECRET as string) || '',
+      refreshToken: (env?.VITE_GOOGLE_DRIVE_REFRESH_TOKEN as string) || '',
     };
   } catch {
     return {
-      publicKey: '',
-      privateKey: '',
-      urlEndpoint: '',
+      clientId: '',
+      clientSecret: '',
+      refreshToken: '',
     };
   }
 };
