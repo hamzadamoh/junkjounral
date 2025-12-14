@@ -1482,26 +1482,20 @@ const App: React.FC = () => {
       const serviceName = 'Ttapi';
       const requestsNeeded = Math.ceil(total / 4);
       
-      // Rate limiting: Ttapi has strict limits, stagger requests
-      // For Ttapi: Send requests with 2-3 second delays to avoid rate limits
-      // For other services: Can send in parallel or with smaller delays
+      // Rate limiting: Process requests in concurrent batches
+      // For Ttapi: Max 3 concurrent requests (Midjourney limit)
+      // For other services: Can send more in parallel
       const isTtapi = settings.imageService === 'ttapi';
-      const delayBetweenRequests = isTtapi ? 2500 : 1000; // 2.5s for Ttapi, 1s for others
       const maxConcurrent = isTtapi ? 3 : 5; // Max 3 concurrent for Ttapi, 5 for others
       
       if (isTtapi) {
-        addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request) with rate limiting (${delayBetweenRequests / 1000}s delays, max ${maxConcurrent} concurrent)...`);
+        addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request) with ${maxConcurrent} concurrent requests per batch...`);
       } else {
         addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
       }
       
-      const imagePromises = Array.from({ length: requestsNeeded }, async (_, requestIdx) => {
-        // Add delay to stagger requests and avoid rate limits (especially for Ttapi)
-        if (requestIdx > 0 && isTtapi) {
-          const delay = requestIdx * delayBetweenRequests;
-          addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ⏳ Waiting ${delay / 1000}s to avoid rate limits...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
+      // Process requests in batches of maxConcurrent
+      const processRequest = async (requestIdx: number) => {
         
         const startIdx = requestIdx * 4;
         const endIdx = Math.min(startIdx + 4, total);
@@ -1681,9 +1675,32 @@ const App: React.FC = () => {
           ));
           return { success: false, index: requestIdx, error: err };
         }
-      });
+      };
 
-      const results = await Promise.allSettled(imagePromises);
+      // Process requests in batches
+      const results: Array<PromiseSettledResult<{ success: boolean; index: number; error?: any }>> = [];
+      
+      for (let batchStart = 0; batchStart < requestsNeeded; batchStart += maxConcurrent) {
+        const batchEnd = Math.min(batchStart + maxConcurrent, requestsNeeded);
+        const batchSize = batchEnd - batchStart;
+        
+        if (isTtapi && batchStart > 0) {
+          addLog(`[${serviceName}] Processing batch ${Math.floor(batchStart / maxConcurrent) + 1} (requests ${batchStart + 1}-${batchEnd} of ${requestsNeeded})...`);
+        }
+        
+        // Process this batch in parallel
+        const batchPromises = Array.from({ length: batchSize }, (_, i) => 
+          processRequest(batchStart + i)
+        );
+        
+        const batchResults = await Promise.allSettled(batchPromises);
+        results.push(...batchResults);
+        
+        // Small delay between batches to avoid overwhelming the API
+        if (batchEnd < requestsNeeded && isTtapi) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay between batches
+        }
+      }
       
       // Calculate summary from actual results
       let completedCount = 0;
