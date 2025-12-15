@@ -417,13 +417,25 @@ const sendTaskToTtapi = async (
   // Clean up extra spaces after removing duplicates
   promptWithNegative = promptWithNegative.replace(/\s+/g, ' ').trim();
   
-  // Add --no realistic if not already present (check case-insensitive)
-  const hasNoRealistic = /--no\s+realistic/i.test(promptWithNegative);
-  if (!hasNoRealistic) {
-    promptWithNegative += ' --no realistic';
-    console.log(`[Ttapi] ✅ Added --no realistic to prompt`);
+  // Add stronger negative prompts to exclude realistic/photographic style
+  // Use multiple specific terms for better results
+  const negativeTerms = 'photorealistic, 3D render, photographic, hyperrealistic, photoreal, DSLR, camera, lens, bokeh, depth of field, realistic lighting, naturalistic shadows, photoreal portrait, ultra-realistic';
+  
+  // Check if any negative prompt already exists
+  const hasNoPrompt = /--no\s+[^-]+/i.test(promptWithNegative);
+  if (!hasNoPrompt) {
+    promptWithNegative += ` --no ${negativeTerms}`;
+    console.log(`[Ttapi] ✅ Added strong negative prompts to exclude realistic style`);
   } else {
-    console.log(`[Ttapi] ℹ️ Prompt already contains --no realistic, skipping`);
+    // If --no already exists, check if it includes our terms
+    const hasOurTerms = /--no\s+.*(?:photorealistic|3D render|photographic)/i.test(promptWithNegative);
+    if (!hasOurTerms) {
+      // Append our terms to existing --no
+      promptWithNegative = promptWithNegative.replace(/(--no\s+[^-]+)/i, `$1, ${negativeTerms}`);
+      console.log(`[Ttapi] ✅ Enhanced existing --no with additional negative terms`);
+    } else {
+      console.log(`[Ttapi] ℹ️ Prompt already contains strong negative terms, skipping`);
+    }
   }
   
   // Log the FINAL prompt that will actually be sent to TTAPI
@@ -431,13 +443,13 @@ const sendTaskToTtapi = async (
   console.log(`[Ttapi] "${promptWithNegative}"`);
   console.log(`[Ttapi] =====================================`);
   
-  // Verify --no realistic is in the prompt
-  if (!promptWithNegative.includes('--no realistic')) {
-    console.error(`[Ttapi] ⚠️ WARNING: --no realistic was NOT added to prompt!`);
+  // Verify negative prompt is in the prompt
+  if (!/--no\s+[^-]+/i.test(promptWithNegative)) {
+    console.error(`[Ttapi] ⚠️ WARNING: --no negative prompt was NOT added!`);
     console.error(`[Ttapi] Prompt: "${promptWithNegative}"`);
     // Force add it as a safety measure
-    promptWithNegative += ' --no realistic';
-    console.log(`[Ttapi] ✅ Force-added --no realistic as safety measure`);
+    promptWithNegative += ` --no ${negativeTerms}`;
+    console.log(`[Ttapi] ✅ Force-added negative prompts as safety measure`);
   }
   
   const data: any = {
@@ -455,8 +467,13 @@ const sendTaskToTtapi = async (
   }
   
   // Final verification before sending
-  console.log(`[Ttapi] Final data.prompt ends with: "${data.prompt.substring(Math.max(0, data.prompt.length - 50))}"`);
-  console.log(`[Ttapi] Contains --no realistic: ${data.prompt.includes('--no realistic')}`);
+  const promptEnd = data.prompt.substring(Math.max(0, data.prompt.length - 100));
+  console.log(`[Ttapi] Final data.prompt ends with: "${promptEnd}"`);
+  const hasNegativePrompt = /--no\s+[^-]+/i.test(data.prompt);
+  console.log(`[Ttapi] Contains --no negative prompt: ${hasNegativePrompt}`);
+  if (!hasNegativePrompt) {
+    console.error(`[Ttapi] ❌ CRITICAL: Negative prompt missing from final prompt!`);
+  }
   
   if (isHoldAccount) {
     console.log(`[Ttapi] HOLD account detected. Mode: ${processMode || 'fast'}`);
