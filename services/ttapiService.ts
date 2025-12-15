@@ -404,10 +404,27 @@ const sendTaskToTtapi = async (
   // Add negative prompt to exclude realistic style
   // Append --no realistic to every prompt (avoid duplicates)
   let promptWithNegative = prompt.trim();
+  
+  // Remove duplicate --ar parameters (keep only the first occurrence)
+  const arPattern = /--ar\s+[^\s]+/gi;
+  let arCount = 0;
+  promptWithNegative = promptWithNegative.replace(arPattern, (match) => {
+    arCount++;
+    // Keep the first --ar, remove all subsequent ones
+    return arCount === 1 ? match : '';
+  });
+  // Clean up extra spaces after removing duplicates
+  promptWithNegative = promptWithNegative.replace(/\s+/g, ' ').trim();
+  
+  // Add --no realistic if not already present
   if (!promptWithNegative.includes('--no realistic')) {
     promptWithNegative += ' --no realistic';
   }
-  console.log(`[Ttapi] Final prompt with negative prompt: ${promptWithNegative.substring(0, 200)}...`);
+  
+  // Log the FINAL prompt that will actually be sent to TTAPI
+  console.log(`[Ttapi] ===== FINAL PROMPT SENT TO TTAPI =====`);
+  console.log(`[Ttapi] "${promptWithNegative}"`);
+  console.log(`[Ttapi] =====================================`);
   
   const data: any = {
     prompt: promptWithNegative,
@@ -1568,13 +1585,9 @@ export const generateJournalPage = async (
       }
     }
 
-    // Log the EXACT prompt being sent to Midjourney for debugging
-    console.log(`[Ttapi] FULL PROMPT BEING SENT: "${prompt}"`);
-    console.log(`[Ttapi] Full request body:`, JSON.stringify({
-      prompt: prompt,
-      aspect_ratio: aspectRatio,
-      mode: processMode !== 'fast' ? processMode : undefined
-    }, null, 2));
+    // Log the prompt before sending (--no realistic will be added in sendTaskToTtapi)
+    console.log(`[Ttapi] Prompt before sending to sendTaskToTtapi: "${prompt}"`);
+    console.log(`[Ttapi] Note: --no realistic will be added automatically in sendTaskToTtapi`);
 
     // Send task to ttapi.io with retry logic for rate limits
     let jobId: string | null = null;
