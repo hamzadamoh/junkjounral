@@ -404,6 +404,7 @@ const sendTaskToTtapi = async (
   // Add negative prompt to exclude realistic style
   // Append --no realistic to every prompt (avoid duplicates)
   let promptWithNegative = prompt.trim();
+  console.log(`[Ttapi] Original prompt received: "${promptWithNegative.substring(0, 100)}..."`);
   
   // Remove duplicate --ar parameters (keep only the first occurrence)
   const arPattern = /--ar\s+[^\s]+/gi;
@@ -416,15 +417,28 @@ const sendTaskToTtapi = async (
   // Clean up extra spaces after removing duplicates
   promptWithNegative = promptWithNegative.replace(/\s+/g, ' ').trim();
   
-  // Add --no realistic if not already present
-  if (!promptWithNegative.includes('--no realistic')) {
+  // Add --no realistic if not already present (check case-insensitive)
+  const hasNoRealistic = /--no\s+realistic/i.test(promptWithNegative);
+  if (!hasNoRealistic) {
     promptWithNegative += ' --no realistic';
+    console.log(`[Ttapi] ✅ Added --no realistic to prompt`);
+  } else {
+    console.log(`[Ttapi] ℹ️ Prompt already contains --no realistic, skipping`);
   }
   
   // Log the FINAL prompt that will actually be sent to TTAPI
   console.log(`[Ttapi] ===== FINAL PROMPT SENT TO TTAPI =====`);
   console.log(`[Ttapi] "${promptWithNegative}"`);
   console.log(`[Ttapi] =====================================`);
+  
+  // Verify --no realistic is in the prompt
+  if (!promptWithNegative.includes('--no realistic')) {
+    console.error(`[Ttapi] ⚠️ WARNING: --no realistic was NOT added to prompt!`);
+    console.error(`[Ttapi] Prompt: "${promptWithNegative}"`);
+    // Force add it as a safety measure
+    promptWithNegative += ' --no realistic';
+    console.log(`[Ttapi] ✅ Force-added --no realistic as safety measure`);
+  }
   
   const data: any = {
     prompt: promptWithNegative,
@@ -439,6 +453,10 @@ const sendTaskToTtapi = async (
     data.mode = processMode; // 'relax' or 'turbo'
     console.log(`[Ttapi] Setting mode parameter to: ${processMode}`);
   }
+  
+  // Final verification before sending
+  console.log(`[Ttapi] Final data.prompt ends with: "${data.prompt.substring(Math.max(0, data.prompt.length - 50))}"`);
+  console.log(`[Ttapi] Contains --no realistic: ${data.prompt.includes('--no realistic')}`);
   
   if (isHoldAccount) {
     console.log(`[Ttapi] HOLD account detected. Mode: ${processMode || 'fast'}`);
