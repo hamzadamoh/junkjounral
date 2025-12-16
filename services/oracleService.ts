@@ -58,9 +58,12 @@ Example response:
 
 /**
  * Analyzes a single image using OpenAI GPT-4 Vision
+ * @param imageBase64 The base64 encoded image
+ * @param mainTopic Optional main topic/theme to provide context for analysis
  */
 export const analyzeImageWithOracle = async (
-  imageBase64: string
+  imageBase64: string,
+  mainTopic?: string
 ): Promise<OracleAnalysisResult> => {
   const apiKey = getOpenAIApiKey();
   
@@ -93,7 +96,9 @@ export const analyzeImageWithOracle = async (
           },
           {
             type: 'text',
-            text: 'Analyze this image and provide the JSON response with name, description, and Midjourney prompt.'
+            text: mainTopic 
+              ? `Analyze this image assuming it is related to the theme/topic: "${mainTopic}". Provide the JSON response with name, description, and Midjourney prompt that reflects this theme context.`
+              : 'Analyze this image and provide the JSON response with name, description, and Midjourney prompt.'
           }
         ]
       }
@@ -192,10 +197,14 @@ export const analyzeImageWithOracle = async (
 
 /**
  * Analyzes multiple images in parallel (with rate limiting)
+ * @param slices Array of sliced images to analyze
+ * @param onProgress Optional progress callback
+ * @param mainTopic Optional main topic/theme to provide context for all analyses
  */
 export const analyzeAllImages = async (
   slices: SlicedImage[],
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number) => void,
+  mainTopic?: string
 ): Promise<AnalyzedSlice[]> => {
   const total = slices.length;
   let completed = 0;
@@ -212,7 +221,7 @@ export const analyzeAllImages = async (
     const batchResults = await Promise.all(
       batch.map(async (slice): Promise<AnalyzedSlice> => {
         try {
-          const analysis = await analyzeImageWithOracle(slice.base64);
+          const analysis = await analyzeImageWithOracle(slice.base64, mainTopic);
           completed++;
           onProgress?.(completed, total);
           
@@ -251,12 +260,15 @@ export const analyzeAllImages = async (
 
 /**
  * Analyzes a single slice and returns updated slice
+ * @param slice The slice to analyze
+ * @param mainTopic Optional main topic/theme to provide context for analysis
  */
 export const analyzeSingleSlice = async (
-  slice: SlicedImage
+  slice: SlicedImage,
+  mainTopic?: string
 ): Promise<AnalyzedSlice> => {
   try {
-    const analysis = await analyzeImageWithOracle(slice.base64);
+    const analysis = await analyzeImageWithOracle(slice.base64, mainTopic);
     return {
       ...slice,
       name: analysis.name,

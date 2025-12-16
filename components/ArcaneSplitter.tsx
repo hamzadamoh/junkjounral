@@ -61,6 +61,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [isFetchingEtsy, setIsFetchingEtsy] = useState(false); // Loading state for Etsy fetch
   const [etsySliceGrids, setEtsySliceGrids] = useState(true); // Whether to slice Etsy images as grids
   const [etsyFetchProgress, setEtsyFetchProgress] = useState({ current: 0, total: 0 }); // Progress for Etsy fetch
+  const [mainTopic, setMainTopic] = useState<string>(''); // Main topic/theme for analysis context
   const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -297,13 +298,18 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     setAnalysisProgress({ completed: 0, total: slices.length });
     setError(null);
     
+    const topic = mainTopic.trim();
+    if (topic) {
+      console.log(`[ArcaneSplitter] Analyzing with main topic context: "${topic}"`);
+    }
+    
     // Mark all as analyzing
     setSlices(prev => prev.map(s => ({ ...s, isAnalyzing: true })));
     
     try {
       const analyzed = await analyzeAllImages(slices, (completed, total) => {
         setAnalysisProgress({ completed, total });
-      });
+      }, topic || undefined);
       // Preserve gridId for each analyzed slice
       setSlices(prev => {
         const gridIdMap = new Map(prev.map(s => [s.id, s.gridId]));
@@ -318,7 +324,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     } finally {
       setIsAnalyzing(false);
     }
-  }, [slices, hasApiKey]);
+  }, [slices, hasApiKey, mainTopic]);
   
   // Analyze single slice
   const handleAnalyzeSingle = useCallback(async (sliceId: string) => {
@@ -331,11 +337,16 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       s.id === sliceId ? { ...s, isAnalyzing: true } : s
     ));
     
-    const analyzed = await analyzeSingleSlice(slice);
+    const topic = mainTopic.trim();
+    if (topic) {
+      console.log(`[ArcaneSplitter] Analyzing single image with topic context: "${topic}"`);
+    }
+    
+    const analyzed = await analyzeSingleSlice(slice, topic || undefined);
     setSlices(prev => prev.map(s => 
       s.id === sliceId ? { ...analyzed, gridId: s.gridId } : s // Preserve gridId
     ));
-  }, [slices, hasApiKey]);
+  }, [slices, hasApiKey, mainTopic]);
   
   // Download all slices as ZIP
   const handleDownloadZip = useCallback(async () => {
@@ -803,6 +814,43 @@ NO text, NO explanation - ONLY the JSON array.`
                 )}
                 {hasApiKey ? (
                   <>
+                    {/* Main Topic Input for Analysis Context */}
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-slate-300 whitespace-nowrap">
+                        {mainTopic ? (
+                          <span className="text-purple-400" title="Topic set - analysis will use this context">
+                            Topic:
+                          </span>
+                        ) : (
+                          <span>Main Topic:</span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        value={mainTopic}
+                        onChange={(e) => setMainTopic(e.target.value)}
+                        placeholder="e.g., kitchen items, vintage tools, pastel decor..."
+                        className={`px-3 py-2 bg-slate-800 border rounded-lg text-sm text-white
+                          placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                          min-w-[200px] flex-1 transition-colors ${
+                            mainTopic 
+                              ? 'border-purple-500/50' 
+                              : 'border-slate-600'
+                          }`}
+                        title={mainTopic 
+                          ? `Analysis will assume images are related to: "${mainTopic}"`
+                          : "Enter the main theme/topic to help AI analyze images in the correct context (optional)"}
+                      />
+                      {mainTopic && (
+                        <button
+                          onClick={() => setMainTopic('')}
+                          className="text-slate-400 hover:text-white transition-colors p-1"
+                          title="Clear topic"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                     <button
                       onClick={handleAnalyzeAll}
                       disabled={isAnalyzing || isSortingBySimilarity}
