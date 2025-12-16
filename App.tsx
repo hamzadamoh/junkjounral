@@ -3492,35 +3492,35 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
 
               <div>
                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                   Quantity (1-200)
-                 </label>
-                 <div className="flex gap-3 items-center">
-                 <input 
-                   type="range" 
-                   min="1" 
-                     max="200" 
-                     value={Math.min(settings.pageCount, 200)}
-                   onChange={(e) => handleSettingChange('pageCount', parseInt(e.target.value))}
-                     className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-gothic-gold"
-                   />
-                   <input
-                     type="number"
-                     min="1"
-                     max="200"
-                     value={settings.pageCount}
-                     onChange={(e) => {
-                       const value = parseInt(e.target.value) || 1;
-                       const clampedValue = Math.min(Math.max(value, 1), 200);
-                       handleSettingChange('pageCount', clampedValue);
-                     }}
-                     className="w-20 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 text-center focus:outline-none focus:border-gothic-gold transition-colors"
-                   />
-                 </div>
-                 <div className="flex justify-between text-xs text-slate-500 mt-1">
-                   <span>1 Page</span>
-                   <span className="text-gothic-gold font-bold">{settings.pageCount} Pages</span>
-                   <span>200 Pages</span>
-                 </div>
+                  Quantity (1-500)
+                </label>
+                <div className="flex gap-3 items-center">
+                <input 
+                  type="range" 
+                  min="1" 
+                    max="500" 
+                    value={Math.min(settings.pageCount, 500)}
+                  onChange={(e) => handleSettingChange('pageCount', parseInt(e.target.value))}
+                    className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-gothic-gold"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    value={settings.pageCount}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 1;
+                      const clampedValue = Math.min(Math.max(value, 1), 500);
+                      handleSettingChange('pageCount', clampedValue);
+                    }}
+                    className="w-20 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-300 text-center focus:outline-none focus:border-gothic-gold transition-colors"
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                  <span>1 Page</span>
+                  <span className="text-gothic-gold font-bold">{settings.pageCount} Pages</span>
+                  <span>500 Pages</span>
+                </div>
                  {settings.pageCount > 50 && (
                    <p className="text-xs text-amber-500 mt-2">
                      ⚠️ Generating {settings.pageCount} images may take a while and use significant API credits.
