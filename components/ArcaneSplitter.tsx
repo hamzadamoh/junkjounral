@@ -964,18 +964,9 @@ NO text, NO explanation - ONLY the JSON array.`
                   Download ZIP
                 </button>
                 
-                {analyzedCount > 0 && (
+                {/* WordPress Upload Toggle - Available as soon as there are slices (can upload while analyzing) */}
+                {slices.length > 0 && (
                   <>
-                    <button
-                      onClick={handleCopyPrompts}
-                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-white
-                        flex items-center gap-2 transition-colors"
-                    >
-                      {copiedPrompts ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                      {copiedPrompts ? 'Copied!' : 'Copy Prompts'}
-                    </button>
-                    
-                    {/* WordPress Upload Toggle - Always visible when there are analyzed slices */}
                     <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
                       <input
                         type="checkbox"
@@ -993,10 +984,10 @@ NO text, NO explanation - ONLY the JSON array.`
                     {uploadToWordPress && (
                       <button
                         onClick={handleUploadToWordPress}
-                        disabled={isUploadingToWordPress || slices.length === 0}
+                        disabled={isUploadingToWordPress || slices.length === 0 || isAnalyzing}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
                           disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                        title="Upload all sliced images to WordPress and include URLs in prompts"
+                        title="Upload all sliced images to WordPress and include URLs in prompts (can run while analysis is in progress)"
                       >
                         {isUploadingToWordPress ? (
                           <>
@@ -1011,6 +1002,19 @@ NO text, NO explanation - ONLY the JSON array.`
                         )}
                       </button>
                     )}
+                  </>
+                )}
+                
+                {analyzedCount > 0 && (
+                  <>
+                    <button
+                      onClick={handleCopyPrompts}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-white
+                        flex items-center gap-2 transition-colors"
+                    >
+                      {copiedPrompts ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                      {copiedPrompts ? 'Copied!' : 'Copy Prompts'}
+                    </button>
                     
                     {onPromptsGenerated && (
                       <>
