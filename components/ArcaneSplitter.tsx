@@ -315,10 +315,17 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       const analyzed = await analyzeAllImages(slices, (completed, total) => {
         setAnalysisProgress({ completed, total });
       }, topic || undefined, detailLevel);
-      // Preserve gridId for each analyzed slice
+      // Preserve gridId and wordPressUrl (and other custom properties) for each analyzed slice
       setSlices(prev => {
-        const gridIdMap = new Map(prev.map(s => [s.id, s.gridId]));
-        return analyzed.map(s => ({ ...s, gridId: gridIdMap.get(s.id) }));
+        const prevMap = new Map(prev.map(s => [s.id, s]));
+        return analyzed.map(s => {
+          const prevSlice = prevMap.get(s.id);
+          return {
+            ...s,
+            gridId: prevSlice?.gridId,
+            wordPressUrl: (prevSlice as any)?.wordPressUrl, // Preserve WordPress URL
+          };
+        });
       });
       
       // Don't auto-navigate to generation - let user sort first if they want
@@ -349,7 +356,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     
     const analyzed = await analyzeSingleSlice(slice, topic || undefined, detailLevel);
     setSlices(prev => prev.map(s => 
-      s.id === sliceId ? { ...analyzed, gridId: s.gridId } : s // Preserve gridId
+      s.id === sliceId ? { 
+        ...analyzed, 
+        gridId: s.gridId,
+        wordPressUrl: (s as any).wordPressUrl // Preserve WordPress URL
+      } : s
     ));
   }, [slices, hasApiKey, mainTopic, detailLevel]);
   
@@ -419,17 +430,24 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   // Use prompts in bulk mode
   const handleUsePrompts = useCallback(() => {
     // Include WordPress URLs in prompts if they exist (regardless of toggle state)
-    const prompts = slices.filter(s => s.prompt).map(s => {
+    const slicesWithPrompts = slices.filter(s => s.prompt);
+    const slicesWithUrls = slicesWithPrompts.filter(s => (s as any).wordPressUrl);
+    console.log(`[ArcaneSplitter] Preparing ${slicesWithPrompts.length} prompts (${slicesWithUrls.length} have WordPress URLs)`);
+    
+    const prompts = slicesWithPrompts.map(s => {
       const wordPressUrl = (s as any).wordPressUrl;
       if (wordPressUrl) {
         // If WordPress URL exists, always include it in the prompt (Midjourney image reference format)
         const promptWithUrl = `${wordPressUrl} ${s.prompt!}`;
-        console.log(`[ArcaneSplitter] Including WordPress URL in prompt: ${wordPressUrl.substring(0, 50)}...`);
+        console.log(`[ArcaneSplitter] ✅ Including WordPress URL in prompt: ${wordPressUrl.substring(0, 80)}...`);
         return promptWithUrl;
+      } else {
+        console.log(`[ArcaneSplitter] ⚠️ No WordPress URL for slice ${s.id}`);
       }
       return s.prompt!;
     });
-    console.log(`[ArcaneSplitter] Sending ${prompts.length} prompts to bulk mode (first prompt preview: ${prompts[0]?.substring(0, 100)}...)`);
+    console.log(`[ArcaneSplitter] Sending ${prompts.length} prompts to bulk mode`);
+    console.log(`[ArcaneSplitter] First prompt preview: ${prompts[0]?.substring(0, 150)}...`);
     onPromptsGenerated?.(prompts, imagesPerPrompt);
     onClose?.();
   }, [slices, onPromptsGenerated, onClose, imagesPerPrompt]);
