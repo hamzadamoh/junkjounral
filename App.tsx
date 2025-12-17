@@ -615,10 +615,14 @@ const App: React.FC = () => {
       const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPromptToUse));
       
       if (settings.imageService === 'ttapi') {
-        // Process in batches of 3 concurrent requests (Midjourney limit)
-        const maxConcurrent = 3;
+        // Calculate dynamic batch size based on available accounts
+        // With multiple accounts, we can send more parallel requests
+        // Formula: accounts × 3 (e.g., 2 accounts = 6 parallel requests)
+        const { getTTAPIAccountCount } = await import('./services/ttapiService');
+        const accountCount = await getTTAPIAccountCount(settings.midjourneyMode || 'fast');
+        const maxConcurrent = accountCount * 3;
         const totalBatches = Math.ceil(promptsToProcess.length / maxConcurrent);
-        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (${settings.midjourneyMode} mode)...`);
+        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (${accountCount} account(s) available, ${settings.midjourneyMode} mode)...`);
         
         // Track if we've detected relax mode issues and should switch to fast
         let shouldUseFastMode = false;
@@ -1501,13 +1505,25 @@ const App: React.FC = () => {
       const requestsNeeded = Math.ceil(total / 4);
       
       // Rate limiting: Process requests in concurrent batches
-      // For Ttapi: Max 3 concurrent requests (Midjourney limit)
+      // For Ttapi: Dynamic based on account count (accounts × 3)
       // For other services: Can send more in parallel
       const isTtapi = settings.imageService === 'ttapi';
-      const maxConcurrent = isTtapi ? 3 : 5; // Max 3 concurrent for Ttapi, 5 for others
+      
+      // For TTAPI, calculate dynamic batch size based on account count
+      let maxConcurrent = 5; // Default for non-TTAPI services
+      if (isTtapi) {
+        try {
+          const { getTTAPIAccountCount } = await import('./services/ttapiService');
+          const accountCount = await getTTAPIAccountCount(settings.midjourneyMode || 'fast');
+          maxConcurrent = accountCount * 3; // accounts × 3
+        } catch (error) {
+          console.warn(`[${serviceName}] Could not get account count, defaulting to 3:`, error);
+          maxConcurrent = 3; // Fallback to 3 if account count fetch fails
+        }
+      }
       
       if (isTtapi) {
-        addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request) with ${maxConcurrent} concurrent requests per batch...`);
+        addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request) with ${maxConcurrent} concurrent requests per batch (${Math.floor(maxConcurrent / 3)} account(s) available)...`);
       } else {
         addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
       }

@@ -1775,3 +1775,57 @@ export const generateJournalPage = async (
   }
 };
 
+/**
+ * Get the number of available TTAPI accounts for dynamic batch sizing
+ * For Hold Account Mode, fetches actual account count
+ * For PPU mode, returns 1 (single account)
+ */
+export const getTTAPIAccountCount = async (mode: 'fast' | 'relax' = 'fast'): Promise<number> => {
+  const apiKey = getTtapiApiKey();
+  const baseUrl = getTtapiBaseUrl();
+  
+  if (!apiKey) {
+    return 1; // Default to 1 if no API key
+  }
+  
+  // Only check accounts for Hold Account Mode
+  if (baseUrl.includes('hold.ttapi.io')) {
+    try {
+      // Try to fetch accounts from TTAPI
+      const accountsUrl = `${baseUrl}/midjourney/v1/accounts`;
+      const response = await fetch(accountsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const accounts = data.accounts || data.data?.accounts || [];
+        
+        // For fast mode, filter accounts with Fast Time available
+        if (mode === 'fast') {
+          const accountsWithFastTime = accounts.filter((acc: any) => 
+            acc.fast_time_remaining > 0 || acc.has_fast_time || acc.fast_hours > 0
+          );
+          const count = Math.max(accountsWithFastTime.length || accounts.length, 1);
+          console.log(`[Ttapi] Found ${count} account(s) available for ${mode} mode`);
+          return count;
+        }
+        
+        // For relax mode, use all accounts
+        const count = Math.max(accounts.length, 1);
+        console.log(`[Ttapi] Found ${count} account(s) available for ${mode} mode`);
+        return count;
+      }
+    } catch (error) {
+      console.warn(`[Ttapi] Could not fetch account count, defaulting to 1:`, error);
+    }
+  }
+  
+  // Default to 1 account (PPU mode or if fetch failed)
+  return 1;
+};
+
