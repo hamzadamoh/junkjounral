@@ -1448,12 +1448,44 @@ export const generateJournalPage = async (
     processMode
   });
   console.log(`[Ttapi] Custom prompt provided: ${customPrompt ? 'Yes' : 'No'}`);
+  if (customPrompt) {
+    console.log(`[Ttapi] Custom prompt preview (first 200 chars): "${customPrompt.substring(0, 200)}..."`);
+    // Check if custom prompt starts with a URL
+    const urlMatch = customPrompt.match(/^(https?:\/\/[^\s]+)/i);
+    if (urlMatch) {
+      console.log(`[Ttapi] ✅ Custom prompt starts with URL: ${urlMatch[1].substring(0, 80)}...`);
+    } else {
+      console.log(`[Ttapi] ⚠️ Custom prompt does NOT start with a URL`);
+    }
+  }
   console.log(`[Ttapi] Variation index: ${variationIndex}`);
   
   try {
     // Use custom prompt if provided (from ChatGPT), otherwise construct one
     // Check if customPrompt is a non-empty string
     let prompt = (customPrompt && customPrompt.trim()) ? customPrompt : constructPrompt(theme, settings, parametersForMJ, variationIndex);
+    
+    // CRITICAL: Extract image URL at the start of the prompt (for Midjourney image reference)
+    // This must be preserved throughout all transformations and prepended at the end
+    let imageUrlAtStart: string | null = null;
+    const urlMatchAtStart = prompt.match(/^(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|mp4|mov|avi|webm|pdf))\s*/i);
+    if (urlMatchAtStart) {
+      imageUrlAtStart = urlMatchAtStart[1];
+      console.log(`[Ttapi] ✅ Detected image URL at start of prompt: ${imageUrlAtStart.substring(0, 80)}...`);
+      // Remove the URL from the prompt temporarily (we'll add it back at the end)
+      prompt = prompt.substring(urlMatchAtStart[0].length).trim();
+      console.log(`[Ttapi] Extracted image URL, remaining prompt length: ${prompt.length}`);
+    } else {
+      // Also check for any URL at the start (even without image extension)
+      const anyUrlMatch = prompt.match(/^(https?:\/\/[^\s]+)\s*/i);
+      if (anyUrlMatch) {
+        imageUrlAtStart = anyUrlMatch[1];
+        console.log(`[Ttapi] ✅ Detected URL at start (non-image): ${imageUrlAtStart.substring(0, 80)}...`);
+        prompt = prompt.substring(anyUrlMatch[0].length).trim();
+      } else {
+        console.log(`[Ttapi] ⚠️ No URL detected at start of prompt`);
+      }
+    }
     
     // CRITICAL: Extract --ar parameter and preserve other Midjourney parameters (--p, --sref, --sw, etc.)
     // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
@@ -1485,9 +1517,19 @@ export const generateJournalPage = async (
     
     // Clean the prompt to remove problematic phrases that Midjourney interprets as parameters
     const promptBeforeCleaning = prompt;
+    const urlBeforeCleaning = prompt.match(/^(https?:\/\/[^\s]+)/i)?.[1];
+    if (urlBeforeCleaning) {
+      console.log(`[Ttapi] URL before cleaning: ${urlBeforeCleaning.substring(0, 80)}...`);
+    }
     prompt = cleanPromptForMidjourney(prompt);
+    const urlAfterCleaning = prompt.match(/^(https?:\/\/[^\s]+)/i)?.[1];
+    if (urlAfterCleaning) {
+      console.log(`[Ttapi] ✅ URL preserved after cleaning: ${urlAfterCleaning.substring(0, 80)}...`);
+    } else if (urlBeforeCleaning) {
+      console.log(`[Ttapi] ❌ URL REMOVED during cleaning! Original: ${urlBeforeCleaning.substring(0, 80)}...`);
+    }
     if (promptBeforeCleaning !== prompt) {
-      console.log(`[Ttapi] Prompt cleaned: "${promptBeforeCleaning}" -> "${prompt}"`);
+      console.log(`[Ttapi] Prompt cleaned: "${promptBeforeCleaning.substring(0, 100)}..." -> "${prompt.substring(0, 100)}..."`);
     }
     
     // CRITICAL: Validate that prompt is not empty after cleaning
@@ -1638,8 +1680,22 @@ export const generateJournalPage = async (
       }
     }
 
-    // Log the prompt before sending (--no realistic will be added in sendTaskToTtapi)
-    console.log(`[Ttapi] Prompt before sending to sendTaskToTtapi: "${prompt}"`);
+    // CRITICAL: Prepend the image URL back at the start (if it was extracted)
+    // Midjourney requires image URLs to be at the very beginning of the prompt
+    if (imageUrlAtStart) {
+      prompt = `${imageUrlAtStart} ${prompt}`;
+      console.log(`[Ttapi] ✅ Prepended image URL back to prompt: ${imageUrlAtStart.substring(0, 80)}...`);
+    }
+    
+    // Log the final prompt before sending (--no realistic will be added in sendTaskToTtapi)
+    const finalUrlCheck = prompt.match(/^(https?:\/\/[^\s]+)/i);
+    if (finalUrlCheck) {
+      console.log(`[Ttapi] ✅ Final prompt STARTS with URL: ${finalUrlCheck[1].substring(0, 80)}...`);
+      console.log(`[Ttapi] Final prompt preview (first 300 chars): "${prompt.substring(0, 300)}..."`);
+    } else {
+      console.log(`[Ttapi] ⚠️ Final prompt does NOT start with a URL`);
+      console.log(`[Ttapi] Final prompt preview (first 300 chars): "${prompt.substring(0, 300)}..."`);
+    }
     console.log(`[Ttapi] Note: --no realistic will be added automatically in sendTaskToTtapi`);
 
     // Send task to ttapi.io with retry logic for rate limits
