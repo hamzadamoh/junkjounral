@@ -984,7 +984,7 @@ NO text, NO explanation - ONLY the JSON array.`
                     {uploadToWordPress && (
                       <button
                         onClick={handleUploadToWordPress}
-                        disabled={isUploadingToWordPress || slices.length === 0 || isAnalyzing}
+                        disabled={isUploadingToWordPress || slices.length === 0}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
                           disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
                         title="Upload all sliced images to WordPress and include URLs in prompts (can run while analysis is in progress)"
