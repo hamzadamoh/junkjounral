@@ -615,15 +615,18 @@ const App: React.FC = () => {
       const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPromptToUse));
       
       if (settings.imageService === 'ttapi') {
-        // Calculate dynamic batch size based on available accounts
-        // With multiple accounts, we can send more parallel requests
-        // Formula: accounts × 3 (e.g., 2 accounts = 6 parallel requests)
-        const { getTTAPIAccountCount, getTTAPIAccountIds } = await import('./services/ttapiService');
-        const accountCount = await getTTAPIAccountCount(settings.midjourneyMode || 'fast');
-        const accountIds = await getTTAPIAccountIds(settings.midjourneyMode || 'fast');
-        const maxConcurrent = accountCount * 3;
+        // For Hold Account Mode, assume 2 accounts and send 6 parallel requests
+        // TTAPI will handle load balancing automatically if account_id is not specified
+        // This avoids needing to fetch account count first (which requires API route deployment)
+        const { getTtapiBaseUrl } = await import('./services/ttapiService');
+        const baseUrl = getTtapiBaseUrl();
+        const isHoldAccount = baseUrl.includes('hold.ttapi.io');
+        
+        // Assume 2 accounts for Hold Account Mode, 1 for PPU mode
+        const assumedAccountCount = isHoldAccount ? 2 : 1;
+        const maxConcurrent = assumedAccountCount * 3; // 2 accounts = 6, 1 account = 3
         const totalBatches = Math.ceil(promptsToProcess.length / maxConcurrent);
-        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (${accountCount} account(s) available, ${settings.midjourneyMode} mode)...`);
+        addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (assuming ${assumedAccountCount} account(s) for ${settings.midjourneyMode} mode)...`);
         
         // Track if we've detected relax mode issues and should switch to fast
         let shouldUseFastMode = false;
@@ -635,16 +638,12 @@ const App: React.FC = () => {
           
           addLog(`[Ttapi Bulk] 🚀 Starting batch ${batchNumber}/${totalBatches}: Processing ${batchEnd - batchStart} prompt(s) in parallel (prompts ${batchStart + 1}-${batchEnd} of ${promptsToProcess.length})...`, 'log');
           
-          // Process this batch in parallel with round-robin account distribution
+          // Process this batch in parallel - let TTAPI handle load balancing
           const batchPromises = promptsToProcess.slice(batchStart, batchEnd).map(async (prompt, batchIndex) => {
             const promptIndex = batchStart + batchIndex;
             
-            // Distribute requests across accounts in round-robin fashion
-            // If we have 2 accounts and 6 requests: 0,2,4 → account[0], 1,3,5 → account[1]
-            const accountId = accountIds.length > 0 ? accountIds[promptIndex % accountIds.length] : undefined;
-            if (accountId) {
-              console.log(`[Ttapi Bulk] Request ${promptIndex + 1} assigned to account: ${accountId}`);
-            }
+            // Don't specify account_id - let TTAPI distribute requests automatically
+            const accountId = undefined;
           
           try {
             // Apply moodboard and SREF if provided
@@ -1518,18 +1517,22 @@ const App: React.FC = () => {
       // For other services: Can send more in parallel
       const isTtapi = settings.imageService === 'ttapi';
       
-      // For TTAPI, calculate dynamic batch size based on account count
+      // For TTAPI, assume 2 accounts for Hold Account Mode and send 6 parallel requests
+      // TTAPI will handle load balancing automatically if account_id is not specified
       let maxConcurrent = 5; // Default for non-TTAPI services
       let accountIds: string[] = [];
       if (isTtapi) {
         try {
-          const { getTTAPIAccountCount, getTTAPIAccountIds } = await import('./services/ttapiService');
-          const accountCount = await getTTAPIAccountCount(settings.midjourneyMode || 'fast');
-          accountIds = await getTTAPIAccountIds(settings.midjourneyMode || 'fast');
-          maxConcurrent = accountCount * 3; // accounts × 3
+          const { getTtapiBaseUrl } = await import('./services/ttapiService');
+          const baseUrl = getTtapiBaseUrl();
+          const isHoldAccount = baseUrl.includes('hold.ttapi.io');
+          // Assume 2 accounts for Hold Account Mode, 1 for PPU mode
+          const assumedAccountCount = isHoldAccount ? 2 : 1;
+          maxConcurrent = assumedAccountCount * 3; // 2 accounts = 6, 1 account = 3
+          console.log(`[${serviceName}] Assuming ${assumedAccountCount} account(s) for ${settings.midjourneyMode || 'fast'} mode, using ${maxConcurrent} concurrent requests`);
         } catch (error) {
-          console.warn(`[${serviceName}] Could not get account count, defaulting to 3:`, error);
-          maxConcurrent = 3; // Fallback to 3 if account count fetch fails
+          console.warn(`[${serviceName}] Could not determine account count, defaulting to 3:`, error);
+          maxConcurrent = 3; // Fallback to 3 if detection fails
         }
       }
       
@@ -1545,11 +1548,8 @@ const App: React.FC = () => {
         const endIdx = Math.min(startIdx + 4, total);
         const imageRange = `${startIdx + 1}-${endIdx}`;
         
-        // Distribute requests across accounts in round-robin fashion
-        const accountId = accountIds.length > 0 ? accountIds[requestIdx % accountIds.length] : undefined;
-        if (accountId) {
-          console.log(`[${serviceName} Request ${requestIdx + 1}] Assigned to account: ${accountId}`);
-        }
+        // Don't specify account_id - let TTAPI handle load balancing automatically
+        const accountId = undefined;
         
         // Log immediately when request starts (all requests in batch start simultaneously)
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);

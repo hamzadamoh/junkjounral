@@ -3,7 +3,7 @@ import { Theme, GenerationSettings } from '../types';
 // Get Ttapi domain from environment variable (defaults to PPU mode)
 // Hold Account Mode: https://hold.ttapi.io
 // PPU Mode: https://api.ttapi.io
-const getTtapiBaseUrl = (): string => {
+export const getTtapiBaseUrl = (): string => {
   return import.meta.env.VITE_TTAPI_DOMAIN || 'https://api.ttapi.io';
 };
 
