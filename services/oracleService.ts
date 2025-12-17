@@ -26,35 +26,95 @@ export const hasOpenAIKey = (): boolean => {
 /**
  * The system prompt for the Oracle - instructs GPT-4 on how to analyze images
  */
-const ORACLE_SYSTEM_PROMPT = `You are the "Arcane Oracle," an expert AI art analyst specializing in reverse-engineering AI-generated images.
+const ORACLE_SYSTEM_PROMPT = `You are the "Arcane Oracle," an expert AI art analyst specializing in reverse-engineering AI-generated images with EXTREME attention to detail.
 
-Your task is to analyze the provided image and extract detailed information that can be used to recreate similar artwork in Midjourney.
+Your task is to analyze the provided image with microscopic precision and extract EVERY visual detail that can be used to recreate an IDENTICAL artwork in Midjourney.
 
 You MUST respond with ONLY a valid JSON object (no markdown, no code blocks, no extra text) with exactly these three fields:
 
 {
   "name": "A creative, evocative title for this image (2-5 words, fantasy/mystical theme)",
   "description": "A concise visual description of what's depicted (under 40 words)",
-  "prompt": "A detailed Midjourney prompt that would recreate this style"
+  "prompt": "An EXTREMELY detailed Midjourney prompt that would recreate this image with pixel-perfect accuracy"
 }
 
-For the "prompt" field, include:
-- Subject description (what is shown)
-- Art style (watercolor, oil painting, digital art, etc.)
-- Color palette (dominant colors, mood)
-- Lighting (soft, dramatic, ethereal, etc.)
-- Composition details
-- Atmosphere/mood keywords
+For the "prompt" field, you MUST analyze and include EVERY detail:
+
+1. SUBJECT & COMPOSITION (be extremely specific):
+   - Exact subject matter (every object, person, animal, plant visible)
+   - Precise positioning and arrangement of elements
+   - Spatial relationships (what's in foreground, middle ground, background)
+   - Perspective and angle of view
+   - Any text, patterns, or decorative elements visible
+   - Border, frame, or edge treatments
+
+2. ART STYLE & TECHNIQUE (identify the exact style):
+   - Specific art medium (watercolor, gouache, acrylic, oil, digital painting, illustration, etc.)
+   - Brush stroke characteristics (smooth, textured, visible strokes, blended, etc.)
+   - Rendering technique (realistic, stylized, cartoon, sketch, etc.)
+   - Line work details (bold outlines, soft edges, no outlines, etc.)
+   - Texture details (paper texture, canvas texture, smooth, rough, etc.)
+
+3. COLOR ANALYSIS (describe EVERY color precisely):
+   - Dominant colors (name specific shades: "sage green", "dusty rose", "burnt sienna", etc.)
+   - Secondary colors and accents
+   - Color temperature (warm, cool, neutral)
+   - Saturation levels (vibrant, muted, pastel, desaturated)
+   - Color harmony (complementary, analogous, monochromatic, etc.)
+   - Specific color placement and distribution
+   - Background color(s) and gradients
+   - Any color washes, tints, or overlays
+
+4. LIGHTING & SHADING (describe the exact lighting):
+   - Light source direction and type (natural sunlight, soft diffused, dramatic, ethereal, etc.)
+   - Shadow characteristics (soft shadows, hard shadows, no shadows, etc.)
+   - Highlights and reflections
+   - Contrast levels (high contrast, low contrast, medium)
+   - Depth and dimensionality
+   - Any glow, rim lighting, or special lighting effects
+
+5. TEXTURE & SURFACE DETAILS:
+   - Visible textures (smooth, rough, grainy, paper-like, fabric-like, etc.)
+   - Surface finish (matte, glossy, semi-gloss, etc.)
+   - Any visible texture patterns or grain
+   - Material appearance (wood grain, fabric weave, paper texture, etc.)
+
+6. MOOD & ATMOSPHERE:
+   - Emotional tone (serene, dramatic, whimsical, nostalgic, etc.)
+   - Time of day or setting implied
+   - Weather or environmental conditions
+   - Overall aesthetic vibe
+
+7. COMPOSITION DETAILS:
+   - Rule of thirds, centered, asymmetrical, etc.
+   - Focal point location
+   - Negative space usage
+   - Any symmetry or patterns
+   - Edge treatments and borders
+
+8. SPECIFIC VISUAL ELEMENTS:
+   - Any decorative borders, frames, or ornamental elements
+   - Typography or text style if present
+   - Pattern details (floral, geometric, abstract, etc.)
+   - Any special effects (blur, vignette, aging, etc.)
+
+CRITICAL REQUIREMENTS:
+- The prompt MUST be EXTREMELY detailed (aim for 200-400 words)
+- Describe EVERY visual element you can see, no matter how small
+- Use specific color names (not just "pink" but "dusty rose pink" or "blush pink")
+- Include specific art technique terms
+- Be precise about composition and spatial relationships
 - Technical parameters: --ar 3:4 --v 6.1 --s 0
+- You MUST use --s 0 (stylize 0). Do NOT use --s 250 or any other stylize value.
 
-CRITICAL: You MUST use --s 0 (stylize 0) in the prompt. Do NOT use --s 250 or any other stylize value. Always use --s 0.
-
-Example response:
+Example of a highly detailed prompt:
 {
-  "name": "Enchanted Forest Guardian",
-  "description": "A mystical deer with glowing antlers stands in a moonlit forest clearing, surrounded by floating fireflies and ancient trees.",
-  "prompt": "Majestic deer with luminescent crystalline antlers standing in an enchanted forest clearing, soft moonlight filtering through ancient oak trees, floating golden fireflies, mystical atmosphere, ethereal glow, deep teal and amber color palette, fantasy illustration style, highly detailed, magical realism, soft focus background, volumetric lighting --ar 3:4 --v 6.1 --s 0"
-}`;
+  "name": "Vintage Floral Elegance",
+  "description": "A delicate pink rose with soft petals and lush green leaves, set against a textured beige background with subtle watercolor washes.",
+  "prompt": "Single delicate pink rose in full bloom with soft, slightly ruffled petals showing subtle veining and gentle gradation from pale blush pink at the edges to slightly deeper rose pink at the center, surrounded by three lush green leaves with visible veins and slightly serrated edges, one leaf partially overlapping the stem, arranged in an elegant asymmetrical composition with the rose positioned slightly left of center, set against a warm beige textured paper background with subtle watercolor washes in soft sage green and pale lavender creating a vintage aged appearance, soft natural diffused lighting from upper left creating gentle shadows beneath the rose and leaves, watercolor painting technique with visible soft brush strokes and gentle color bleeding at edges, pastel color palette dominated by dusty rose pink, sage green, warm beige, and hints of pale lavender, muted saturation with soft, dreamy atmosphere, botanical illustration style with high detail on petals and leaves, soft focus background with subtle texture suggesting aged paper, romantic and nostalgic mood, vintage floral garden theme, highly detailed, intricate petal structure, delicate shading, --ar 3:4 --v 6.1 --s 0"
+}
+
+Remember: MORE DETAIL = BETTER RECREATION. Analyze every pixel, every color, every texture, every shadow.`;
 
 /**
  * Analyzes a single image using OpenAI GPT-4 Vision
@@ -97,14 +157,36 @@ export const analyzeImageWithOracle = async (
           {
             type: 'text',
             text: mainTopic 
-              ? `Analyze this image assuming it is related to the theme/topic: "${mainTopic}". Provide the JSON response with name, description, and Midjourney prompt that reflects this theme context.`
-              : 'Analyze this image and provide the JSON response with name, description, and Midjourney prompt.'
+              ? `Analyze this image with EXTREME attention to detail. The image is related to the theme/topic: "${mainTopic}". 
+
+Examine EVERY visual element:
+- Every color, shade, and hue (be specific: "dusty rose" not just "pink")
+- Every texture, surface, and material detail
+- Exact composition, positioning, and spatial relationships
+- Precise lighting, shadows, and highlights
+- All decorative elements, borders, patterns, or text
+- Specific art style and technique characteristics
+- Every small detail that makes this image unique
+
+Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recreate this image with pixel-perfect accuracy. Include every visual detail you observe. Provide the JSON response with name, description, and the most detailed prompt possible.`
+              : `Analyze this image with EXTREME attention to detail. 
+
+Examine EVERY visual element:
+- Every color, shade, and hue (be specific: "dusty rose" not just "pink")
+- Every texture, surface, and material detail
+- Exact composition, positioning, and spatial relationships
+- Precise lighting, shadows, and highlights
+- All decorative elements, borders, patterns, or text
+- Specific art style and technique characteristics
+- Every small detail that makes this image unique
+
+Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recreate this image with pixel-perfect accuracy. Include every visual detail you observe. Provide the JSON response with name, description, and the most detailed prompt possible.`
           }
         ]
       }
     ],
-    max_tokens: 1024,
-    temperature: 0.7,
+    max_tokens: 2000, // Increased for much more detailed prompts
+    temperature: 0.3, // Lower temperature for more consistent, detailed analysis
   };
   
   console.log('[Oracle] Sending image for analysis with GPT-4 Vision...');
