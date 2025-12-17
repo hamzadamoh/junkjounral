@@ -1792,11 +1792,12 @@ export const getTTAPIAccountCount = async (mode: 'fast' | 'relax' = 'fast'): Pro
   if (baseUrl.includes('hold.ttapi.io')) {
     try {
       // Try to fetch accounts from TTAPI
+      // Use TT-API-KEY header (same as sendTaskToTtapi uses)
       const accountsUrl = `${baseUrl}/midjourney/v1/accounts`;
       const response = await fetch(accountsUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'TT-API-KEY': apiKey,
           'Content-Type': 'application/json',
         },
       });
