@@ -24,9 +24,9 @@ export const hasOpenAIKey = (): boolean => {
 };
 
 /**
- * The system prompt for the Oracle - instructs GPT-4 on how to analyze images
+ * The system prompt for the Oracle - detailed version
  */
-const ORACLE_SYSTEM_PROMPT = `You are the "Arcane Oracle," an expert AI art analyst specializing in reverse-engineering AI-generated images with EXTREME attention to detail.
+const ORACLE_SYSTEM_PROMPT_DETAILED = `You are the "Arcane Oracle," an expert AI art analyst specializing in reverse-engineering AI-generated images with EXTREME attention to detail.
 
 Your task is to analyze the provided image with microscopic precision and extract EVERY visual detail that can be used to recreate an IDENTICAL artwork in Midjourney.
 
@@ -117,13 +117,64 @@ Example of a highly detailed prompt:
 Remember: MORE DETAIL = BETTER RECREATION. Analyze every pixel, every color, every texture, every shadow.`;
 
 /**
+ * The system prompt for the Oracle - normal version
+ */
+const ORACLE_SYSTEM_PROMPT_NORMAL = `You are the "Arcane Oracle," an expert AI art analyst specializing in analyzing images and generating Midjourney prompts.
+
+Your task is to analyze the provided image and extract the key visual details needed to recreate a similar artwork in Midjourney.
+
+You MUST respond with ONLY a valid JSON object (no markdown, no code blocks, no extra text) with exactly these three fields:
+
+{
+  "name": "A creative, evocative title for this image (2-5 words, fantasy/mystical theme)",
+  "description": "A concise visual description of what's depicted (under 40 words)",
+  "prompt": "A detailed Midjourney prompt that would recreate this image"
+}
+
+For the "prompt" field, include the key details:
+
+1. SUBJECT & COMPOSITION:
+   - Main subject matter
+   - Basic positioning and arrangement
+   - Foreground, middle ground, background elements
+
+2. ART STYLE & TECHNIQUE:
+   - Art medium (watercolor, digital painting, illustration, etc.)
+   - General style characteristics
+
+3. COLOR ANALYSIS:
+   - Dominant colors (use specific names like "sage green", "dusty rose")
+   - Color temperature and saturation
+   - Overall color palette
+
+4. LIGHTING & SHADING:
+   - Light source direction
+   - Shadow characteristics
+   - Overall lighting mood
+
+5. MOOD & ATMOSPHERE:
+   - Emotional tone
+   - Overall aesthetic vibe
+
+6. COMPOSITION:
+   - Basic composition style
+   - Focal point
+
+Technical parameters: --ar 3:4 --v 6.1 --s 0
+You MUST use --s 0 (stylize 0). Do NOT use --s 250 or any other stylize value.
+
+The prompt should be clear and descriptive (100-200 words), focusing on the most important visual elements.`;
+
+/**
  * Analyzes a single image using OpenAI GPT-4 Vision
  * @param imageBase64 The base64 encoded image
  * @param mainTopic Optional main topic/theme to provide context for analysis
+ * @param detailLevel 'normal' for standard detail, 'detailed' for extremely detailed prompts
  */
 export const analyzeImageWithOracle = async (
   imageBase64: string,
-  mainTopic?: string
+  mainTopic?: string,
+  detailLevel: 'normal' | 'detailed' = 'detailed'
 ): Promise<OracleAnalysisResult> => {
   const apiKey = getOpenAIApiKey();
   
@@ -137,12 +188,69 @@ export const analyzeImageWithOracle = async (
     imageUrl = `data:image/png;base64,${imageBase64}`;
   }
   
+  // Select system prompt and parameters based on detail level
+  const systemPrompt = detailLevel === 'detailed' 
+    ? ORACLE_SYSTEM_PROMPT_DETAILED 
+    : ORACLE_SYSTEM_PROMPT_NORMAL;
+  
+  const maxTokens = detailLevel === 'detailed' ? 2000 : 1000;
+  const temperature = detailLevel === 'detailed' ? 0.3 : 0.5;
+  
+  // User prompt based on detail level
+  const userPromptDetailed = mainTopic 
+    ? `Analyze this image with EXTREME attention to detail. The image is related to the theme/topic: "${mainTopic}". 
+
+Examine EVERY visual element:
+- Every color, shade, and hue (be specific: "dusty rose" not just "pink")
+- Every texture, surface, and material detail
+- Exact composition, positioning, and spatial relationships
+- Precise lighting, shadows, and highlights
+- All decorative elements, borders, patterns, or text
+- Specific art style and technique characteristics
+- Every small detail that makes this image unique
+
+Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recreate this image with pixel-perfect accuracy. Include every visual detail you observe. Provide the JSON response with name, description, and the most detailed prompt possible.`
+    : `Analyze this image with EXTREME attention to detail. 
+
+Examine EVERY visual element:
+- Every color, shade, and hue (be specific: "dusty rose" not just "pink")
+- Every texture, surface, and material detail
+- Exact composition, positioning, and spatial relationships
+- Precise lighting, shadows, and highlights
+- All decorative elements, borders, patterns, or text
+- Specific art style and technique characteristics
+- Every small detail that makes this image unique
+
+Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recreate this image with pixel-perfect accuracy. Include every visual detail you observe. Provide the JSON response with name, description, and the most detailed prompt possible.`;
+
+  const userPromptNormal = mainTopic
+    ? `Analyze this image. The image is related to the theme/topic: "${mainTopic}". 
+
+Focus on the key visual elements:
+- Main subject and composition
+- Dominant colors and color palette
+- Art style and technique
+- Lighting and mood
+- Important details
+
+Generate a clear and descriptive Midjourney prompt (100-200 words) that captures the essential visual elements. Provide the JSON response with name, description, and prompt.`
+    : `Analyze this image and focus on the key visual elements:
+- Main subject and composition
+- Dominant colors and color palette
+- Art style and technique
+- Lighting and mood
+- Important details
+
+Generate a clear and descriptive Midjourney prompt (100-200 words) that captures the essential visual elements. Provide the JSON response with name, description, and prompt.`;
+
+  const userPrompt = detailLevel === 'detailed' ? userPromptDetailed : userPromptNormal;
+
   const requestBody = {
     model: 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
-        content: ORACLE_SYSTEM_PROMPT
+        content: systemPrompt
       },
       {
         role: 'user',
@@ -156,37 +264,13 @@ export const analyzeImageWithOracle = async (
           },
           {
             type: 'text',
-            text: mainTopic 
-              ? `Analyze this image with EXTREME attention to detail. The image is related to the theme/topic: "${mainTopic}". 
-
-Examine EVERY visual element:
-- Every color, shade, and hue (be specific: "dusty rose" not just "pink")
-- Every texture, surface, and material detail
-- Exact composition, positioning, and spatial relationships
-- Precise lighting, shadows, and highlights
-- All decorative elements, borders, patterns, or text
-- Specific art style and technique characteristics
-- Every small detail that makes this image unique
-
-Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recreate this image with pixel-perfect accuracy. Include every visual detail you observe. Provide the JSON response with name, description, and the most detailed prompt possible.`
-              : `Analyze this image with EXTREME attention to detail. 
-
-Examine EVERY visual element:
-- Every color, shade, and hue (be specific: "dusty rose" not just "pink")
-- Every texture, surface, and material detail
-- Exact composition, positioning, and spatial relationships
-- Precise lighting, shadows, and highlights
-- All decorative elements, borders, patterns, or text
-- Specific art style and technique characteristics
-- Every small detail that makes this image unique
-
-Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recreate this image with pixel-perfect accuracy. Include every visual detail you observe. Provide the JSON response with name, description, and the most detailed prompt possible.`
+            text: userPrompt
           }
         ]
       }
     ],
-    max_tokens: 2000, // Increased for much more detailed prompts
-    temperature: 0.3, // Lower temperature for more consistent, detailed analysis
+    max_tokens: maxTokens,
+    temperature: temperature,
   };
   
   console.log('[Oracle] Sending image for analysis with GPT-4 Vision...');
@@ -282,11 +366,13 @@ Generate an EXTREMELY detailed Midjourney prompt (200-400 words) that would recr
  * @param slices Array of sliced images to analyze
  * @param onProgress Optional progress callback
  * @param mainTopic Optional main topic/theme to provide context for all analyses
+ * @param detailLevel 'normal' for standard detail, 'detailed' for extremely detailed prompts
  */
 export const analyzeAllImages = async (
   slices: SlicedImage[],
   onProgress?: (completed: number, total: number) => void,
-  mainTopic?: string
+  mainTopic?: string,
+  detailLevel: 'normal' | 'detailed' = 'detailed'
 ): Promise<AnalyzedSlice[]> => {
   const total = slices.length;
   let completed = 0;
@@ -303,7 +389,7 @@ export const analyzeAllImages = async (
     const batchResults = await Promise.all(
       batch.map(async (slice): Promise<AnalyzedSlice> => {
         try {
-          const analysis = await analyzeImageWithOracle(slice.base64, mainTopic);
+          const analysis = await analyzeImageWithOracle(slice.base64, mainTopic, detailLevel);
           completed++;
           onProgress?.(completed, total);
           
@@ -344,13 +430,15 @@ export const analyzeAllImages = async (
  * Analyzes a single slice and returns updated slice
  * @param slice The slice to analyze
  * @param mainTopic Optional main topic/theme to provide context for analysis
+ * @param detailLevel 'normal' for standard detail, 'detailed' for extremely detailed prompts
  */
 export const analyzeSingleSlice = async (
   slice: SlicedImage,
-  mainTopic?: string
+  mainTopic?: string,
+  detailLevel: 'normal' | 'detailed' = 'detailed'
 ): Promise<AnalyzedSlice> => {
   try {
-    const analysis = await analyzeImageWithOracle(slice.base64, mainTopic);
+    const analysis = await analyzeImageWithOracle(slice.base64, mainTopic, detailLevel);
     return {
       ...slice,
       name: analysis.name,

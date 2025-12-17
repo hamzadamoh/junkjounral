@@ -63,6 +63,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [etsySliceGrids, setEtsySliceGrids] = useState(true); // Whether to slice Etsy images as grids
   const [etsyFetchProgress, setEtsyFetchProgress] = useState({ current: 0, total: 0 }); // Progress for Etsy fetch
   const [mainTopic, setMainTopic] = useState<string>(''); // Main topic/theme for analysis context
+  const [detailLevel, setDetailLevel] = useState<'normal' | 'detailed'>('detailed'); // Detail level for analysis
   const [uploadToWordPress, setUploadToWordPress] = useState<boolean>(false); // WordPress upload toggle
   const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false); // Upload progress
   const [wordPressUploadProgress, setWordPressUploadProgress] = useState({ completed: 0, total: 0 }); // WordPress upload progress
@@ -313,7 +314,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     try {
       const analyzed = await analyzeAllImages(slices, (completed, total) => {
         setAnalysisProgress({ completed, total });
-      }, topic || undefined);
+      }, topic || undefined, detailLevel);
       // Preserve gridId for each analyzed slice
       setSlices(prev => {
         const gridIdMap = new Map(prev.map(s => [s.id, s.gridId]));
@@ -328,7 +329,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     } finally {
       setIsAnalyzing(false);
     }
-  }, [slices, hasApiKey, mainTopic]);
+  }, [slices, hasApiKey, mainTopic, detailLevel]);
   
   // Analyze single slice
   const handleAnalyzeSingle = useCallback(async (sliceId: string) => {
@@ -346,11 +347,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       console.log(`[ArcaneSplitter] Analyzing single image with topic context: "${topic}"`);
     }
     
-    const analyzed = await analyzeSingleSlice(slice, topic || undefined);
+    const analyzed = await analyzeSingleSlice(slice, topic || undefined, detailLevel);
     setSlices(prev => prev.map(s => 
       s.id === sliceId ? { ...analyzed, gridId: s.gridId } : s // Preserve gridId
     ));
-  }, [slices, hasApiKey, mainTopic]);
+  }, [slices, hasApiKey, mainTopic, detailLevel]);
   
   // Download all slices as ZIP
   const handleDownloadZip = useCallback(async () => {
@@ -905,6 +906,34 @@ NO text, NO explanation - ONLY the JSON array.`
                           <X className="w-4 h-4" />
                         </button>
                       )}
+                    </div>
+                    {/* Detail Level Selector */}
+                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+                      <span className="text-xs text-slate-400 whitespace-nowrap">Detail:</span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setDetailLevel('normal')}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            detailLevel === 'normal'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                          title="Normal detail level - standard prompts (100-200 words)"
+                        >
+                          Normal
+                        </button>
+                        <button
+                          onClick={() => setDetailLevel('detailed')}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            detailLevel === 'detailed'
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                          title="Too detailed - extremely detailed prompts (200-400 words)"
+                        >
+                          Too Detailed
+                        </button>
+                      </div>
                     </div>
                     <button
                       onClick={handleAnalyzeAll}
