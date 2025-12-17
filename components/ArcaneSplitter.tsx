@@ -360,10 +360,11 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   
   // Copy all prompts
   const handleCopyPrompts = useCallback(async () => {
-    // Include WordPress URLs in prompts if available
+    // Include WordPress URLs in prompts if they exist (regardless of toggle state)
     const promptsWithUrls = slices.filter(s => s.prompt).map(s => {
       const wordPressUrl = (s as any).wordPressUrl;
-      if (wordPressUrl && uploadToWordPress) {
+      if (wordPressUrl) {
+        // If WordPress URL exists, always include it in the prompt
         return `${wordPressUrl} ${s.prompt!}`;
       }
       return s.prompt!;
@@ -376,7 +377,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     
     // Also notify parent
     onPromptsGenerated?.(promptsWithUrls);
-  }, [slices, onPromptsGenerated, uploadToWordPress]);
+  }, [slices, onPromptsGenerated]);
   
   // Upload slices to WordPress
   const handleUploadToWordPress = useCallback(async () => {
@@ -413,18 +414,18 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   
   // Use prompts in bulk mode
   const handleUsePrompts = useCallback(() => {
-    // Include WordPress URLs in prompts if available
+    // Include WordPress URLs in prompts if they exist (regardless of toggle state)
     const prompts = slices.filter(s => s.prompt).map(s => {
       const wordPressUrl = (s as any).wordPressUrl;
-      if (wordPressUrl && uploadToWordPress) {
-        // Add WordPress URL at the beginning of the prompt (Midjourney image reference format)
+      if (wordPressUrl) {
+        // If WordPress URL exists, always include it in the prompt (Midjourney image reference format)
         return `${wordPressUrl} ${s.prompt!}`;
       }
       return s.prompt!;
     });
     onPromptsGenerated?.(prompts, imagesPerPrompt);
     onClose?.();
-  }, [slices, onPromptsGenerated, onClose, imagesPerPrompt, uploadToWordPress]);
+  }, [slices, onPromptsGenerated, onClose, imagesPerPrompt]);
   
   // Download single slice
   const handleDownloadSlice = useCallback((slice: AnalyzedSlice) => {
