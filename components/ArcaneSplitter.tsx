@@ -36,6 +36,7 @@ import {
   copyAllPrompts,
 } from '../services/imageSlicerService';
 import { analyzeAllImages, analyzeSingleSlice, hasOpenAIKey } from '../services/oracleService';
+import { uploadImageToWordPress } from '../services/imageHostingService';
 
 interface ArcaneSplitterProps {
   onPromptsGenerated?: (prompts: string[], imagesPerPrompt?: number) => void;
@@ -62,6 +63,9 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [etsySliceGrids, setEtsySliceGrids] = useState(true); // Whether to slice Etsy images as grids
   const [etsyFetchProgress, setEtsyFetchProgress] = useState({ current: 0, total: 0 }); // Progress for Etsy fetch
   const [mainTopic, setMainTopic] = useState<string>(''); // Main topic/theme for analysis context
+  const [uploadToWordPress, setUploadToWordPress] = useState<boolean>(false); // WordPress upload toggle
+  const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false); // Upload progress
+  const [wordPressUploadProgress, setWordPressUploadProgress] = useState({ completed: 0, total: 0 }); // WordPress upload progress
   const autoCrop = true; // Always auto-crop
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -356,21 +360,71 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   
   // Copy all prompts
   const handleCopyPrompts = useCallback(async () => {
-    const prompts = await copyAllPrompts(slices);
+    // Include WordPress URLs in prompts if available
+    const promptsWithUrls = slices.filter(s => s.prompt).map(s => {
+      const wordPressUrl = (s as any).wordPressUrl;
+      if (wordPressUrl && uploadToWordPress) {
+        return `${wordPressUrl} ${s.prompt!}`;
+      }
+      return s.prompt!;
+    });
+    
+    // Copy to clipboard
+    await navigator.clipboard.writeText(promptsWithUrls.join('\n\n'));
     setCopiedPrompts(true);
     setTimeout(() => setCopiedPrompts(false), 2000);
     
     // Also notify parent
-    const promptList = slices.filter(s => s.prompt).map(s => s.prompt!);
-    onPromptsGenerated?.(promptList);
-  }, [slices, onPromptsGenerated]);
+    onPromptsGenerated?.(promptsWithUrls);
+  }, [slices, onPromptsGenerated, uploadToWordPress]);
+  
+  // Upload slices to WordPress
+  const handleUploadToWordPress = useCallback(async () => {
+    if (slices.length === 0) return;
+    
+    setIsUploadingToWordPress(true);
+    setWordPressUploadProgress({ completed: 0, total: slices.length });
+    setError(null);
+    
+    try {
+      const updatedSlices = await Promise.all(
+        slices.map(async (slice, index) => {
+          try {
+            const wordPressUrl = await uploadImageToWordPress(slice.base64);
+            setWordPressUploadProgress({ completed: index + 1, total: slices.length });
+            return { ...slice, wordPressUrl };
+          } catch (error: any) {
+            console.error(`[ArcaneSplitter] Failed to upload slice ${slice.id}:`, error);
+            return slice; // Keep original slice if upload fails
+          }
+        })
+      );
+      
+      setSlices(updatedSlices);
+      console.log(`[ArcaneSplitter] ✅ Uploaded ${updatedSlices.filter(s => (s as any).wordPressUrl).length}/${slices.length} images to WordPress`);
+    } catch (error: any) {
+      setError(`WordPress upload failed: ${error.message}`);
+      console.error('[ArcaneSplitter] WordPress upload error:', error);
+    } finally {
+      setIsUploadingToWordPress(false);
+      setWordPressUploadProgress({ completed: 0, total: 0 });
+    }
+  }, [slices]);
   
   // Use prompts in bulk mode
   const handleUsePrompts = useCallback(() => {
-    const prompts = slices.filter(s => s.prompt).map(s => s.prompt!);
+    // Include WordPress URLs in prompts if available
+    const prompts = slices.filter(s => s.prompt).map(s => {
+      const wordPressUrl = (s as any).wordPressUrl;
+      if (wordPressUrl && uploadToWordPress) {
+        // Add WordPress URL at the beginning of the prompt (Midjourney image reference format)
+        return `${wordPressUrl} ${s.prompt!}`;
+      }
+      return s.prompt!;
+    });
     onPromptsGenerated?.(prompts, imagesPerPrompt);
     onClose?.();
-  }, [slices, onPromptsGenerated, onClose, imagesPerPrompt]);
+  }, [slices, onPromptsGenerated, onClose, imagesPerPrompt, uploadToWordPress]);
   
   // Download single slice
   const handleDownloadSlice = useCallback((slice: AnalyzedSlice) => {
@@ -922,6 +976,43 @@ NO text, NO explanation - ONLY the JSON array.`
                     
                     {onPromptsGenerated && (
                       <>
+                        {/* WordPress Upload Toggle */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+                          <input
+                            type="checkbox"
+                            id="wordpress-upload-toggle"
+                            checked={uploadToWordPress}
+                            onChange={(e) => setUploadToWordPress(e.target.checked)}
+                            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-600 focus:ring-amber-500 focus:ring-offset-slate-800"
+                          />
+                          <label htmlFor="wordpress-upload-toggle" className="text-xs text-slate-300 cursor-pointer">
+                            Upload to WordPress
+                          </label>
+                        </div>
+                        
+                        {/* WordPress Upload Button (shown when toggle is on) */}
+                        {uploadToWordPress && (
+                          <button
+                            onClick={handleUploadToWordPress}
+                            disabled={isUploadingToWordPress || slices.length === 0}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
+                              disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                            title="Upload all sliced images to WordPress and include URLs in prompts"
+                          >
+                            {isUploadingToWordPress ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Uploading ({wordPressUploadProgress.completed}/{wordPressUploadProgress.total})
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                Upload to WordPress
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
                         {/* Images Per Prompt Selector */}
                         <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose how many to keep.">
                           <span className="text-xs text-slate-400">Keep:</span>
