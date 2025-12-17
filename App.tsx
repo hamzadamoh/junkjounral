@@ -673,7 +673,11 @@ const App: React.FC = () => {
               addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ⚠️ Relax mode unavailable, using fast mode instead`, 'log');
             }
             
-            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] 🚀 Starting (keeping ${imagesPerPromptToUse} of 4): "${prompt.substring(0, 50)}..."`);
+            // Log the full prompt (including WordPress URL if present) for debugging
+            const promptPreview = prompt.length > 100 ? prompt.substring(0, 100) + '...' : prompt;
+            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] 🚀 Starting (keeping ${imagesPerPromptToUse} of 4): "${promptPreview}"`);
+            console.log(`[Bulk Prompt ${promptIndex + 1}] Full prompt:`, prompt);
+            console.log(`[Bulk Prompt ${promptIndex + 1}] Final prompt (with moodboard/SREF):`, finalPrompt);
             
             // Create a dummy theme for bulk prompt mode
             const dummyTheme: Theme = {

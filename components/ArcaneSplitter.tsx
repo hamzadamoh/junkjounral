@@ -394,6 +394,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           try {
             const wordPressUrl = await uploadImageToWordPress(slice.base64);
             setWordPressUploadProgress({ completed: index + 1, total: slices.length });
+            console.log(`[ArcaneSplitter] ✅ Uploaded slice ${slice.id} to WordPress: ${wordPressUrl}`);
             return { ...slice, wordPressUrl };
           } catch (error: any) {
             console.error(`[ArcaneSplitter] Failed to upload slice ${slice.id}:`, error);
@@ -403,7 +404,9 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       );
       
       setSlices(updatedSlices);
-      console.log(`[ArcaneSplitter] ✅ Uploaded ${updatedSlices.filter(s => (s as any).wordPressUrl).length}/${slices.length} images to WordPress`);
+      const uploadedCount = updatedSlices.filter(s => (s as any).wordPressUrl).length;
+      console.log(`[ArcaneSplitter] ✅ Uploaded ${uploadedCount}/${slices.length} images to WordPress`);
+      console.log(`[ArcaneSplitter] WordPress URLs stored:`, updatedSlices.map(s => ({ id: s.id, url: (s as any).wordPressUrl })));
     } catch (error: any) {
       setError(`WordPress upload failed: ${error.message}`);
       console.error('[ArcaneSplitter] WordPress upload error:', error);
@@ -420,10 +423,13 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       const wordPressUrl = (s as any).wordPressUrl;
       if (wordPressUrl) {
         // If WordPress URL exists, always include it in the prompt (Midjourney image reference format)
-        return `${wordPressUrl} ${s.prompt!}`;
+        const promptWithUrl = `${wordPressUrl} ${s.prompt!}`;
+        console.log(`[ArcaneSplitter] Including WordPress URL in prompt: ${wordPressUrl.substring(0, 50)}...`);
+        return promptWithUrl;
       }
       return s.prompt!;
     });
+    console.log(`[ArcaneSplitter] Sending ${prompts.length} prompts to bulk mode (first prompt preview: ${prompts[0]?.substring(0, 100)}...)`);
     onPromptsGenerated?.(prompts, imagesPerPrompt);
     onClose?.();
   }, [slices, onPromptsGenerated, onClose, imagesPerPrompt]);

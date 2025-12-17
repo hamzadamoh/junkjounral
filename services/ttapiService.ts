@@ -407,6 +407,16 @@ const sendTaskToTtapi = async (
   let promptWithNegative = prompt.trim();
   console.log(`[Ttapi] Original prompt received: "${promptWithNegative.substring(0, 100)}..."`);
   
+  // Check if prompt starts with a WordPress URL (image reference)
+  const urlPattern = /^https?:\/\/[^\s]+/i;
+  const hasImageUrl = urlPattern.test(promptWithNegative);
+  if (hasImageUrl) {
+    const urlMatch = promptWithNegative.match(urlPattern);
+    console.log(`[Ttapi] ✅ Detected image URL at start of prompt: ${urlMatch?.[0]?.substring(0, 80)}...`);
+  } else {
+    console.log(`[Ttapi] ⚠️ No image URL detected at start of prompt`);
+  }
+  
   // Remove duplicate --ar parameters (keep only the first occurrence)
   const arPattern = /--ar\s+[^\s]+/gi;
   let arCount = 0;
