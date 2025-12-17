@@ -618,8 +618,9 @@ const App: React.FC = () => {
         // Calculate dynamic batch size based on available accounts
         // With multiple accounts, we can send more parallel requests
         // Formula: accounts × 3 (e.g., 2 accounts = 6 parallel requests)
-        const { getTTAPIAccountCount } = await import('./services/ttapiService');
+        const { getTTAPIAccountCount, getTTAPIAccountIds } = await import('./services/ttapiService');
         const accountCount = await getTTAPIAccountCount(settings.midjourneyMode || 'fast');
+        const accountIds = await getTTAPIAccountIds(settings.midjourneyMode || 'fast');
         const maxConcurrent = accountCount * 3;
         const totalBatches = Math.ceil(promptsToProcess.length / maxConcurrent);
         addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (${accountCount} account(s) available, ${settings.midjourneyMode} mode)...`);
@@ -634,9 +635,16 @@ const App: React.FC = () => {
           
           addLog(`[Ttapi Bulk] 🚀 Starting batch ${batchNumber}/${totalBatches}: Processing ${batchEnd - batchStart} prompt(s) in parallel (prompts ${batchStart + 1}-${batchEnd} of ${promptsToProcess.length})...`, 'log');
           
-          // Process this batch in parallel
+          // Process this batch in parallel with round-robin account distribution
           const batchPromises = promptsToProcess.slice(batchStart, batchEnd).map(async (prompt, batchIndex) => {
             const promptIndex = batchStart + batchIndex;
+            
+            // Distribute requests across accounts in round-robin fashion
+            // If we have 2 accounts and 6 requests: 0,2,4 → account[0], 1,3,5 → account[1]
+            const accountId = accountIds.length > 0 ? accountIds[promptIndex % accountIds.length] : undefined;
+            if (accountId) {
+              console.log(`[Ttapi Bulk] Request ${promptIndex + 1} assigned to account: ${accountId}`);
+            }
           
           try {
             // Apply moodboard and SREF if provided
@@ -686,7 +694,8 @@ const App: React.FC = () => {
               processMode, // processMode (may be overridden to 'fast' if relax failed)
               undefined, // onProgress
               promptIndex, // variationIndex
-              finalPrompt.trim() || undefined // customPrompt
+              finalPrompt.trim() || undefined, // customPrompt
+              accountId // accountId for explicit account selection
             );
             
             // Extract results
@@ -1511,10 +1520,12 @@ const App: React.FC = () => {
       
       // For TTAPI, calculate dynamic batch size based on account count
       let maxConcurrent = 5; // Default for non-TTAPI services
+      let accountIds: string[] = [];
       if (isTtapi) {
         try {
-          const { getTTAPIAccountCount } = await import('./services/ttapiService');
+          const { getTTAPIAccountCount, getTTAPIAccountIds } = await import('./services/ttapiService');
           const accountCount = await getTTAPIAccountCount(settings.midjourneyMode || 'fast');
+          accountIds = await getTTAPIAccountIds(settings.midjourneyMode || 'fast');
           maxConcurrent = accountCount * 3; // accounts × 3
         } catch (error) {
           console.warn(`[${serviceName}] Could not get account count, defaulting to 3:`, error);
@@ -1533,6 +1544,12 @@ const App: React.FC = () => {
         const startIdx = requestIdx * 4;
         const endIdx = Math.min(startIdx + 4, total);
         const imageRange = `${startIdx + 1}-${endIdx}`;
+        
+        // Distribute requests across accounts in round-robin fashion
+        const accountId = accountIds.length > 0 ? accountIds[requestIdx % accountIds.length] : undefined;
+        if (accountId) {
+          console.log(`[${serviceName} Request ${requestIdx + 1}] Assigned to account: ${accountId}`);
+        }
         
         // Log immediately when request starts (all requests in batch start simultaneously)
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
@@ -1662,7 +1679,8 @@ const App: React.FC = () => {
               ));
             },
             requestIdx,
-            generatedPrompts[requestIdx * 4] // Use prompt from first image in this batch
+            generatedPrompts[requestIdx * 4], // Use prompt from first image in this batch
+            accountId // accountId for explicit account selection
           ) as string[]; // Type assertion: Midjourney returns array
           
           // Extract original URLs if available (attached as property for backward compatibility)

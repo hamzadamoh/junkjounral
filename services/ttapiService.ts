@@ -381,7 +381,8 @@ const sendUpscaleToTtapi = async (
  */
 const sendTaskToTtapi = async (
   prompt: string,
-  processMode: string = 'fast'
+  processMode: string = 'fast',
+  accountId?: string
 ): Promise<string | null> => {
   console.log(`[Ttapi] ===== Starting sendTaskToTtapi =====`);
   console.log(`[Ttapi] Original prompt length: ${prompt.length}`);
@@ -464,6 +465,12 @@ const sendTaskToTtapi = async (
   if (processMode && processMode !== 'fast') {
     data.mode = processMode; // 'relax' or 'turbo'
     console.log(`[Ttapi] Setting mode parameter to: ${processMode}`);
+  }
+  
+  // Add account_id if provided (for explicit account selection in Hold Account Mode)
+  if (accountId && isHoldAccount) {
+    data.account_id = accountId;
+    console.log(`[Ttapi] Using specific account: ${accountId}`);
   }
   
   // Final verification before sending
@@ -1418,7 +1425,8 @@ export const generateJournalPage = async (
   processMode: string = 'fast',
   onProgress?: (status: string) => void,
   variationIndex?: number,
-  customPrompt?: string
+  customPrompt?: string,
+  accountId?: string
 ): Promise<string[]> => {
   console.log(`[Ttapi] ===== generateJournalPage called =====`);
   console.log(`[Ttapi] Theme: ${theme?.name || 'N/A'}`);
@@ -1632,7 +1640,8 @@ export const generateJournalPage = async (
     
     while (!jobId && retryCount <= maxRetries) {
       try {
-        jobId = await sendTaskToTtapi(prompt, processMode);
+        // Pass accountId if provided (for explicit account rotation)
+        jobId = await sendTaskToTtapi(prompt, processMode, accountId);
         if (!jobId) {
           throw new Error('Failed to create ttapi.io task: No job ID returned');
         }
@@ -1828,5 +1837,63 @@ export const getTTAPIAccountCount = async (mode: 'fast' | 'relax' = 'fast'): Pro
   
   // Default to 1 account (PPU mode or if fetch failed)
   return 1;
+};
+
+/**
+ * Get the list of available TTAPI account IDs for round-robin distribution
+ * For Hold Account Mode, fetches actual account list
+ * For PPU mode, returns empty array (no account selection)
+ */
+export const getTTAPIAccountIds = async (mode: 'fast' | 'relax' = 'fast'): Promise<string[]> => {
+  const apiKey = getTtapiApiKey();
+  const baseUrl = getTtapiBaseUrl();
+  
+  if (!apiKey) {
+    return []; // No accounts if no API key
+  }
+  
+  // Only check accounts for Hold Account Mode
+  if (baseUrl.includes('hold.ttapi.io')) {
+    try {
+      // Try to fetch accounts from TTAPI
+      const accountsUrl = `${baseUrl}/midjourney/v1/accounts`;
+      const response = await fetch(accountsUrl, {
+        method: 'GET',
+        headers: {
+          'TT-API-KEY': apiKey,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const accounts = data.accounts || data.data?.accounts || [];
+        
+        // For fast mode, filter accounts with Fast Time available
+        if (mode === 'fast') {
+          const accountsWithFastTime = accounts.filter((acc: any) => 
+            acc.fast_time_remaining > 0 || acc.has_fast_time || acc.fast_hours > 0
+          );
+          const accountIds = (accountsWithFastTime.length > 0 ? accountsWithFastTime : accounts)
+            .map((acc: any) => acc.id || acc.account_id)
+            .filter((id: string) => id); // Remove any undefined/null values
+          console.log(`[Ttapi] Found ${accountIds.length} account ID(s) for ${mode} mode:`, accountIds);
+          return accountIds;
+        }
+        
+        // For relax mode, use all accounts
+        const accountIds = accounts
+          .map((acc: any) => acc.id || acc.account_id)
+          .filter((id: string) => id);
+        console.log(`[Ttapi] Found ${accountIds.length} account ID(s) for ${mode} mode:`, accountIds);
+        return accountIds;
+      }
+    } catch (error) {
+      console.warn(`[Ttapi] Could not fetch account IDs, defaulting to empty:`, error);
+    }
+  }
+  
+  // Default to empty array (PPU mode or if fetch failed)
+  return [];
 };
 
