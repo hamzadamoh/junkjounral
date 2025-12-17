@@ -974,45 +974,45 @@ NO text, NO explanation - ONLY the JSON array.`
                       {copiedPrompts ? 'Copied!' : 'Copy Prompts'}
                     </button>
                     
+                    {/* WordPress Upload Toggle - Always visible when there are analyzed slices */}
+                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
+                      <input
+                        type="checkbox"
+                        id="wordpress-upload-toggle"
+                        checked={uploadToWordPress}
+                        onChange={(e) => setUploadToWordPress(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-600 focus:ring-amber-500 focus:ring-offset-slate-800 cursor-pointer"
+                      />
+                      <label htmlFor="wordpress-upload-toggle" className="text-xs text-slate-300 cursor-pointer whitespace-nowrap">
+                        Upload to WordPress
+                      </label>
+                    </div>
+                    
+                    {/* WordPress Upload Button (shown when toggle is on) */}
+                    {uploadToWordPress && (
+                      <button
+                        onClick={handleUploadToWordPress}
+                        disabled={isUploadingToWordPress || slices.length === 0}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
+                          disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                        title="Upload all sliced images to WordPress and include URLs in prompts"
+                      >
+                        {isUploadingToWordPress ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Uploading ({wordPressUploadProgress.completed}/{wordPressUploadProgress.total})
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4" />
+                            Upload to WordPress
+                          </>
+                        )}
+                      </button>
+                    )}
+                    
                     {onPromptsGenerated && (
                       <>
-                        {/* WordPress Upload Toggle */}
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700">
-                          <input
-                            type="checkbox"
-                            id="wordpress-upload-toggle"
-                            checked={uploadToWordPress}
-                            onChange={(e) => setUploadToWordPress(e.target.checked)}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-600 focus:ring-amber-500 focus:ring-offset-slate-800"
-                          />
-                          <label htmlFor="wordpress-upload-toggle" className="text-xs text-slate-300 cursor-pointer">
-                            Upload to WordPress
-                          </label>
-                        </div>
-                        
-                        {/* WordPress Upload Button (shown when toggle is on) */}
-                        {uploadToWordPress && (
-                          <button
-                            onClick={handleUploadToWordPress}
-                            disabled={isUploadingToWordPress || slices.length === 0}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium text-white
-                              disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                            title="Upload all sliced images to WordPress and include URLs in prompts"
-                          >
-                            {isUploadingToWordPress ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Uploading ({wordPressUploadProgress.completed}/{wordPressUploadProgress.total})
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="w-4 h-4" />
-                                Upload to WordPress
-                              </>
-                            )}
-                          </button>
-                        )}
-                        
                         {/* Images Per Prompt Selector */}
                         <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose how many to keep.">
                           <span className="text-xs text-slate-400">Keep:</span>
