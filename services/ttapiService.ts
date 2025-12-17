@@ -1786,53 +1786,35 @@ export const generateJournalPage = async (
 
 /**
  * Get the number of available TTAPI accounts for dynamic batch sizing
- * For Hold Account Mode, fetches actual account count
+ * For Hold Account Mode, fetches actual account count via server-side API
  * For PPU mode, returns 1 (single account)
  */
 export const getTTAPIAccountCount = async (mode: 'fast' | 'relax' = 'fast'): Promise<number> => {
   const apiKey = getTtapiApiKey();
-  const baseUrl = getTtapiBaseUrl();
   
   if (!apiKey) {
     return 1; // Default to 1 if no API key
   }
   
-  // Only check accounts for Hold Account Mode
-  if (baseUrl.includes('hold.ttapi.io')) {
-    try {
-      // Try to fetch accounts from TTAPI
-      // Use TT-API-KEY header (same as sendTaskToTtapi uses)
-      const accountsUrl = `${baseUrl}/midjourney/v1/accounts`;
-      const response = await fetch(accountsUrl, {
-        method: 'GET',
-        headers: {
-          'TT-API-KEY': apiKey,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const accounts = data.accounts || data.data?.accounts || [];
-        
-        // For fast mode, filter accounts with Fast Time available
-        if (mode === 'fast') {
-          const accountsWithFastTime = accounts.filter((acc: any) => 
-            acc.fast_time_remaining > 0 || acc.has_fast_time || acc.fast_hours > 0
-          );
-          const count = Math.max(accountsWithFastTime.length || accounts.length, 1);
-          console.log(`[Ttapi] Found ${count} account(s) available for ${mode} mode`);
-          return count;
-        }
-        
-        // For relax mode, use all accounts
-        const count = Math.max(accounts.length, 1);
-        console.log(`[Ttapi] Found ${count} account(s) available for ${mode} mode`);
-        return count;
-      }
-    } catch (error) {
-      console.warn(`[Ttapi] Could not fetch account count, defaulting to 1:`, error);
+  try {
+    // Use server-side API route to avoid CORS issues
+    const response = await fetch(`/api/ttapi/accounts?mode=${mode}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const count = data.count || 1;
+      console.log(`[Ttapi] Found ${count} account(s) available for ${mode} mode`);
+      return count;
+    } else {
+      console.warn(`[Ttapi] Could not fetch account count, defaulting to 1:`, response.status);
     }
+  } catch (error) {
+    console.warn(`[Ttapi] Could not fetch account count, defaulting to 1:`, error);
   }
   
   // Default to 1 account (PPU mode or if fetch failed)
@@ -1841,56 +1823,35 @@ export const getTTAPIAccountCount = async (mode: 'fast' | 'relax' = 'fast'): Pro
 
 /**
  * Get the list of available TTAPI account IDs for round-robin distribution
- * For Hold Account Mode, fetches actual account list
+ * For Hold Account Mode, fetches actual account list via server-side API
  * For PPU mode, returns empty array (no account selection)
  */
 export const getTTAPIAccountIds = async (mode: 'fast' | 'relax' = 'fast'): Promise<string[]> => {
   const apiKey = getTtapiApiKey();
-  const baseUrl = getTtapiBaseUrl();
   
   if (!apiKey) {
     return []; // No accounts if no API key
   }
   
-  // Only check accounts for Hold Account Mode
-  if (baseUrl.includes('hold.ttapi.io')) {
-    try {
-      // Try to fetch accounts from TTAPI
-      const accountsUrl = `${baseUrl}/midjourney/v1/accounts`;
-      const response = await fetch(accountsUrl, {
-        method: 'GET',
-        headers: {
-          'TT-API-KEY': apiKey,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const accounts = data.accounts || data.data?.accounts || [];
-        
-        // For fast mode, filter accounts with Fast Time available
-        if (mode === 'fast') {
-          const accountsWithFastTime = accounts.filter((acc: any) => 
-            acc.fast_time_remaining > 0 || acc.has_fast_time || acc.fast_hours > 0
-          );
-          const accountIds = (accountsWithFastTime.length > 0 ? accountsWithFastTime : accounts)
-            .map((acc: any) => acc.id || acc.account_id)
-            .filter((id: string) => id); // Remove any undefined/null values
-          console.log(`[Ttapi] Found ${accountIds.length} account ID(s) for ${mode} mode:`, accountIds);
-          return accountIds;
-        }
-        
-        // For relax mode, use all accounts
-        const accountIds = accounts
-          .map((acc: any) => acc.id || acc.account_id)
-          .filter((id: string) => id);
-        console.log(`[Ttapi] Found ${accountIds.length} account ID(s) for ${mode} mode:`, accountIds);
-        return accountIds;
-      }
-    } catch (error) {
-      console.warn(`[Ttapi] Could not fetch account IDs, defaulting to empty:`, error);
+  try {
+    // Use server-side API route to avoid CORS issues
+    const response = await fetch(`/api/ttapi/accounts?mode=${mode}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const accountIds = data.accountIds || [];
+      console.log(`[Ttapi] Found ${accountIds.length} account ID(s) for ${mode} mode:`, accountIds);
+      return accountIds;
+    } else {
+      console.warn(`[Ttapi] Could not fetch account IDs, defaulting to empty:`, response.status);
     }
+  } catch (error) {
+    console.warn(`[Ttapi] Could not fetch account IDs, defaulting to empty:`, error);
   }
   
   // Default to empty array (PPU mode or if fetch failed)
