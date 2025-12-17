@@ -44,24 +44,26 @@ export default async function handler(req, res) {
     const finalFilename = filename || `style-ref-${Date.now()}.${mimeType.split('/')[1] || 'jpg'}`;
 
     // Create multipart/form-data body for WordPress REST API
-    const boundary = `----WebKitFormBoundary${Date.now()}${Math.random().toString(36).substring(2)}`;
+    // Use a simpler boundary format
+    const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).substring(2, 15)}`;
     const CRLF = '\r\n';
     
-    const formDataParts = [
+    // Build multipart body manually
+    const header = [
       `--${boundary}${CRLF}`,
       `Content-Disposition: form-data; name="file"; filename="${finalFilename}"${CRLF}`,
       `Content-Type: ${mimeType}${CRLF}`,
-      `${CRLF}`,
+      `${CRLF}`
+    ].join('');
+    
+    const footer = `${CRLF}--${boundary}--${CRLF}`;
+    
+    // Combine header, image buffer, and footer
+    const formDataBuffer = Buffer.concat([
+      Buffer.from(header, 'utf8'),
       imageBuffer,
-      `${CRLF}--${boundary}--${CRLF}`
-    ];
-
-    // Combine parts into a single buffer
-    const formDataBuffer = Buffer.concat(
-      formDataParts.map(part => 
-        Buffer.isBuffer(part) ? part : Buffer.from(part, 'utf8')
-      )
-    );
+      Buffer.from(footer, 'utf8')
+    ]);
 
     // Upload to WordPress
     const uploadUrl = `${wpUrl.replace(/\/$/, '')}/wp-json/wp/v2/media`;
@@ -71,6 +73,7 @@ export default async function handler(req, res) {
       headers: {
         'Authorization': `Basic ${Buffer.from(`${wpUsername}:${wpPassword}`).toString('base64')}`,
         'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': formDataBuffer.length.toString(),
       },
       body: formDataBuffer,
     });
@@ -78,12 +81,46 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
       console.error('[WordPress API] Upload error:', response.status, errorText);
+      
+      // Check if it's a database connection error
+      if (errorText.includes('database connection') || errorText.includes('Database Error')) {
+        return res.status(503).json({ 
+          error: 'WordPress database connection error. Please try again in a moment.',
+          retryable: true
+        });
+      }
+      
+      // Try to extract meaningful error from HTML if it's an HTML response
+      let errorMessage = errorText;
+      if (errorText.includes('<!DOCTYPE html>')) {
+        const titleMatch = errorText.match(/<title>(.*?)<\/title>/i);
+        const h1Match = errorText.match(/<h1[^>]*>(.*?)<\/h1>/i);
+        if (h1Match) {
+          errorMessage = h1Match[1];
+        } else if (titleMatch) {
+          errorMessage = titleMatch[1];
+        } else {
+          errorMessage = 'WordPress server error';
+        }
+      }
+      
       return res.status(response.status).json({ 
-        error: `WordPress upload failed: ${response.status} ${errorText}` 
+        error: `WordPress upload failed: ${response.status} ${errorMessage.substring(0, 200)}` 
       });
     }
 
-    const data = await response.json();
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get('content-type');
+    let data;
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      console.error('[WordPress API] Non-JSON response:', text.substring(0, 200));
+      return res.status(500).json({ 
+        error: 'WordPress returned an unexpected response format' 
+      });
+    }
 
     if (!data.source_url) {
       return res.status(500).json({ error: 'WordPress response missing source_url' });

@@ -30,41 +30,76 @@ interface WordPressMediaResponse {
 /**
  * Uploads an image to WordPress and returns the public URL
  * Uses server-side API route to avoid CORS issues
+ * Includes retry logic for database connection errors
  * @param base64Image Base64 encoded image (with or without data URL prefix)
+ * @param retries Number of retry attempts (default: 2)
  * @returns The public URL of the uploaded image
  */
-export const uploadImageToWordPress = async (base64Image: string): Promise<string> => {
-  try {
-    // Use server-side API route to avoid CORS issues
-    const response = await fetch('/api/wordpress/upload', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        base64Image,
-        filename: `style-ref-${Date.now()}.jpg`
-      })
-    });
+export const uploadImageToWordPress = async (base64Image: string, retries: number = 2): Promise<string> => {
+  const maxRetries = retries;
+  let attempt = 0;
+  
+  while (attempt <= maxRetries) {
+    try {
+      // Use server-side API route to avoid CORS issues
+      const response = await fetch('/api/wordpress/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          base64Image,
+          filename: `style-ref-${Date.now()}.jpg`
+        })
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('[WordPress] Upload error response:', errorData);
-      throw new Error(errorData.error || `WordPress upload failed: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        
+        // Check if it's a retryable error (database connection issues)
+        if (errorData.retryable && attempt < maxRetries) {
+          attempt++;
+          const delay = Math.min(1000 * attempt, 3000); // Exponential backoff, max 3 seconds
+          console.log(`[WordPress] Retryable error, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        console.error('[WordPress] Upload error response:', errorData);
+        throw new Error(errorData.error || `WordPress upload failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.url) {
+        throw new Error('API response missing URL');
+      }
+
+      console.log(`[WordPress] ✅ Image uploaded successfully: ${data.url}`);
+      return data.url;
+    } catch (error: any) {
+      // If it's the last attempt, throw the error
+      if (attempt >= maxRetries) {
+        console.error('[WordPress] Upload error (max retries reached):', error);
+        throw new Error(`Failed to upload image to WordPress: ${error.message || 'Unknown error'}`);
+      }
+      
+      // Check if error message suggests retryable issue
+      if (error.message && (error.message.includes('database') || error.message.includes('503'))) {
+        attempt++;
+        const delay = Math.min(1000 * attempt, 3000);
+        console.log(`[WordPress] Database error detected, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // Non-retryable error, throw immediately
+      console.error('[WordPress] Upload error:', error);
+      throw new Error(`Failed to upload image to WordPress: ${error.message || 'Unknown error'}`);
     }
-
-    const data = await response.json();
-
-    if (!data.url) {
-      throw new Error('API response missing URL');
-    }
-
-    console.log(`[WordPress] ✅ Image uploaded successfully: ${data.url}`);
-    return data.url;
-  } catch (error: any) {
-    console.error('[WordPress] Upload error:', error);
-    throw new Error(`Failed to upload image to WordPress: ${error.message || 'Unknown error'}`);
   }
+  
+  throw new Error('Failed to upload image to WordPress: Max retries exceeded');
 };
 
 /**
