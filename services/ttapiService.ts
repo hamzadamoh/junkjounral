@@ -406,15 +406,29 @@ const sendTaskToTtapi = async (
   // Append --no realistic to every prompt (avoid duplicates)
   let promptWithNegative = prompt.trim();
   console.log(`[Ttapi] Original prompt received: "${promptWithNegative.substring(0, 100)}..."`);
+  console.log(`[Ttapi] First 200 chars: "${promptWithNegative.substring(0, 200)}"`);
   
   // Check if prompt starts with a WordPress URL (image reference)
+  // More robust URL pattern that handles various URL formats
   const urlPattern = /^https?:\/\/[^\s]+/i;
-  const hasImageUrl = urlPattern.test(promptWithNegative);
-  if (hasImageUrl) {
-    const urlMatch = promptWithNegative.match(urlPattern);
-    console.log(`[Ttapi] ✅ Detected image URL at start of prompt: ${urlMatch?.[0]?.substring(0, 80)}...`);
+  const urlMatch = promptWithNegative.match(urlPattern);
+  const hasImageUrl = urlMatch !== null && urlMatch.index === 0;
+  
+  if (hasImageUrl && urlMatch) {
+    console.log(`[Ttapi] ✅ Detected image URL at start of prompt: ${urlMatch[0].substring(0, 80)}...`);
+    console.log(`[Ttapi] Full URL: ${urlMatch[0]}`);
   } else {
-    console.log(`[Ttapi] ⚠️ No image URL detected at start of prompt`);
+    // Additional check: maybe the URL is there but the regex didn't match
+    const startsWithHttp = promptWithNegative.toLowerCase().startsWith('http://') || promptWithNegative.toLowerCase().startsWith('https://');
+    if (startsWithHttp) {
+      // Extract URL manually
+      const spaceIndex = promptWithNegative.indexOf(' ');
+      const extractedUrl = spaceIndex > 0 ? promptWithNegative.substring(0, spaceIndex) : promptWithNegative;
+      console.log(`[Ttapi] ✅ Detected URL via manual check: ${extractedUrl.substring(0, 80)}...`);
+    } else {
+      console.log(`[Ttapi] ⚠️ No image URL detected at start of prompt`);
+      console.log(`[Ttapi] First 10 chars: "${promptWithNegative.substring(0, 10)}"`);
+    }
   }
   
   // Remove duplicate --ar parameters (keep only the first occurrence)
@@ -1682,9 +1696,21 @@ export const generateJournalPage = async (
 
     // CRITICAL: Prepend the image URL back at the start (if it was extracted)
     // Midjourney requires image URLs to be at the very beginning of the prompt
+    // Ensure no leading whitespace and exactly one space between URL and prompt
     if (imageUrlAtStart) {
-      prompt = `${imageUrlAtStart} ${prompt}`;
-      console.log(`[Ttapi] ✅ Prepended image URL back to prompt: ${imageUrlAtStart.substring(0, 80)}...`);
+      // Remove any leading/trailing whitespace from URL and prompt
+      const cleanUrl = imageUrlAtStart.trim();
+      const cleanPrompt = prompt.trim();
+      // Ensure URL starts with http:// or https://
+      if (cleanUrl.match(/^https?:\/\//i)) {
+        prompt = `${cleanUrl} ${cleanPrompt}`;
+        console.log(`[Ttapi] ✅ Prepended image URL back to prompt: ${cleanUrl.substring(0, 80)}...`);
+        console.log(`[Ttapi] Full URL: ${cleanUrl}`);
+      } else {
+        console.warn(`[Ttapi] ⚠️ Extracted URL does not start with http:// or https://: ${cleanUrl.substring(0, 80)}...`);
+        // Still prepend it, but log a warning
+        prompt = `${cleanUrl} ${cleanPrompt}`;
+      }
     }
     
     // Log the final prompt before sending (--no realistic will be added in sendTaskToTtapi)
