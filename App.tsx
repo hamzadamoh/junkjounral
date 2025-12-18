@@ -2023,7 +2023,7 @@ const App: React.FC = () => {
           // Import splitGridImage dynamically
           const { splitGridImage } = await import('./services/ttapiService');
           // Use the proxy URL to fetch the grid image
-          const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`;
+          const proxyUrl = `/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`;
           const slices = await splitGridImage(proxyUrl);
           
           // Extract the specific slice (slices are base64 data URLs)
@@ -2040,7 +2040,7 @@ const App: React.FC = () => {
         }
       } else if (img.originalUrl) {
         // Regular image with original URL - fetch it directly
-        const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
+        const response = await fetch(`/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`);
         if (response.ok) {
           blob = await response.blob();
         } else {
@@ -2133,7 +2133,7 @@ const App: React.FC = () => {
           // Check if this is a grid image that needs to be split fresh
           if (img.originalUrl && gridSliceIndex !== undefined) {
             try {
-              const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`;
+              const proxyUrl = `/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`;
               const slices = await splitGridImage(proxyUrl);
               if (slices[gridSliceIndex]) {
                 blob = await (await fetch(slices[gridSliceIndex])).blob();
@@ -2146,7 +2146,7 @@ const App: React.FC = () => {
             }
           } else if (img.originalUrl) {
             try {
-              const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
+              const response = await fetch(`/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`);
               if (response.ok) {
                 blob = await response.blob();
               } else {
@@ -2221,7 +2221,7 @@ const App: React.FC = () => {
           if (img.originalUrl && gridSliceIndex !== undefined) {
             // Grid image - split fresh for maximum quality
             try {
-              const proxyUrl = `/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`;
+              const proxyUrl = `/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`;
               const slices = await splitGridImage(proxyUrl);
               if (slices[gridSliceIndex]) {
                 blob = await (await fetch(slices[gridSliceIndex])).blob();
@@ -2235,7 +2235,7 @@ const App: React.FC = () => {
           } else if (img.originalUrl) {
             // Regular image with original URL - fetch it directly
             try {
-              const response = await fetch(`/api/ttapi/image?url=${encodeURIComponent(img.originalUrl)}`);
+              const response = await fetch(`/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`);
               if (response.ok) {
                 blob = await response.blob();
               } else {

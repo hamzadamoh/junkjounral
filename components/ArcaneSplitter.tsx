@@ -215,7 +215,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       const fetchPromises = imageUrls.map(async (imageUrl: string, i: number) => {
         try {
           // Fetch image via proxy to avoid CORS
-          const imgResponse = await fetch(`/api/ttapi/image?url=${encodeURIComponent(imageUrl)}`);
+          const imgResponse = await fetch(`/api/ttapi?operation=image&url=${encodeURIComponent(imageUrl)}`);
           const blob = await imgResponse.blob();
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();

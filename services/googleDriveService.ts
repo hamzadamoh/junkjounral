@@ -159,7 +159,7 @@ export async function uploadImagesToGoogleDrive(
   console.log(`[Google Drive] Creating folder: "${folderName}"...`);
   let folderId: string;
   try {
-    const folderResponse = await fetch('/api/google-drive/create-folder', {
+    const folderResponse = await fetch('/api/google-drive', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ export async function uploadImagesToGoogleDrive(
         // Remove data URL prefix if present
         const base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
         
-        const uploadResponse = await fetch('/api/google-drive/upload-file', {
+        const uploadResponse = await fetch('/api/google-drive', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

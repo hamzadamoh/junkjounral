@@ -299,7 +299,7 @@ const sendUpscaleToTtapi = async (
 
   try {
     console.log(`[Ttapi] Sending upscale request via Vercel proxy...`);
-    const response = await fetch('/api/ttapi/imagine', {
+          const response = await fetch('/api/ttapi?operation=imagine', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -534,7 +534,7 @@ const sendTaskToTtapi = async (
   try {
     console.log(`[Ttapi] Sending POST request via Vercel proxy...`);
     // Use Vercel serverless function to bypass CORS
-    const response = await fetch('/api/ttapi/imagine', {
+          const response = await fetch('/api/ttapi?operation=imagine', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -658,7 +658,7 @@ const getTaskStatus = async (jobId: string): Promise<TtapiJobStatus> => {
 
   try {
     // Use Vercel serverless function to bypass CORS
-    const response = await fetch(`/api/ttapi/fetch?jobId=${jobId}`, {
+      const response = await fetch(`/api/ttapi?operation=fetch&jobId=${jobId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -1277,7 +1277,7 @@ const convertUrlsToBase64 = async (imageUrls: string[]): Promise<string[]> => {
                         url.includes('discord.com') || 
                         url.includes('mjcdn.ttapi.io') ||
                         url.includes('cdn.ttapi.io');
-      const fetchUrl = needsProxy ? `/api/ttapi/image?url=${encodeURIComponent(url)}` : url;
+      const fetchUrl = needsProxy ? `/api/ttapi?operation=image&url=${encodeURIComponent(url)}` : url;
       
       const imageResponse = await fetch(fetchUrl);
       if (!imageResponse.ok) {
@@ -1890,7 +1890,7 @@ export const getTTAPIAccountCount = async (mode: 'fast' | 'relax' = 'fast'): Pro
   
   try {
     // Use server-side API route to avoid CORS issues
-    const response = await fetch(`/api/ttapi/accounts?mode=${mode}`, {
+      const response = await fetch(`/api/ttapi?operation=accounts&mode=${mode}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -1927,7 +1927,7 @@ export const getTTAPIAccountIds = async (mode: 'fast' | 'relax' = 'fast'): Promi
   
   try {
     // Use server-side API route to avoid CORS issues
-    const response = await fetch(`/api/ttapi/accounts?mode=${mode}`, {
+      const response = await fetch(`/api/ttapi?operation=accounts&mode=${mode}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
