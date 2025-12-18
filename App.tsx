@@ -104,6 +104,7 @@ const App: React.FC = () => {
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState<boolean>(false);
+  const [imagesPerPromptToDownload, setImagesPerPromptToDownload] = useState<1 | 2 | 3 | 4>(4); // How many images to download per prompt
   const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
     message: string;
@@ -2101,6 +2102,29 @@ const App: React.FC = () => {
     }
   };
 
+  /**
+   * Filter images to only include the selected number per prompt
+   * Assumes Midjourney generates 4 images per prompt, so groups images in sets of 4
+   */
+  const filterImagesByPromptCount = (images: GeneratedImage[]): GeneratedImage[] => {
+    if (imagesPerPromptToDownload === 4) {
+      return images; // Return all images
+    }
+    
+    const filtered: GeneratedImage[] = [];
+    const imagesPerPrompt = 4; // Midjourney always generates 4 images per prompt
+    
+    // Group images by prompt (every 4 images = 1 prompt)
+    for (let i = 0; i < images.length; i += imagesPerPrompt) {
+      const promptGroup = images.slice(i, i + imagesPerPrompt);
+      // Take only the first N images from this prompt group
+      const imagesToKeep = promptGroup.slice(0, imagesPerPromptToDownload);
+      filtered.push(...imagesToKeep);
+    }
+    
+    return filtered;
+  };
+
   // Download only selected images as ZIP
   const downloadSelectedAsZip = async () => {
     try {
@@ -2198,12 +2222,20 @@ const App: React.FC = () => {
         return;
       }
 
+      // Filter images based on imagesPerPromptToDownload setting
+      const filteredImages = filterImagesByPromptCount(completedImages);
+      
+      if (filteredImages.length === 0) {
+        alert('No images to download after filtering');
+        return;
+      }
+
       // Show loading state
-      const loadingMsg = `Preparing ${completedImages.length} images for download...`;
+      const loadingMsg = `Preparing ${filteredImages.length} images for download (${imagesPerPromptToDownload} per prompt)...`;
       alert(loadingMsg);
 
       // Shuffle images to randomize order (so 4 images from each batch aren't grouped together)
-      const shuffledImages = shuffleArray(completedImages);
+      const shuffledImages = shuffleArray(filteredImages);
       console.log(`[Download] Shuffled ${shuffledImages.length} images for random order`);
 
       // Fetch all images and add to zip with generic filenames
@@ -2307,6 +2339,14 @@ const App: React.FC = () => {
       return;
     }
 
+    // Filter images based on imagesPerPromptToDownload setting
+    const filteredImages = filterImagesByPromptCount(completedImages);
+    
+    if (filteredImages.length === 0) {
+      alert('No images to upload after filtering');
+      return;
+    }
+
     // Prompt for folder name
     const folderName = prompt('Enter a name for the Google Drive folder:');
     if (!folderName || folderName.trim() === '') {
@@ -2315,10 +2355,10 @@ const App: React.FC = () => {
 
     try {
       setIsUploadingToGoogleDrive(true);
-      addLog(`[Google Drive] Preparing to upload ${completedImages.length} images to folder: "${folderName}"...`, 'log');
+      addLog(`[Google Drive] Preparing to upload ${filteredImages.length} images (${imagesPerPromptToDownload} per prompt) to folder: "${folderName}"...`, 'log');
 
       // Prepare images for upload
-      const imagesToUpload = completedImages.map(img => ({
+      const imagesToUpload = filteredImages.map(img => ({
         url: img.url!,
         originalUrl: img.originalUrl,
       }));
@@ -2396,8 +2436,16 @@ const App: React.FC = () => {
         return;
       }
 
+      // Filter images based on imagesPerPromptToDownload setting
+      const filteredImages = filterImagesByPromptCount(completedImages);
+      
+      if (filteredImages.length === 0) {
+        alert('No images to download after filtering');
+        return;
+      }
+
       // Show loading state
-      const loadingMsg = `Preparing ${completedImages.length} images for PDF...`;
+      const loadingMsg = `Preparing ${filteredImages.length} images for PDF (${imagesPerPromptToDownload} per prompt)...`;
       alert(loadingMsg);
 
       const pdf = new jsPDF({
@@ -2406,8 +2454,8 @@ const App: React.FC = () => {
         format: 'a4'
       });
 
-      for (let i = 0; i < completedImages.length; i++) {
-        const img = completedImages[i];
+      for (let i = 0; i < filteredImages.length; i++) {
+        const img = filteredImages[i];
         try {
           // Fetch image and convert to base64
           const response = await fetch(img.url);
@@ -3781,7 +3829,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
   );
 
   const renderGallery = () => {
-    const completedCount = generatedImages.filter(img => img.status === 'completed' && img.url).length;
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    const completedCount = completedImages.length;
+    const filteredCount = filterImagesByPromptCount(completedImages).length;
 
     return (
     <div className="animate-fade-in">
@@ -3824,6 +3874,26 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   )}
                 </button>
                 
+                {/* Images Per Prompt Selector */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose how many to download per prompt.">
+                  <span className="text-xs text-slate-300 whitespace-nowrap">Download:</span>
+                  <div className="flex gap-1">
+                    {([1, 2, 3, 4] as const).map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => setImagesPerPromptToDownload(num)}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          imagesPerPromptToDownload === num
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        }`}
+                      >
+                        {num}/4
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Download Selected - only show when images are selected */}
                 {selectedImages.size > 0 && (
                   <button 
@@ -3838,30 +3908,30 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <button 
                   onClick={downloadAllAsZip}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title="Download all images as ZIP file"
+                  title={`Download all images as ZIP file (${imagesPerPromptToDownload} per prompt)`}
                 >
-                  <Archive size={18} /> Download All ({completedCount})
+                  <Archive size={18} /> Download All ({filteredCount})
                 </button>
                 <button 
                   onClick={downloadAllAsPdf}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title="Download all images as PDF"
+                  title={`Download all images as PDF (${imagesPerPromptToDownload} per prompt)`}
                 >
-                  <FileText size={18} /> Download PDF ({completedCount})
+                  <FileText size={18} /> Download PDF ({filteredCount})
                 </button>
                 <button 
                   onClick={uploadToGoogleDrive}
                   disabled={isUploadingToGoogleDrive}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title="Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)"
+                  title={`Upload all images to Google Drive (${imagesPerPromptToDownload} per prompt, images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
                 >
                   {isUploadingToGoogleDrive ? (
                     <>
-                      <RefreshCw size={18} className="animate-spin" /> Uploading... ({completedCount})
+                      <RefreshCw size={18} className="animate-spin" /> Uploading... ({filteredCount})
                     </>
                   ) : (
                     <>
-                      <Link size={18} /> Upload to Google Drive ({completedCount})
+                      <Link size={18} /> Upload to Google Drive ({filteredCount})
                     </>
                   )}
                 </button>
