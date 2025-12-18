@@ -2103,21 +2103,66 @@ const App: React.FC = () => {
   };
 
   /**
+   * Detect the actual number of images per prompt from the generated images
+   * by looking at how many consecutive images share the same prompt
+   */
+  const detectImagesPerPrompt = (images: GeneratedImage[]): number => {
+    if (images.length === 0) return bulkImagesPerPrompt;
+    
+    // Try to detect the pattern by looking at prompts
+    // Images generated from the same prompt should have the same prompt text (before Midjourney parameters)
+    let currentPrompt = '';
+    let count = 0;
+    let maxCount = 0;
+    
+    for (const img of images) {
+      // Extract the base prompt (before --ar, --v, etc.)
+      const basePrompt = img.prompt.split(' --')[0].trim();
+      
+      if (basePrompt === currentPrompt) {
+        count++;
+      } else {
+        if (count > maxCount) {
+          maxCount = count;
+        }
+        currentPrompt = basePrompt;
+        count = 1;
+      }
+    }
+    
+    // Check the last group
+    if (count > maxCount) {
+      maxCount = count;
+    }
+    
+    // If we detected a pattern, use it; otherwise fall back to bulkImagesPerPrompt
+    // Valid values are 1, 2, or 4
+    if (maxCount > 0 && (maxCount === 1 || maxCount === 2 || maxCount === 4)) {
+      return maxCount;
+    }
+    
+    return bulkImagesPerPrompt;
+  };
+
+  /**
    * Filter images to only include the selected image INDEX from each prompt
-   * Assumes Midjourney generates 4 images per prompt, so groups images in sets of 4
+   * Detects the actual number of images per prompt from the generated images
    * If user selects 2, it downloads the 2nd image (index 1) from each prompt
    */
   const filterImagesByPromptCount = (images: GeneratedImage[]): GeneratedImage[] => {
-    if (imagesPerPromptToDownload === 4) {
+    // Detect the actual number of images per prompt from the generated images
+    const actualImagesPerPrompt = detectImagesPerPrompt(images);
+    
+    // If "All" is selected, return all images
+    if (imagesPerPromptToDownload === 4 || imagesPerPromptToDownload > actualImagesPerPrompt) {
       return images; // Return all images
     }
     
     const filtered: GeneratedImage[] = [];
-    const imagesPerPrompt = 4; // Midjourney always generates 4 images per prompt
     
-    // Group images by prompt (every 4 images = 1 prompt)
-    for (let i = 0; i < images.length; i += imagesPerPrompt) {
-      const promptGroup = images.slice(i, i + imagesPerPrompt);
+    // Group images by prompt (every N images = 1 prompt, where N = actualImagesPerPrompt)
+    for (let i = 0; i < images.length; i += actualImagesPerPrompt) {
+      const promptGroup = images.slice(i, i + actualImagesPerPrompt);
       // Select the Nth image from this prompt group (1-based to 0-based index)
       const imageIndex = imagesPerPromptToDownload - 1; // Convert 1-4 to 0-3
       if (promptGroup[imageIndex]) {
@@ -3835,6 +3880,8 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
     const completedCount = completedImages.length;
     const filteredCount = filterImagesByPromptCount(completedImages).length;
+    // Detect the actual number of images per prompt from the generated images
+    const detectedImagesPerPrompt = detectImagesPerPrompt(completedImages);
 
     return (
     <div className="animate-fade-in">
@@ -3878,23 +3925,36 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 </button>
                 
                 {/* Images Per Prompt Selector */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose which image to download from each prompt (1st, 2nd, 3rd, 4th, or All).">
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title={`Detected ${detectedImagesPerPrompt} image(s) per prompt. Choose which image to download from each prompt.`}>
                   <span className="text-xs text-slate-300 whitespace-nowrap">Image:</span>
                   <div className="flex gap-1">
-                    {([1, 2, 3, 4] as const).map((num) => (
+                    {/* Show options based on detected images per prompt */}
+                    {Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).map((num) => (
                       <button
                         key={num}
-                        onClick={() => setImagesPerPromptToDownload(num)}
+                        onClick={() => setImagesPerPromptToDownload(num as 1 | 2 | 3 | 4)}
                         className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                           imagesPerPromptToDownload === num
                             ? 'bg-amber-600 text-white'
                             : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                         }`}
-                        title={num === 4 ? 'Download all 4 images from each prompt' : `Download the ${num === 1 ? '1st' : num === 2 ? '2nd' : '3rd'} image from each prompt`}
+                        title={`Download the ${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'} image from each prompt`}
                       >
-                        {num === 4 ? 'All' : (num === 1 ? '1st' : num === 2 ? '2nd' : '3rd')}
+                        {num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'}
                       </button>
                     ))}
+                    {/* Always show "All" option */}
+                    <button
+                      onClick={() => setImagesPerPromptToDownload(4)}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                        imagesPerPromptToDownload === 4
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                      title={`Download all ${detectedImagesPerPrompt} image(s) from each prompt`}
+                    >
+                      All
+                    </button>
                   </div>
                 </div>
 
