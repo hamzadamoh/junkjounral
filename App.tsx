@@ -2103,8 +2103,9 @@ const App: React.FC = () => {
   };
 
   /**
-   * Filter images to only include the selected number per prompt
+   * Filter images to only include the selected image INDEX from each prompt
    * Assumes Midjourney generates 4 images per prompt, so groups images in sets of 4
+   * If user selects 2, it downloads the 2nd image (index 1) from each prompt
    */
   const filterImagesByPromptCount = (images: GeneratedImage[]): GeneratedImage[] => {
     if (imagesPerPromptToDownload === 4) {
@@ -2117,9 +2118,11 @@ const App: React.FC = () => {
     // Group images by prompt (every 4 images = 1 prompt)
     for (let i = 0; i < images.length; i += imagesPerPrompt) {
       const promptGroup = images.slice(i, i + imagesPerPrompt);
-      // Take only the first N images from this prompt group
-      const imagesToKeep = promptGroup.slice(0, imagesPerPromptToDownload);
-      filtered.push(...imagesToKeep);
+      // Select the Nth image from this prompt group (1-based to 0-based index)
+      const imageIndex = imagesPerPromptToDownload - 1; // Convert 1-4 to 0-3
+      if (promptGroup[imageIndex]) {
+        filtered.push(promptGroup[imageIndex]);
+      }
     }
     
     return filtered;
@@ -3875,8 +3878,8 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 </button>
                 
                 {/* Images Per Prompt Selector */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose how many to download per prompt.">
-                  <span className="text-xs text-slate-300 whitespace-nowrap">Download:</span>
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title="Midjourney generates 4 images per prompt. Choose which image to download from each prompt (1st, 2nd, 3rd, 4th, or All).">
+                  <span className="text-xs text-slate-300 whitespace-nowrap">Image:</span>
                   <div className="flex gap-1">
                     {([1, 2, 3, 4] as const).map((num) => (
                       <button
@@ -3887,8 +3890,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                             ? 'bg-amber-600 text-white'
                             : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                         }`}
+                        title={num === 4 ? 'Download all 4 images from each prompt' : `Download the ${num === 1 ? '1st' : num === 2 ? '2nd' : '3rd'} image from each prompt`}
                       >
-                        {num}/4
+                        {num === 4 ? 'All' : (num === 1 ? '1st' : num === 2 ? '2nd' : '3rd')}
                       </button>
                     ))}
                   </div>
@@ -3908,14 +3912,18 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <button 
                   onClick={downloadAllAsZip}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title={`Download all images as ZIP file (${imagesPerPromptToDownload} per prompt)`}
+                  title={imagesPerPromptToDownload === 4 
+                    ? 'Download all images as ZIP file' 
+                    : `Download the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt as ZIP`}
                 >
                   <Archive size={18} /> Download All ({filteredCount})
                 </button>
                 <button 
                   onClick={downloadAllAsPdf}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title={`Download all images as PDF (${imagesPerPromptToDownload} per prompt)`}
+                  title={imagesPerPromptToDownload === 4 
+                    ? 'Download all images as PDF' 
+                    : `Download the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt as PDF`}
                 >
                   <FileText size={18} /> Download PDF ({filteredCount})
                 </button>
@@ -3923,7 +3931,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   onClick={uploadToGoogleDrive}
                   disabled={isUploadingToGoogleDrive}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title={`Upload all images to Google Drive (${imagesPerPromptToDownload} per prompt, images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
+                  title={imagesPerPromptToDownload === 4 
+                    ? 'Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)' 
+                    : `Upload the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
                 >
                   {isUploadingToGoogleDrive ? (
                     <>
