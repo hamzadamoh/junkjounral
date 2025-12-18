@@ -17,6 +17,88 @@ const getDiscordToken = (): string => {
   return import.meta.env.VITE_DISCORD_TOKEN || '';
 };
 
+/**
+ * Rewrite a prompt to remove banned words using ChatGPT
+ * @param originalPrompt The prompt that was blocked
+ * @param bannedWords The banned words detected in the error message
+ * @returns A rewritten prompt with banned words replaced
+ */
+const rewritePromptToRemoveBannedWords = async (
+  originalPrompt: string,
+  bannedWords: string[]
+): Promise<string> => {
+  console.log(`[Ttapi] 🔄 Rewriting prompt to remove banned words: ${bannedWords.join(', ')}`);
+  
+  try {
+    // Extract the text part of the prompt (before parameters like --ar, --v, etc.)
+    const promptParts = originalPrompt.match(/^(.+?)(\s+--[a-z-]+\s+[^\s]+(?:\s+--[a-z-]+\s+[^\s]+)*)$/i);
+    const promptText = promptParts ? promptParts[1] : originalPrompt;
+    const promptParams = promptParts ? promptParts[2] : '';
+
+    const systemPrompt = `You are a prompt rewriting assistant. Your task is to rewrite Midjourney prompts to remove banned words while preserving the original meaning and artistic intent.
+
+Rules:
+1. Replace banned words with acceptable synonyms or alternative phrases
+2. Maintain the same artistic style, composition, and visual elements
+3. Keep all technical details (colors, lighting, composition, etc.)
+4. Do NOT change Midjourney parameters (--ar, --v, --s, etc.) - they will be preserved separately
+5. Return ONLY the rewritten prompt text, no explanations or additional text
+
+Common banned word replacements:
+- "bleed" → "extend to edge", "reach edge", "full bleed design"
+- "blood" → "red liquid", "crimson fluid", "red substance"
+- Other banned words: replace with contextually appropriate alternatives`;
+
+    const userPrompt = `Rewrite this Midjourney prompt to remove these banned words: ${bannedWords.join(', ')}
+
+Original prompt:
+${promptText}
+
+Return ONLY the rewritten prompt text (no parameters, no explanations):`;
+
+    const response = await fetch('/api/openai/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 500,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Ttapi] Failed to rewrite prompt: ${response.status} - ${errorText}`);
+      throw new Error(`Failed to rewrite prompt: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rewrittenText = data.choices?.[0]?.message?.content?.trim();
+
+    if (!rewrittenText) {
+      throw new Error('No rewritten prompt returned from ChatGPT');
+    }
+
+    // Combine rewritten text with original parameters
+    const rewrittenPrompt = `${rewrittenText}${promptParams}`;
+    
+    console.log(`[Ttapi] ✅ Prompt rewritten successfully`);
+    console.log(`[Ttapi] Original: "${promptText.substring(0, 100)}..."`);
+    console.log(`[Ttapi] Rewritten: "${rewrittenText.substring(0, 100)}..."`);
+    
+    return rewrittenPrompt;
+  } catch (error) {
+    console.error(`[Ttapi] Error rewriting prompt:`, error);
+    throw error;
+  }
+};
+
 interface TtapiTaskResponse {
   jobId?: string;
   job_id?: string;
@@ -563,6 +645,104 @@ const sendTaskToTtapi = async (
                            apiMessage.toLowerCase().includes('try again later');
         const isNoAccounts = apiMessage.toLowerCase().includes('no available accounts') ||
                             apiMessage.toLowerCase().includes('no available account');
+        const isBannedWords = apiMessage.toLowerCase().includes('banned prompt words') ||
+                             apiMessage.toLowerCase().includes('banned words') ||
+                             apiMessage.toLowerCase().includes('banned word');
+        
+        // Handle banned words error - rewrite prompt and retry
+        if (response.status === 400 && isBannedWords) {
+          console.warn(`[Ttapi] ⚠️ Banned words detected in prompt: ${apiMessage}`);
+          
+          // Extract banned words from error message
+          // Handle formats like: "banned prompt words：bleed" or "banned words: bleed, blood"
+          let bannedWords: string[] = [];
+          
+          // Try multiple patterns to extract banned words
+          const patterns = [
+            /banned\s+(?:prompt\s+)?words?[：:]\s*([^\n，,]+)/i,  // "banned prompt words：bleed"
+            /banned\s+words?[：:]\s*([^\n，,]+)/i,                // "banned words: bleed"
+            /[：:]\s*([a-z]+)(?:\s|$)/i,                         // "：bleed" or ": bleed"
+          ];
+          
+          for (const pattern of patterns) {
+            const match = apiMessage.match(pattern);
+            if (match && match[1]) {
+              const extracted = match[1].trim();
+              if (extracted) {
+                // Split by comma if multiple words
+                bannedWords = extracted.split(/[，,]/).map(w => w.trim()).filter(w => w && w.length > 0);
+                if (bannedWords.length > 0) break;
+              }
+            }
+          }
+          
+          // Fallback: if no words extracted, try to find any word after colon
+          if (bannedWords.length === 0) {
+            const fallbackMatch = apiMessage.match(/[：:]\s*([a-z]+)/i);
+            if (fallbackMatch && fallbackMatch[1]) {
+              bannedWords = [fallbackMatch[1].trim()];
+            }
+          }
+          
+          // If still no words, use a generic term
+          if (bannedWords.length === 0) {
+            bannedWords = ['banned content'];
+          }
+          
+          console.log(`[Ttapi] Detected banned words: ${bannedWords.join(', ')}`);
+          
+          // Rewrite the prompt
+          try {
+            const rewrittenPrompt = await rewritePromptToRemoveBannedWords(
+              promptWithNegative,
+              bannedWords.length > 0 ? bannedWords : ['banned content']
+            );
+            
+            // Update the prompt in the request data
+            data.prompt = rewrittenPrompt;
+            console.log(`[Ttapi] 🔄 Retrying with rewritten prompt...`);
+            
+            // Retry the request with rewritten prompt
+            const retryResponse = await fetch('/api/ttapi?operation=imagine', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(data)
+            });
+            
+            if (!retryResponse.ok) {
+              const retryErrorText = await retryResponse.text();
+              console.error(`[Ttapi] Retry after rewrite also failed: ${retryResponse.status} - ${retryErrorText}`);
+              // Update error message to indicate rewrite was attempted
+              errorMessage = `Ttapi API error: Banned words detected. Attempted to rewrite prompt but retry also failed.`;
+              errorDetail = `Original error: ${apiMessage}. Retry error: ${retryErrorText}`;
+            } else {
+              // Success! Parse and return the response
+              const retryResponseText = await retryResponse.text();
+              const retryJson = JSON.parse(retryResponseText);
+              const retryJobId = retryJson.data?.jobId || retryJson.data?.job_id || retryJson.data?.id || retryJson.data?.task_id ||
+                                retryJson.jobId || retryJson.job_id || retryJson.id || retryJson.task_id;
+              
+              if (retryJobId) {
+                console.log(`[Ttapi] ✅ Task created successfully after rewrite. Job ID: ${retryJobId}`);
+                return retryJobId;
+              } else {
+                console.error(`[Ttapi] Retry succeeded but no job ID found in response`);
+                errorMessage = `Ttapi API error: Banned words detected. Rewrite succeeded but no job ID returned.`;
+                errorDetail = `Retry response: ${retryResponseText}`;
+              }
+            }
+          } catch (rewriteError: any) {
+            console.error(`[Ttapi] Failed to rewrite and retry prompt:`, rewriteError);
+            errorMessage = `Ttapi API error: Banned words detected. Failed to rewrite prompt.`;
+            errorDetail = `Original error: ${apiMessage}. Rewrite error: ${rewriteError.message || rewriteError}`;
+          }
+          
+          // If we reach here, the rewrite/retry failed, so throw the error
+          const fullError = errorDetail ? `${errorMessage} ${errorDetail}` : errorMessage;
+          throw new Error(fullError);
+        }
         
         // Handle specific error cases
         if (response.status === 402) {
@@ -596,6 +776,89 @@ const sendTaskToTtapi = async (
       } catch (parseError) {
         // Use the already-read responseText
         console.error(`[Ttapi] HTTP ${response.status} error (could not parse JSON):`, responseText);
+        
+        // Check if it's a banned words error in plain text
+        const isBannedWordsText = responseText.toLowerCase().includes('banned prompt words') ||
+                                 responseText.toLowerCase().includes('banned words') ||
+                                 responseText.toLowerCase().includes('banned word');
+        
+        if (response.status === 400 && isBannedWordsText) {
+          // Extract banned words using same logic as JSON error handler
+          let bannedWords: string[] = [];
+          
+          const patterns = [
+            /banned\s+(?:prompt\s+)?words?[：:]\s*([^\n，,]+)/i,
+            /banned\s+words?[：:]\s*([^\n，,]+)/i,
+            /[：:]\s*([a-z]+)(?:\s|$)/i,
+          ];
+          
+          for (const pattern of patterns) {
+            const match = responseText.match(pattern);
+            if (match && match[1]) {
+              const extracted = match[1].trim();
+              if (extracted) {
+                bannedWords = extracted.split(/[，,]/).map(w => w.trim()).filter(w => w && w.length > 0);
+                if (bannedWords.length > 0) break;
+              }
+            }
+          }
+          
+          if (bannedWords.length === 0) {
+            const fallbackMatch = responseText.match(/[：:]\s*([a-z]+)/i);
+            if (fallbackMatch && fallbackMatch[1]) {
+              bannedWords = [fallbackMatch[1].trim()];
+            }
+          }
+          
+          if (bannedWords.length === 0) {
+            bannedWords = ['banned content'];
+          }
+          
+          console.warn(`[Ttapi] ⚠️ Banned words detected in plain text response: ${bannedWords.join(', ')}`);
+          
+          try {
+            const rewrittenPrompt = await rewritePromptToRemoveBannedWords(
+              promptWithNegative,
+              bannedWords.length > 0 ? bannedWords : ['banned content']
+            );
+            
+            data.prompt = rewrittenPrompt;
+            console.log(`[Ttapi] 🔄 Retrying with rewritten prompt...`);
+            
+            const retryResponse = await fetch('/api/ttapi?operation=imagine', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(data)
+            });
+            
+            if (!retryResponse.ok) {
+              const retryErrorText = await retryResponse.text();
+              console.error(`[Ttapi] Retry after rewrite also failed: ${retryResponse.status} - ${retryErrorText}`);
+              errorMessage = `Ttapi API error: Banned words detected. Attempted to rewrite prompt but retry also failed.`;
+              errorDetail = `Original error: ${responseText}. Retry error: ${retryErrorText}`;
+            } else {
+              const retryResponseText = await retryResponse.text();
+              const retryJson = JSON.parse(retryResponseText);
+              const retryJobId = retryJson.data?.jobId || retryJson.data?.job_id || retryJson.data?.id || retryJson.data?.task_id ||
+                                retryJson.jobId || retryJson.job_id || retryJson.id || retryJson.task_id;
+              
+              if (retryJobId) {
+                console.log(`[Ttapi] ✅ Task created successfully after rewrite. Job ID: ${retryJobId}`);
+                return retryJobId;
+              }
+            }
+          } catch (rewriteError: any) {
+            console.error(`[Ttapi] Failed to rewrite and retry prompt:`, rewriteError);
+            errorMessage = `Ttapi API error: Banned words detected. Failed to rewrite prompt.`;
+            errorDetail = `Original error: ${responseText}. Rewrite error: ${rewriteError.message || rewriteError}`;
+          }
+          
+          const fullError = errorDetail ? `${errorMessage} ${errorDetail}` : errorMessage;
+          throw new Error(fullError);
+        }
+        
         errorMessage = `Ttapi HTTP error: ${response.status} - ${responseText}`;
       }
       
