@@ -176,10 +176,12 @@ export const analyzeImageWithOracle = async (
   mainTopic?: string,
   detailLevel: 'normal' | 'detailed' = 'detailed'
 ): Promise<OracleAnalysisResult> => {
+  // Check if API key is configured (for hasOpenAIKey check)
+  // But use server-side route to protect the key
   const apiKey = getOpenAIApiKey();
   
   if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Set VITE_OPENAI_API_KEY in your environment.');
+    throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY in Vercel environment variables.');
   }
   
   // Ensure the image has a proper data URL prefix
@@ -275,11 +277,11 @@ Generate a clear and descriptive Midjourney prompt (100-200 words) that captures
   
   console.log('[Oracle] Sending image for analysis with GPT-4 Vision...');
   
-  const response = await fetch(OPENAI_API_URL, {
+  // Use server-side API route to protect API key
+  const response = await fetch('/api/openai/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify(requestBody),
   });

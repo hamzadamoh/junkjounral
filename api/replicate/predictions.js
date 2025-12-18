@@ -19,7 +19,8 @@ export default async function handler(req, res) {
       });
     }
     
-    console.log('Using Replicate API key (first 10 chars):', apiKey.substring(0, 10) + '...');
+    // Security: Don't log API key, even partially
+    // console.log('Using Replicate API key (first 10 chars):', apiKey.substring(0, 10) + '...');
 
     // Get the request body from the frontend
     const { version, input } = req.body;
