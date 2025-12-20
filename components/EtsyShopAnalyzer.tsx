@@ -315,13 +315,14 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
         throw new Error('No images were successfully fetched');
       }
 
-      // Step 2: Download each image, convert to base64, and upload to WordPress
+      // Step 2: Download each image via proxy (to bypass CORS), convert to base64, and upload to WordPress
       for (let i = 0; i < successfulFetches.length; i++) {
         const fetchResult = successfulFetches[i];
         
         try {
-          // Download the image
-          const imageResponse = await fetch(fetchResult.image_url);
+          // Download the image via proxy to bypass CORS
+          const proxyUrl = `/api/etsy/proxy-image?url=${encodeURIComponent(fetchResult.image_url)}`;
+          const imageResponse = await fetch(proxyUrl);
           if (!imageResponse.ok) {
             throw new Error(`Failed to download image: ${imageResponse.statusText}`);
           }
