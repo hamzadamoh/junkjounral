@@ -108,6 +108,10 @@ export default async function handler(req, res) {
         ? Math.floor((Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
         : null;
 
+      // Calculate price in numeric format
+      const priceNum = listing.price ? parseFloat(listing.price) : 0;
+      const currency = listing.currency_code || 'USD';
+
       return {
         listing_id: listing.listing_id,
         shop_id: listing.shop_id,
@@ -119,8 +123,14 @@ export default async function handler(req, res) {
         last_modified: modifiedDate ? modifiedDate.toISOString() : null,
         is_digital: listing.listing_type === 'download',
         tags: listing.tags || [],
-        price: listing.price,
-        currency_code: listing.currency_code,
+        price: priceNum,
+        currency_code: currency,
+        // Additional fields for enhanced display
+        // Note: Images are fetched separately via /api/etsy/fetch-images
+        image_url: null, // Will be populated by separate image fetch
+        state: listing.state || 'active',
+        when_made: listing.when_made,
+        who_made: listing.who_made,
       };
     });
 
@@ -131,6 +141,24 @@ export default async function handler(req, res) {
       ? Math.floor((Date.now() - shopCreationDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
+    // Calculate additional metrics
+    const totalRevenue = processedListings.reduce((sum, listing) => {
+      // Estimate revenue: price * (stock reduction estimate or use views/favorites as proxy)
+      // For digital items, we can't track sales easily, so we'll use a placeholder
+      return sum + (listing.price || 0);
+    }, 0);
+    
+    const avgPrice = processedListings.length > 0
+      ? processedListings.reduce((sum, listing) => sum + (listing.price || 0), 0) / processedListings.length
+      : 0;
+
+    const oldestListing = processedListings.reduce((oldest, listing) => {
+      if (!oldest) return listing;
+      if (!listing.age_days) return oldest;
+      if (!oldest.age_days) return listing;
+      return listing.age_days > oldest.age_days ? listing : oldest;
+    }, null);
+
     const responseData = {
       shop_info: {
         shop_name: shopDetails.shop_name || shopIdentifier,
@@ -140,6 +168,11 @@ export default async function handler(req, res) {
         total_favorers: shopDetails.num_favorers || 0,
         total_sales: shopDetails.transaction_sold_count || 0,
         shop_url: shopUrl,
+        // Additional calculated metrics
+        avg_price: avgPrice,
+        currency_code: processedListings[0]?.currency_code || 'USD',
+        oldest_listing_age_days: oldestListing?.age_days || null,
+        shop_location: shopDetails.location || null,
       },
       listings: processedListings,
     };
