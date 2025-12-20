@@ -387,7 +387,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
 
             {/* Listings Table */}
             <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                 <table className="w-full">
                   <thead className="bg-slate-900 border-b border-slate-700">
                     <tr>
@@ -403,7 +403,6 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                   <tbody className="divide-y divide-slate-700">
                     {result.listings
                       .sort((a, b) => b.views - a.views)
-                      .slice(0, 50)
                       .map((listing) => (
                         <tr key={listing.listing_id} className="hover:bg-slate-700/50 transition-colors">
                           <td className="px-4 py-3 text-sm text-white max-w-xs truncate" title={listing.title}>
@@ -463,11 +462,9 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                   </tbody>
                 </table>
               </div>
-              {result.listings.length > 50 && (
-                <div className="px-4 py-3 bg-slate-900 border-t border-slate-700 text-sm text-slate-400 text-center">
-                  Showing top 50 listings by views. Total: {result.listings.length} listings
-                </div>
-              )}
+              <div className="px-4 py-3 bg-slate-900 border-t border-slate-700 text-sm text-slate-400 text-center">
+                Showing all {result.listings.length} listing{result.listings.length !== 1 ? 's' : ''} sorted by views
+              </div>
             </div>
           </div>
         )}
