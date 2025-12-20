@@ -89,6 +89,12 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
       // Automatically fetch listing images
       if (data.listings && data.listings.length > 0) {
         fetchListingImages(data.listings.map((l: Listing) => l.listing_id));
+        
+        // Automatically fetch and upload all images to WordPress
+        // Use setTimeout to allow UI to update first
+        setTimeout(() => {
+          handleFetchAndUploadImagesAuto(data.listings.map((l: Listing) => l.listing_id));
+        }, 1000);
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred while analyzing the shop');
@@ -130,19 +136,23 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
   const handleExportCSV = () => {
     if (!result) return;
 
-    const headers = ['Listing ID', 'Title', 'Views', 'Favorites', 'Stock', 'Age (Days)', 'Price', 'Currency', 'Is Digital', 'Tags'];
-    const rows = result.listings.map(listing => [
-      listing.listing_id,
-      listing.title,
-      listing.views,
-      listing.favorites,
-      listing.stock,
-      listing.age_days || '',
-      listing.price || '',
-      listing.currency_code || '',
-      listing.is_digital ? 'Yes' : 'No',
-      listing.tags.join(', '),
-    ]);
+    const headers = ['Listing ID', 'Title', 'WordPress Image Link', 'Views', 'Favorites', 'Stock', 'Age (Days)', 'Price', 'Currency', 'Is Digital', 'Tags'];
+    const rows = result.listings.map(listing => {
+      const wpImageUrl = uploadedImages.get(listing.listing_id) || '';
+      return [
+        listing.listing_id,
+        listing.title,
+        wpImageUrl, // WordPress image link
+        listing.views,
+        listing.favorites,
+        listing.stock,
+        listing.age_days || '',
+        listing.price || '',
+        listing.currency_code || '',
+        listing.is_digital ? 'Yes' : 'No',
+        listing.tags.join(', '),
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
@@ -269,20 +279,18 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
     };
   };
 
-  const handleFetchAndUploadImages = async () => {
-    if (!result || result.listings.length === 0) {
-      setError('No listings to process');
+  const handleFetchAndUploadImagesAuto = async (listingIds: number[]) => {
+    if (!listingIds || listingIds.length === 0) {
       return;
     }
 
     setIsFetchingImages(true);
     setError(null);
-    setUploadProgress({ completed: 0, total: result.listings.length });
+    setUploadProgress({ completed: 0, total: listingIds.length });
     const newUploadedImages = new Map<number, string>();
 
     try {
       // Step 1: Fetch image URLs from Etsy API
-      const listingIds = result.listings.map(l => l.listing_id);
       
       const fetchResponse = await fetch('/api/etsy/fetch-images', {
         method: 'POST',
@@ -351,18 +359,36 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
       setUploadedImages(newUploadedImages);
       
       if (newUploadedImages.size > 0) {
-        // Copy all WordPress URLs to clipboard
-        const urls = Array.from(newUploadedImages.values()).join('\n');
-        await navigator.clipboard.writeText(urls);
-        alert(`Successfully uploaded ${newUploadedImages.size} image(s) to WordPress! URLs copied to clipboard.`);
+        console.log(`✅ Successfully uploaded ${newUploadedImages.size} image(s) to WordPress!`);
       }
 
     } catch (err: any) {
+      console.error('Failed to fetch and upload images:', err);
       setError(err.message || 'Failed to fetch and upload images');
     } finally {
       setIsFetchingImages(false);
       setUploadProgress({ completed: 0, total: 0 });
     }
+  };
+
+  const handleFetchAndUploadImages = async () => {
+    if (!result || result.listings.length === 0) {
+      setError('No listings to process');
+      return;
+    }
+
+    const listingIds = result.listings.map(l => l.listing_id);
+    await handleFetchAndUploadImagesAuto(listingIds);
+    
+    // Wait a bit for state to update, then show alert
+    setTimeout(() => {
+      if (uploadedImages.size > 0) {
+        // Copy all WordPress URLs to clipboard
+        const urls = Array.from(uploadedImages.values()).join('\n');
+        navigator.clipboard.writeText(urls);
+        alert(`Successfully uploaded ${uploadedImages.size} image(s) to WordPress! URLs copied to clipboard.`);
+      }
+    }, 500);
   };
 
   return (
@@ -454,6 +480,21 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
           
           return (
             <div className="space-y-6">
+              {/* Auto Upload Status */}
+              {isFetchingImages && (
+                <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-center gap-3 text-blue-400">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <div>
+                      <div className="font-medium">Automatically uploading images to WordPress...</div>
+                      <div className="text-sm text-blue-300">
+                        Progress: {uploadProgress.completed} / {uploadProgress.total} images
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Shop Info Card - Enhanced */}
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                 <div className="flex items-center gap-4">
