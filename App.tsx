@@ -2584,6 +2584,39 @@ const App: React.FC = () => {
   // --- Render Steps ---
 
   const renderThemeSelection = () => {
+    // Handle prompts generated from Arcane Splitter
+    const handleArcaneSplitterPrompts = (prompts: string[], imagesPerPrompt?: number) => {
+      setBulkPrompts(prompts.join('\n\n'));
+      // Store the images per prompt preference if provided
+      if (imagesPerPrompt) {
+        setBulkImagesPerPrompt(imagesPerPrompt);
+      }
+      setShowArcaneSplitter(false);
+    };
+
+    // If Etsy Shop Analyzer is open, show it
+    if (showEtsyAnalyzer) {
+      return (
+        <div className="animate-fade-in max-w-6xl mx-auto px-4">
+          <EtsyShopAnalyzer
+            onClose={() => setShowEtsyAnalyzer(false)}
+          />
+        </div>
+      );
+    }
+
+    // If Arcane Splitter is open, show it
+    if (showArcaneSplitter) {
+      return (
+        <div className="animate-fade-in max-w-5xl mx-auto">
+          <ArcaneSplitter
+            onPromptsGenerated={handleArcaneSplitterPrompts}
+            onClose={() => setShowArcaneSplitter(false)}
+          />
+        </div>
+      );
+    }
+
     // If Image Theme Expansion mode is selected, show the single image upload form
     if (isImageThemeExpansion) {
       return (
@@ -2961,39 +2994,6 @@ const App: React.FC = () => {
       };
 
       const detectedPrompts = parsePrompts(bulkPrompts);
-      
-      // Handle prompts generated from Arcane Splitter
-      const handleArcaneSplitterPrompts = (prompts: string[], imagesPerPrompt?: number) => {
-        setBulkPrompts(prompts.join('\n\n'));
-        // Store the images per prompt preference if provided
-        if (imagesPerPrompt) {
-          setBulkImagesPerPrompt(imagesPerPrompt);
-        }
-        setShowArcaneSplitter(false);
-      };
-      
-      // If Etsy Shop Analyzer is open, show it
-      if (showEtsyAnalyzer) {
-        return (
-          <div className="animate-fade-in max-w-6xl mx-auto px-4">
-            <EtsyShopAnalyzer
-              onClose={() => setShowEtsyAnalyzer(false)}
-            />
-          </div>
-        );
-      }
-
-      // If Arcane Splitter is open, show it
-      if (showArcaneSplitter) {
-        return (
-          <div className="animate-fade-in max-w-5xl mx-auto">
-            <ArcaneSplitter
-              onPromptsGenerated={handleArcaneSplitterPrompts}
-              onClose={() => setShowArcaneSplitter(false)}
-            />
-          </div>
-        );
-      }
       
       return (
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
