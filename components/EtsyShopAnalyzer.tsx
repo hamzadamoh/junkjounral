@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Loader2, X, TrendingUp, Eye, Heart, Package, Calendar, DollarSign, Download, FileText } from 'lucide-react';
+import { ShoppingBag, Loader2, X, TrendingUp, Eye, Heart, Package, Calendar, DollarSign, Download, FileText, Upload, Check, Copy } from 'lucide-react';
+import { uploadImageToWordPress } from '../services/imageHostingService';
 
 interface EtsyShopAnalyzerProps {
   onClose?: () => void;
@@ -40,6 +41,9 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFetchingImages, setIsFetchingImages] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 });
+  const [uploadedImages, setUploadedImages] = useState<Map<number, string>>(new Map());
 
   const handleAnalyze = async () => {
     if (!shopUrl.trim()) {
@@ -123,6 +127,102 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleFetchAndUploadImages = async () => {
+    if (!result || result.listings.length === 0) {
+      setError('No listings to process');
+      return;
+    }
+
+    setIsFetchingImages(true);
+    setError(null);
+    setUploadProgress({ completed: 0, total: result.listings.length });
+    const newUploadedImages = new Map<number, string>();
+
+    try {
+      // Step 1: Fetch image URLs from Etsy API
+      const listingIds = result.listings.map(l => l.listing_id);
+      
+      const fetchResponse = await fetch('/api/etsy/fetch-images', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          listingIds,
+          apiKey: apiKey.trim() || undefined,
+        }),
+      });
+
+      if (!fetchResponse.ok) {
+        const errorData = await fetchResponse.json();
+        throw new Error(errorData.error || 'Failed to fetch images');
+      }
+
+      const fetchData = await fetchResponse.json();
+      const successfulFetches = fetchData.results.filter((r: any) => r.success);
+
+      if (successfulFetches.length === 0) {
+        throw new Error('No images were successfully fetched');
+      }
+
+      // Step 2: Download each image, convert to base64, and upload to WordPress
+      for (let i = 0; i < successfulFetches.length; i++) {
+        const fetchResult = successfulFetches[i];
+        
+        try {
+          // Download the image
+          const imageResponse = await fetch(fetchResult.image_url);
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to download image: ${imageResponse.statusText}`);
+          }
+
+          // Convert to base64
+          const imageBlob = await imageResponse.blob();
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+              const base64String = reader.result as string;
+              resolve(base64String);
+            };
+            reader.onerror = reject;
+          });
+          reader.readAsDataURL(imageBlob);
+          const base64Image = await base64Promise;
+
+          // Upload to WordPress
+          const wordpressUrl = await uploadImageToWordPress(base64Image);
+          newUploadedImages.set(fetchResult.listing_id, wordpressUrl);
+
+          setUploadProgress({ completed: i + 1, total: successfulFetches.length });
+          
+          // Small delay to avoid overwhelming WordPress
+          if (i < successfulFetches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+        } catch (error: any) {
+          console.error(`Failed to upload image for listing ${fetchResult.listing_id}:`, error);
+          // Continue with next image even if one fails
+        }
+      }
+
+      setUploadedImages(newUploadedImages);
+      
+      if (newUploadedImages.size > 0) {
+        // Copy all WordPress URLs to clipboard
+        const urls = Array.from(newUploadedImages.values()).join('\n');
+        await navigator.clipboard.writeText(urls);
+        alert(`Successfully uploaded ${newUploadedImages.size} image(s) to WordPress! URLs copied to clipboard.`);
+      }
+
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch and upload images');
+    } finally {
+      setIsFetchingImages(false);
+      setUploadProgress({ completed: 0, total: 0 });
+    }
   };
 
   return (
@@ -250,8 +350,25 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
               </div>
             </div>
 
-            {/* Export Buttons */}
-            <div className="flex gap-3">
+            {/* Action Buttons */}
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={handleFetchAndUploadImages}
+                disabled={isFetchingImages || result.listings.length === 0}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                {isFetchingImages ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Uploading ({uploadProgress.completed}/{uploadProgress.total})
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Fetch & Upload Images to WordPress
+                  </>
+                )}
+              </button>
               <button
                 onClick={handleExportCSV}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center gap-2"
@@ -280,6 +397,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Stock</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Age</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">WordPress URL</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700">
@@ -308,6 +426,36 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                               <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">Digital</span>
                             ) : (
                               <span className="px-2 py-1 bg-slate-700 text-slate-400 rounded text-xs">Physical</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {uploadedImages.has(listing.listing_id) ? (
+                              <div className="flex items-center gap-2">
+                                <Check className="w-4 h-4 text-green-400" />
+                                <a
+                                  href={uploadedImages.get(listing.listing_id)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-purple-400 hover:text-purple-300 underline truncate max-w-xs"
+                                  title={uploadedImages.get(listing.listing_id)}
+                                >
+                                  {uploadedImages.get(listing.listing_id)?.substring(0, 40)}...
+                                </a>
+                                <button
+                                  onClick={() => {
+                                    const url = uploadedImages.get(listing.listing_id);
+                                    if (url) {
+                                      navigator.clipboard.writeText(url);
+                                    }
+                                  }}
+                                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                                  title="Copy URL"
+                                >
+                                  <Copy className="w-3 h-3 text-slate-400" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 text-xs">Not uploaded</span>
                             )}
                           </td>
                         </tr>
