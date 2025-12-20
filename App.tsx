@@ -23,7 +23,8 @@ import {
   Upload,
   Folder,
   Square,
-  CheckSquare
+  CheckSquare,
+  ShoppingBag
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -36,6 +37,7 @@ import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecific
 import { uploadImageToWordPress } from './services/imageHostingService';
 import { uploadImagesToGoogleDrive, GoogleDriveUploadResult } from './services/googleDriveService';
 import ArcaneSplitter from './components/ArcaneSplitter';
+import EtsyShopAnalyzer from './components/EtsyShopAnalyzer';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
 // Note: import.meta.env is replaced at build time by Vite, so this is safe
@@ -70,6 +72,7 @@ const App: React.FC = () => {
   const [bulkSrefCode, setBulkSrefCode] = useState<string>(''); // SREF code for all bulk prompts
   const [bulkImagesPerPrompt, setBulkImagesPerPrompt] = useState<1 | 2 | 4>(4); // Images per prompt for Midjourney
   const [showArcaneSplitter, setShowArcaneSplitter] = useState<boolean>(false); // Show Arcane Splitter for grid image processing
+  const [showEtsyAnalyzer, setShowEtsyAnalyzer] = useState<boolean>(false); // Show Etsy Shop Analyzer
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -2969,6 +2972,17 @@ const App: React.FC = () => {
         setShowArcaneSplitter(false);
       };
       
+      // If Etsy Shop Analyzer is open, show it
+      if (showEtsyAnalyzer) {
+        return (
+          <div className="animate-fade-in max-w-6xl mx-auto px-4">
+            <EtsyShopAnalyzer
+              onClose={() => setShowEtsyAnalyzer(false)}
+            />
+          </div>
+        );
+      }
+
       // If Arcane Splitter is open, show it
       if (showArcaneSplitter) {
         return (
@@ -3410,6 +3424,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Bulk Prompt Import</h3>
               <p className="text-sm text-slate-400">
                 Paste multiple prompts (one per paragraph) with optional moodboard and SREF for all
+              </p>
+            </div>
+          </button>
+
+          {/* Etsy Shop Analyzer Option */}
+          <button
+            onClick={() => setShowEtsyAnalyzer(true)}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <ShoppingBag className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Etsy Shop Analyzer</h3>
+              <p className="text-sm text-slate-400">
+                Analyze Etsy shop performance, listings, views, favorites, and sales data
               </p>
             </div>
           </button>
