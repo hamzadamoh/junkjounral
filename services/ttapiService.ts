@@ -35,19 +35,29 @@ const rewritePromptToRemoveBannedWords = async (
     const promptText = promptParts ? promptParts[1] : originalPrompt;
     const promptParams = promptParts ? promptParts[2] : '';
 
-    const systemPrompt = `You are a prompt rewriting assistant. Your task is to rewrite Midjourney prompts to remove banned words while preserving the original meaning and artistic intent.
+    // Create a replacement map for common banned words
+    const bannedWordReplacements: { [key: string]: string } = {
+      'bleed': 'extend to the edges',
+      'blood': 'red liquid',
+      'bloody': 'red-stained',
+      'bleeding': 'extending to edges',
+    };
 
-Rules:
-1. Replace banned words with acceptable synonyms or alternative phrases
-2. Maintain the same artistic style, composition, and visual elements
-3. Keep all technical details (colors, lighting, composition, etc.)
-4. Do NOT change Midjourney parameters (--ar, --v, --s, etc.) - they will be preserved separately
-5. Return ONLY the rewritten prompt text, no explanations or additional text
+    const systemPrompt = `You are a prompt rewriting assistant. Your task is to rewrite Midjourney prompts to remove ALL instances of banned words while preserving the original meaning and artistic intent.
+
+CRITICAL RULES:
+1. You MUST remove or replace EVERY instance of the banned word(s), including variations (e.g., "bleed", "bleeding", "bleeds")
+2. Replace banned words with acceptable synonyms or alternative phrases that convey the same meaning
+3. Maintain the same artistic style, composition, and visual elements
+4. Keep all technical details (colors, lighting, composition, etc.)
+5. Do NOT change Midjourney parameters (--ar, --v, --s, etc.) - they will be preserved separately
+6. Return ONLY the rewritten prompt text, no explanations or additional text
+7. Double-check that NO banned words remain in your response
 
 Common banned word replacements:
-- "bleed" → "extend to edge", "reach edge", "full bleed design"
-- "blood" → "red liquid", "crimson fluid", "red substance"
-- Other banned words: replace with contextually appropriate alternatives`;
+- "bleed" / "bleeding" / "bleeds" → "extend to the edges", "reach the borders", "go to the very edge", "seamlessly integrate to the perimeter"
+- "blood" / "bloody" → "red liquid", "crimson fluid", "red substance", "red-stained"
+- Other banned words: replace with contextually appropriate alternatives that avoid the banned term entirely`;
 
     const userPrompt = `Rewrite this Midjourney prompt to remove these banned words: ${bannedWords.join(', ')}
 
@@ -79,18 +89,61 @@ Return ONLY the rewritten prompt text (no parameters, no explanations):`;
     }
 
     const data = await response.json();
-    const rewrittenText = data.choices?.[0]?.message?.content?.trim();
+    let rewrittenText = data.choices?.[0]?.message?.content?.trim();
 
     if (!rewrittenText) {
       throw new Error('No rewritten prompt returned from ChatGPT');
     }
 
+    // Post-processing: Manually remove any remaining instances of banned words as a safety net
+    // This ensures we catch any words ChatGPT might have missed
+    let finalText = rewrittenText;
+    for (const bannedWord of bannedWords) {
+      const lowerBanned = bannedWord.toLowerCase();
+      
+      // Create a case-insensitive regex to find the banned word
+      const bannedWordRegex = new RegExp(`\\b${lowerBanned}\\w*\\b`, 'gi');
+      
+      // Check if the banned word still exists
+      if (bannedWordRegex.test(finalText)) {
+        console.warn(`[Ttapi] ⚠️ Banned word "${bannedWord}" still found after ChatGPT rewrite. Applying manual replacement...`);
+        
+        // Get replacement from map or use default
+        const replacement = bannedWordReplacements[lowerBanned] || 
+          (lowerBanned === 'bleed' ? 'extend to the edges' : 
+           lowerBanned === 'blood' ? 'red liquid' : 
+           'removed');
+        
+        // Replace all instances (case-insensitive)
+        finalText = finalText.replace(bannedWordRegex, replacement);
+        
+        console.log(`[Ttapi] Replaced "${bannedWord}" with "${replacement}"`);
+      }
+    }
+
+    // Final verification: check if banned words still exist and apply emergency replacement if needed
+    for (const bannedWord of bannedWords) {
+      const lowerBanned = bannedWord.toLowerCase();
+      const finalCheckRegex = new RegExp(`\\b${lowerBanned}\\w*\\b`, 'gi');
+      if (finalCheckRegex.test(finalText)) {
+        console.error(`[Ttapi] ❌ CRITICAL: Banned word "${bannedWord}" still exists after all replacements!`);
+        // Apply emergency replacement based on word type
+        const emergencyReplacement = lowerBanned === 'bleed' || lowerBanned.startsWith('bleed') 
+          ? 'extend to the edges' 
+          : lowerBanned === 'blood' || lowerBanned.startsWith('blood')
+          ? 'red liquid'
+          : 'removed';
+        finalText = finalText.replace(finalCheckRegex, emergencyReplacement);
+        console.log(`[Ttapi] Applied emergency replacement for "${bannedWord}" → "${emergencyReplacement}"`);
+      }
+    }
+    
     // Combine rewritten text with original parameters
-    const rewrittenPrompt = `${rewrittenText}${promptParams}`;
+    const rewrittenPrompt = `${finalText}${promptParams}`;
     
     console.log(`[Ttapi] ✅ Prompt rewritten successfully`);
     console.log(`[Ttapi] Original: "${promptText.substring(0, 100)}..."`);
-    console.log(`[Ttapi] Rewritten: "${rewrittenText.substring(0, 100)}..."`);
+    console.log(`[Ttapi] Rewritten: "${finalText.substring(0, 100)}..."`);
     
     return rewrittenPrompt;
   } catch (error) {
