@@ -455,19 +455,19 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
           return (
             <div className="space-y-6">
               {/* Shop Info Card - Enhanced */}
-              <div className="bg-white rounded-lg p-6 border border-slate-200 shadow-sm">
+              <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-amber-500 flex items-center justify-center text-white font-bold text-xl">
                     {result.shop_info.shop_name.substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-2xl font-bold text-slate-900">{result.shop_info.shop_name}</h3>
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded">
+                      <h3 className="text-2xl font-bold text-white">{result.shop_info.shop_name}</h3>
+                      <span className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded">
                         {result.shop_info.currency_code || 'USD'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
+                    <div className="flex items-center gap-4 mt-1 text-sm text-slate-400">
                       <span>ID: {result.shop_info.shop_id}</span>
                       {result.shop_info.shop_location && (
                         <span>• {result.shop_info.shop_location}-based</span>
@@ -480,74 +480,74 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
               {/* KPI Cards Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {/* Total Sales */}
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <div className="flex items-center gap-2 text-blue-600 mb-2">
+                <div className="bg-blue-900/30 rounded-lg p-4 border border-blue-700/50">
+                  <div className="flex items-center gap-2 text-blue-400 mb-2">
                     <BarChart3 className="w-4 h-4" />
                     <span className="text-xs font-medium">Total Sales</span>
                   </div>
-                  <div className="text-2xl font-bold text-blue-900">{metrics?.totalSales.toLocaleString() || 0}</div>
-                  <div className="text-xs text-blue-600 mt-1">{metrics?.dailyAvgSales}/day</div>
+                  <div className="text-2xl font-bold text-blue-300">{metrics?.totalSales.toLocaleString() || 0}</div>
+                  <div className="text-xs text-blue-400 mt-1">{metrics?.dailyAvgSales}/day</div>
                 </div>
 
                 {/* Est. Revenue */}
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="flex items-center gap-2 text-green-600 mb-2">
+                <div className="bg-green-900/30 rounded-lg p-4 border border-green-700/50">
+                  <div className="flex items-center gap-2 text-green-400 mb-2">
                     <DollarSign className="w-4 h-4" />
                     <span className="text-xs font-medium">Est. Revenue</span>
                   </div>
-                  <div className="text-2xl font-bold text-green-900">
+                  <div className="text-2xl font-bold text-green-300">
                     {metrics?.currencySymbol}{metrics?.estimatedRevenue.toFixed(2) || '0.00'}
                   </div>
-                  <div className="text-xs text-green-600 mt-1">{metrics?.currencySymbol}{metrics?.dailyAvgRevenue}/day</div>
+                  <div className="text-xs text-green-400 mt-1">{metrics?.currencySymbol}{metrics?.dailyAvgRevenue}/day</div>
                 </div>
 
                 {/* Avg Price */}
-                <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
-                  <div className="flex items-center gap-2 text-cyan-600 mb-2">
+                <div className="bg-cyan-900/30 rounded-lg p-4 border border-cyan-700/50">
+                  <div className="flex items-center gap-2 text-cyan-400 mb-2">
                     <TrendingUp className="w-4 h-4" />
                     <span className="text-xs font-medium">Avg Price</span>
                   </div>
-                  <div className="text-2xl font-bold text-cyan-900">
+                  <div className="text-2xl font-bold text-cyan-300">
                     {metrics?.currencySymbol}{metrics?.avgPrice.toFixed(2) || '0.00'}
                   </div>
                 </div>
 
                 {/* Listings */}
-                <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                  <div className="flex items-center gap-2 text-slate-600 mb-2">
+                <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+                  <div className="flex items-center gap-2 text-slate-400 mb-2">
                     <Package className="w-4 h-4" />
                     <span className="text-xs font-medium">Listings</span>
                   </div>
-                  <div className="text-2xl font-bold text-slate-900">
+                  <div className="text-2xl font-bold text-white">
                     {result.shop_info.total_listings} ({result.shop_info.total_listings})
                   </div>
                 </div>
 
                 {/* Favorites */}
-                <div className="bg-pink-50 rounded-lg p-4 border border-pink-200">
-                  <div className="flex items-center gap-2 text-pink-600 mb-2">
+                <div className="bg-pink-900/30 rounded-lg p-4 border border-pink-700/50">
+                  <div className="flex items-center gap-2 text-pink-400 mb-2">
                     <Heart className="w-4 h-4" />
                     <span className="text-xs font-medium">Favorites</span>
                   </div>
-                  <div className="text-2xl font-bold text-pink-900">
+                  <div className="text-2xl font-bold text-pink-300">
                     {result.shop_info.total_favorers.toLocaleString()}
                   </div>
-                  <div className="text-xs text-pink-600 mt-1">
+                  <div className="text-xs text-pink-400 mt-1">
                     {result.shop_info.total_favorers.toLocaleString()} (5.0★)
                   </div>
                 </div>
 
                 {/* Age / Oldest */}
-                <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
-                  <div className="flex items-center gap-2 text-amber-600 mb-2">
+                <div className="bg-amber-900/30 rounded-lg p-4 border border-amber-700/50">
+                  <div className="flex items-center gap-2 text-amber-400 mb-2">
                     <Calendar className="w-4 h-4" />
                     <span className="text-xs font-medium">Age / Oldest</span>
                   </div>
-                  <div className="text-2xl font-bold text-amber-900">
+                  <div className="text-2xl font-bold text-amber-300">
                     {result.shop_info.shop_age_days ? `${result.shop_info.shop_age_days}d` : 'N/A'}
                   </div>
                   {metrics?.oldestListingAge && (
-                    <div className="text-xs text-amber-600 mt-1">
+                    <div className="text-xs text-amber-400 mt-1">
                       Oldest: {metrics.oldestListingAge}d
                     </div>
                   )}
@@ -558,14 +558,14 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
               <div className="flex gap-3 flex-wrap">
                 <button
                   onClick={handleCopyAllTags}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-2 font-medium"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors flex items-center gap-2 font-medium"
                 >
                   <Tag className="w-4 h-4" />
                   Copy All Tags
                 </button>
                 <button
                   onClick={handleExportCSV}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors flex items-center gap-2 font-medium"
                 >
                   <Download className="w-4 h-4" />
                   Export to CSV
@@ -590,77 +590,77 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
               </div>
 
               {/* Comprehensive Listings Table */}
-              <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+              <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                    <thead className="bg-slate-900 border-b border-slate-700 sticky top-0 z-10">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">#</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Image</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">#</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Image</th>
                         <th 
-                          className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase cursor-pointer hover:bg-slate-100"
+                          className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase cursor-pointer hover:bg-slate-800"
                           onClick={() => handleSort('title')}
                         >
                           Title {sortColumn === 'title' && (sortDirection === 'asc' ? '↑' : '↓')}
                         </th>
                         <th 
-                          className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase cursor-pointer hover:bg-slate-100"
+                          className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase cursor-pointer hover:bg-slate-800"
                           onClick={() => handleSort('price')}
                         >
                           Price {sortColumn === 'price' && (sortDirection === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Qty</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Views</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Qty</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Views</th>
                         <th 
-                          className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase cursor-pointer hover:bg-slate-100"
+                          className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase cursor-pointer hover:bg-slate-800"
                           onClick={() => handleSort('favorites')}
                         >
                           Favs {sortColumn === 'favorites' && (sortDirection === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Created</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Modified</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">WordPress</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Actions</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Created</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Modified</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">WordPress</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-700">
                       {sortedListings.map((listing, index) => {
                         const imageUrl = listingImages.get(listing.listing_id) || listing.image_url;
                         const wpUrl = uploadedImages.get(listing.listing_id);
                         const currencySymbol = listing.currency_code === 'USD' ? '$' : listing.currency_code || '$';
                         
                         return (
-                          <tr key={listing.listing_id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-3 py-2 text-slate-600 font-medium">{index + 1}</td>
+                          <tr key={listing.listing_id} className="hover:bg-slate-700/50 transition-colors">
+                            <td className="px-3 py-2 text-slate-300 font-medium">{index + 1}</td>
                             <td className="px-3 py-2">
                               {imageUrl ? (
                                 <img 
                                   src={imageUrl} 
                                   alt={listing.title}
-                                  className="w-12 h-12 object-cover rounded border border-slate-200"
+                                  className="w-12 h-12 object-cover rounded border border-slate-600"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                   }}
                                 />
                               ) : (
-                                <div className="w-12 h-12 bg-slate-100 rounded border border-slate-200 flex items-center justify-center">
-                                  <ImageIcon className="w-5 h-5 text-slate-400" />
+                                <div className="w-12 h-12 bg-slate-700 rounded border border-slate-600 flex items-center justify-center">
+                                  <ImageIcon className="w-5 h-5 text-slate-500" />
                                 </div>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-slate-900 max-w-xs truncate" title={listing.title}>
+                            <td className="px-3 py-2 text-white max-w-xs truncate" title={listing.title}>
                               {listing.title}
                             </td>
-                            <td className="px-3 py-2 text-slate-700 font-medium">
+                            <td className="px-3 py-2 text-slate-300 font-medium">
                               {currencySymbol}{listing.price?.toFixed(2) || '0.00'}
                             </td>
-                            <td className="px-3 py-2 text-slate-600">{listing.stock}</td>
-                            <td className="px-3 py-2 text-slate-600">{listing.views.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-slate-600">{listing.favorites.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-slate-600">
+                            <td className="px-3 py-2 text-slate-300">{listing.stock}</td>
+                            <td className="px-3 py-2 text-slate-300">{listing.views.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-slate-300">{listing.favorites.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-slate-300">
                               {listing.age_days ? `${listing.age_days}d` : 'N/A'}
                             </td>
-                            <td className="px-3 py-2 text-slate-600 text-xs">
+                            <td className="px-3 py-2 text-slate-400 text-xs">
                               {listing.last_modified 
                                 ? new Date(listing.last_modified).toLocaleDateString()
                                 : 'N/A'}
@@ -668,17 +668,17 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                             <td className="px-3 py-2">
                               {wpUrl ? (
                                 <div className="flex items-center gap-1">
-                                  <Check className="w-3 h-3 text-green-500" />
+                                  <Check className="w-3 h-3 text-green-400" />
                                   <button
                                     onClick={() => navigator.clipboard.writeText(wpUrl)}
-                                    className="text-xs text-purple-600 hover:text-purple-700 underline"
+                                    className="text-xs text-purple-400 hover:text-purple-300 underline"
                                     title="Copy WordPress URL"
                                   >
                                     Copy
                                   </button>
                                 </div>
                               ) : (
-                                <span className="text-xs text-slate-400">-</span>
+                                <span className="text-xs text-slate-500">-</span>
                               )}
                             </td>
                             <td className="px-3 py-2">
@@ -688,7 +688,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                                     const tags = listing.tags.join(', ');
                                     navigator.clipboard.writeText(tags);
                                   }}
-                                  className="px-2 py-1 text-xs bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors"
+                                  className="px-2 py-1 text-xs bg-amber-600/20 text-amber-400 rounded hover:bg-amber-600/30 transition-colors border border-amber-600/30"
                                   title={`Tags: ${listing.tags.join(', ')}`}
                                 >
                                   Tags
@@ -698,7 +698,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                                     onClick={() => {
                                       window.open(imageUrl, '_blank');
                                     }}
-                                    className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                                    className="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/30 transition-colors border border-blue-600/30"
                                     title="View image"
                                   >
                                     Img
@@ -712,7 +712,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
                     </tbody>
                   </table>
                 </div>
-                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 text-sm text-slate-600 text-center">
+                <div className="px-4 py-3 bg-slate-900 border-t border-slate-700 text-sm text-slate-400 text-center">
                   Showing all {result.listings.length} listing{result.listings.length !== 1 ? 's' : ''} 
                   {sortColumn && ` sorted by ${sortColumn} (${sortDirection})`}
                 </div>
