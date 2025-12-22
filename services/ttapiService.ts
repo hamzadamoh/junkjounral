@@ -30,9 +30,20 @@ const rewritePromptToRemoveBannedWords = async (
   console.log(`[Ttapi] 🔄 Rewriting prompt to remove banned words: ${bannedWords.join(', ')}`);
   
   try {
+    // Extract image URL if present at the start of the prompt
+    const urlMatch = originalPrompt.match(/^(https?:\/\/[^\s]+\.(png|jpg|jpeg|webp|gif))\s+(.+)$/i);
+    let imageUrl = '';
+    let promptWithoutUrl = originalPrompt;
+    
+    if (urlMatch) {
+      imageUrl = urlMatch[1];
+      promptWithoutUrl = urlMatch[3];
+      console.log(`[Ttapi] ✅ Extracted image URL: ${imageUrl.substring(0, 80)}...`);
+    }
+    
     // Extract the text part of the prompt (before parameters like --ar, --v, etc.)
-    const promptParts = originalPrompt.match(/^(.+?)(\s+--[a-z-]+\s+[^\s]+(?:\s+--[a-z-]+\s+[^\s]+)*)$/i);
-    const promptText = promptParts ? promptParts[1] : originalPrompt;
+    const promptParts = promptWithoutUrl.match(/^(.+?)(\s+--[a-z-]+\s+[^\s]+(?:\s+--[a-z-]+\s+[^\s]+)*)$/i);
+    const promptText = promptParts ? promptParts[1] : promptWithoutUrl;
     const promptParams = promptParts ? promptParts[2] : '';
 
     // Create a replacement map for common banned words
@@ -138,8 +149,12 @@ Return ONLY the rewritten prompt text (no parameters, no explanations):`;
       }
     }
     
-    // Combine rewritten text with original parameters
-    const rewrittenPrompt = `${finalText}${promptParams}`;
+    // Reconstruct the prompt: image URL (if present) + rewritten text + parameters
+    let rewrittenPrompt = finalText + promptParams;
+    if (imageUrl) {
+      rewrittenPrompt = `${imageUrl} ${rewrittenPrompt}`;
+      console.log(`[Ttapi] ✅ Re-added image URL to rewritten prompt`);
+    }
     
     console.log(`[Ttapi] ✅ Prompt rewritten successfully`);
     console.log(`[Ttapi] Original: "${promptText.substring(0, 100)}..."`);
