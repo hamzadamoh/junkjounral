@@ -1827,22 +1827,54 @@ export const generateJournalPage = async (
     const validParams = ['ar', 'v', 's', 'p', 'sref', 'sw', 'no', 'style', 'chaos', 'quality', 'stylize', 'weird', 'tile', 'relax', 'turbo', 'seed', 'fast', 'slow', 'repeat', 'video', 'iw', 'stop', 'aspect', 'w', 'h', 'version', 'niji', 'test', 'testp', 'creative'];
     
     // Extract all Midjourney parameters - find all --param patterns
-    // This regex finds --param followed by optional value(s), stopping at next --param or end
+    // Improved regex that handles:
+    // - Parameters with values: --ar 3:4, --v 6.1
+    // - Parameters without values (flags): --relax, --tile
+    // - Parameters at end of string
+    // - Parameters with text after them (like --relax - @ismail)
     const allParameterMatches: Array<{ full: string; start: number; end: number }> = [];
     const promptCopy = prompt;
     
-    // Find all --param patterns
-    const paramPattern = /--([a-z]+)(?:\s+([^\s-]+(?:\s+[^\s-]+)*?))?(?=\s+--|$)/gi;
+    // More robust pattern: matches --param followed by optional value(s)
+    // Value can be: single word, colon-separated (3:4), or multiple words (for --no)
+    // For flags like --relax, --tile: no value needed
+    // Stops at next --param, end of string, or certain delimiters like "- @"
+    const paramPattern = /--([a-z]+)(?:\s+([^\s-]+(?:\s+[^\s-]+)*?))?(?=\s+--|\s*$|\s*-\s*@|\s*\(|\s*[A-Z])/gi;
     let match;
+    
+    console.log(`[Ttapi] Searching for parameters in prompt (length: ${promptCopy.length})`);
+    console.log(`[Ttapi] Prompt preview: "${promptCopy.substring(Math.max(0, promptCopy.length - 200))}"`);
     
     while ((match = paramPattern.exec(promptCopy)) !== null) {
       const paramName = match[1].toLowerCase();
       if (validParams.includes(paramName)) {
+        // Get the full match including any trailing whitespace
+        const fullMatch = match[0].trim();
         allParameterMatches.push({
-          full: match[0].trim(),
+          full: fullMatch,
           start: match.index,
           end: match.index + match[0].length
         });
+        console.log(`[Ttapi] ✅ Found parameter: "${fullMatch}" at position ${match.index}`);
+      } else {
+        console.log(`[Ttapi] ⚠️ Found --${paramName} but it's not a valid Midjourney parameter`);
+      }
+    }
+    
+    if (allParameterMatches.length === 0) {
+      console.log(`[Ttapi] ⚠️ No parameters found. Checking if prompt ends with parameters...`);
+      // Fallback: check if prompt ends with parameters (common case)
+      const endMatch = promptCopy.match(/(--[a-z]+\s*(?:[^\s-]+(?:\s+[^\s-]+)*?)?)\s*$/i);
+      if (endMatch) {
+        const paramName = endMatch[1].match(/--([a-z]+)/i)?.[1]?.toLowerCase();
+        if (paramName && validParams.includes(paramName)) {
+          allParameterMatches.push({
+            full: endMatch[1].trim(),
+            start: endMatch.index!,
+            end: promptCopy.length
+          });
+          console.log(`[Ttapi] ✅ Found parameter at end: "${endMatch[1].trim()}"`);
+        }
       }
     }
     
@@ -2021,6 +2053,7 @@ export const generateJournalPage = async (
     // Re-add extracted parameters (like --v, --s, --p, --sref, --sw, --no, etc.)
     // These should be added after --ar, --sref, and --p (if added by settings)
     // But before --relax (if added for HOLD accounts)
+    // CRITICAL: This must happen for ALL modes, including Custom/Override
     if (extractedParameters && extractedParameters.length > 0) {
       // Filter out any --ar parameters (we add that separately)
       const paramsToAdd = extractedParameters.filter(p => !p.toLowerCase().startsWith('--ar'));
@@ -2028,8 +2061,13 @@ export const generateJournalPage = async (
       if (paramsToAdd.length > 0) {
         const paramsString = paramsToAdd.join(' ');
         prompt += ` ${paramsString}`;
-        console.log(`[Ttapi] Re-added extracted parameters: ${paramsString}`);
+        console.log(`[Ttapi] ✅ Re-added ${paramsToAdd.length} extracted parameter(s): ${paramsString}`);
+        console.log(`[Ttapi] Prompt now ends with: "${prompt.substring(Math.max(0, prompt.length - 100))}"`);
+      } else {
+        console.log(`[Ttapi] ⚠️ No parameters to re-add (all were --ar)`);
       }
+    } else {
+      console.log(`[Ttapi] ⚠️ No extracted parameters to re-add (extractedParameters: ${extractedParameters.length})`);
     }
 
     // Add other Midjourney parameters (e.g., --v 6.1, --niji 6) if provided
@@ -2080,6 +2118,25 @@ export const generateJournalPage = async (
       console.log(`[Ttapi] ⚠️ Final prompt does NOT start with a URL`);
       console.log(`[Ttapi] Final prompt preview (first 300 chars): "${prompt.substring(0, 300)}..."`);
     }
+    
+    // CRITICAL: Verify all parameters are present in final prompt
+    const finalParamsInPrompt = prompt.match(/--([a-z]+)(?:\s+[^\s-]+)?/gi) || [];
+    console.log(`[Ttapi] 🔍 Final prompt contains ${finalParamsInPrompt.length} parameter(s):`, finalParamsInPrompt);
+    if (extractedParameters.length > 0) {
+      const missingParams = extractedParameters.filter(extracted => {
+        const extractedParam = extracted.match(/--([a-z]+)/i)?.[1]?.toLowerCase();
+        return !finalParamsInPrompt.some(final => final.toLowerCase().includes(`--${extractedParam}`));
+      });
+      if (missingParams.length > 0) {
+        console.error(`[Ttapi] ❌ CRITICAL: ${missingParams.length} extracted parameter(s) missing from final prompt:`, missingParams);
+        // Re-add missing parameters as emergency fix
+        prompt += ` ${missingParams.join(' ')}`;
+        console.log(`[Ttapi] 🔧 Emergency fix: Re-added missing parameters. New prompt ends with: "${prompt.substring(Math.max(0, prompt.length - 150))}"`);
+      } else {
+        console.log(`[Ttapi] ✅ All extracted parameters are present in final prompt`);
+      }
+    }
+    
     console.log(`[Ttapi] Note: --no realistic will be added automatically in sendTaskToTtapi`);
 
     // Send task to ttapi.io with retry logic for rate limits
