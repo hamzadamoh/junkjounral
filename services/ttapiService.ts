@@ -1820,6 +1820,7 @@ export const generateJournalPage = async (
     // CRITICAL: Extract ALL Midjourney parameters from anywhere in the prompt
     // Parameters can appear before or after --ar, or without --ar at all
     // Valid Midjourney parameters: --ar, --v, --s, --p, --sref, --sw, --no, --style, --chaos, --quality, --stylize, --weird, --tile, --relax, --turbo, etc.
+    const originalPromptBeforeExtraction = prompt; // Save for fallback
     let extractedAspectRatio: string | null = null;
     let extractedParameters: string[] = []; // Store all extracted parameters
     
@@ -1899,10 +1900,13 @@ export const generateJournalPage = async (
         }
       });
       
-      // Store other parameters
+      // Store other parameters (CRITICAL: preserve this array)
       if (otherParams.length > 0) {
-        extractedParameters = otherParams;
-        console.log(`[Ttapi] Extracted other parameters: ${extractedParameters.join(', ')}`);
+        extractedParameters = [...otherParams]; // Create a copy to ensure it's not lost
+        console.log(`[Ttapi] ✅ Stored ${extractedParameters.length} other parameter(s): ${extractedParameters.join(', ')}`);
+        console.log(`[Ttapi] extractedParameters array reference preserved:`, extractedParameters);
+      } else {
+        console.log(`[Ttapi] ⚠️ No other parameters to store (only --ar found)`);
       }
       
       // Remove ALL parameters from the prompt (work backwards to preserve indices)
@@ -1917,6 +1921,22 @@ export const generateJournalPage = async (
       cleanedPrompt = cleanedPrompt.replace(/\s+/g, ' ').trim();
       prompt = cleanedPrompt;
       console.log(`[Ttapi] Removed all parameters from prompt. New prompt length: ${prompt.length}`);
+      
+      // VERIFICATION: Ensure extractedParameters is actually populated
+      console.log(`[Ttapi] 🔍 VERIFICATION: extractedParameters.length = ${extractedParameters.length}`);
+      if (extractedParameters.length > 0) {
+        console.log(`[Ttapi] ✅ VERIFICATION: extractedParameters contains:`, extractedParameters);
+      } else {
+        console.error(`[Ttapi] ❌ VERIFICATION FAILED: extractedParameters is empty but ${allParameterMatches.length} parameters were found!`);
+        // Emergency fix: populate from allParameterMatches
+        const emergencyParams = allParameterMatches
+          .filter(p => !p.full.toLowerCase().startsWith('--ar'))
+          .map(p => p.full);
+        if (emergencyParams.length > 0) {
+          extractedParameters = emergencyParams;
+          console.log(`[Ttapi] 🔧 EMERGENCY FIX: Populated extractedParameters with ${emergencyParams.length} parameter(s):`, emergencyParams);
+        }
+      }
     } else {
       console.log(`[Ttapi] No Midjourney parameters found in prompt`);
     }
@@ -2054,20 +2074,52 @@ export const generateJournalPage = async (
     // These should be added after --ar, --sref, and --p (if added by settings)
     // But before --relax (if added for HOLD accounts)
     // CRITICAL: This must happen for ALL modes, including Custom/Override
+    
+    // FALLBACK: If extractedParameters is empty but original prompt had parameters, extract them again
+    if ((!extractedParameters || extractedParameters.length === 0) && originalPromptBeforeExtraction) {
+      console.log(`[Ttapi] ⚠️ extractedParameters is empty, checking original prompt for parameters...`);
+      const fallbackParams = originalPromptBeforeExtraction.match(/--(?:v|s|p|sref|sw|no|style|chaos|quality|stylize|weird|tile|relax|turbo|seed|version|niji)\s+[^\s-]+(?:\s+[^\s-]+)*?/gi);
+      if (fallbackParams && fallbackParams.length > 0) {
+        extractedParameters = fallbackParams.map(p => p.trim());
+        console.log(`[Ttapi] 🔧 FALLBACK: Extracted ${extractedParameters.length} parameter(s) from original prompt:`, extractedParameters);
+      }
+    }
+    
     if (extractedParameters && extractedParameters.length > 0) {
+      console.log(`[Ttapi] 🔄 Preparing to re-add ${extractedParameters.length} extracted parameter(s):`, extractedParameters);
+      
       // Filter out any --ar parameters (we add that separately)
-      const paramsToAdd = extractedParameters.filter(p => !p.toLowerCase().startsWith('--ar'));
+      // For other parameters, check for exact duplicates but preserve extracted ones
+      const paramsToAdd = extractedParameters.filter(p => {
+        const paramLower = p.toLowerCase().trim();
+        
+        // Skip --ar (we handle that separately)
+        if (paramLower.startsWith('--ar')) {
+          return false;
+        }
+        
+        // Check if this EXACT parameter is already in the prompt to avoid duplicates
+        // Use word boundary to match the full parameter
+        const escapedParam = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const exactMatch = new RegExp(`\\b${escapedParam}\\b`, 'i');
+        if (exactMatch.test(prompt)) {
+          console.log(`[Ttapi] ⚠️ Skipping ${p} - exact match already present in prompt`);
+          return false;
+        }
+        
+        return true;
+      });
       
       if (paramsToAdd.length > 0) {
         const paramsString = paramsToAdd.join(' ');
         prompt += ` ${paramsString}`;
         console.log(`[Ttapi] ✅ Re-added ${paramsToAdd.length} extracted parameter(s): ${paramsString}`);
-        console.log(`[Ttapi] Prompt now ends with: "${prompt.substring(Math.max(0, prompt.length - 100))}"`);
+        console.log(`[Ttapi] Prompt now ends with: "${prompt.substring(Math.max(0, prompt.length - 150))}"`);
       } else {
-        console.log(`[Ttapi] ⚠️ No parameters to re-add (all were --ar)`);
+        console.log(`[Ttapi] ⚠️ No parameters to re-add (all were filtered out)`);
       }
     } else {
-      console.log(`[Ttapi] ⚠️ No extracted parameters to re-add (extractedParameters: ${extractedParameters.length})`);
+      console.log(`[Ttapi] ⚠️ No extracted parameters to re-add (extractedParameters length: ${extractedParameters?.length || 0})`);
     }
 
     // Add other Midjourney parameters (e.g., --v 6.1, --niji 6) if provided
