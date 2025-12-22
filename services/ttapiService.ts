@@ -42,9 +42,46 @@ const rewritePromptToRemoveBannedWords = async (
     }
     
     // Extract the text part of the prompt (before parameters like --ar, --v, etc.)
-    const promptParts = promptWithoutUrl.match(/^(.+?)(\s+--[a-z-]+\s+[^\s]+(?:\s+--[a-z-]+\s+[^\s]+)*)$/i);
-    const promptText = promptParts ? promptParts[1] : promptWithoutUrl;
-    const promptParams = promptParts ? promptParts[2] : '';
+    // Use the same robust parameter extraction logic as generateJournalPage
+    const validParams = ['ar', 'v', 's', 'p', 'sref', 'sw', 'no', 'style', 'chaos', 'quality', 'stylize', 'weird', 'tile', 'relax', 'turbo', 'seed', 'fast', 'slow', 'repeat', 'video', 'iw', 'stop', 'aspect', 'w', 'h', 'version', 'niji', 'test', 'testp', 'creative'];
+    
+    // Extract all Midjourney parameters - find all --param patterns
+    // Pattern handles: parameters with values, flags, at end of string, with text after
+    const paramPattern = /--([a-z]+)(?:\s+([^\s-]+(?:\s+[^\s-]+)*?))?(?=\s+--|\s*$|\s*-\s*@|\s*\(|\s*[A-Z])/gi;
+    const allParameterMatches: Array<{ full: string; start: number; end: number }> = [];
+    let match;
+    
+    while ((match = paramPattern.exec(promptWithoutUrl)) !== null) {
+      const paramName = match[1].toLowerCase();
+      if (validParams.includes(paramName)) {
+        const fullMatch = match[0].trim();
+        allParameterMatches.push({
+          full: fullMatch,
+          start: match.index,
+          end: match.index + match[0].length
+        });
+      }
+    }
+    
+    let promptText: string;
+    let promptParams: string;
+    
+    if (allParameterMatches.length > 0) {
+      // Find the position of the first parameter
+      const firstParamIndex = allParameterMatches[0].start;
+      promptText = promptWithoutUrl.substring(0, firstParamIndex).trim();
+      
+      // Reconstruct parameters string from all matches
+      promptParams = allParameterMatches.map(p => p.full).join(' ');
+      
+      console.log(`[Ttapi] ✅ Extracted ${allParameterMatches.length} parameter(s) from prompt`);
+      console.log(`[Ttapi] Parameters: ${promptParams.substring(0, 200)}...`);
+    } else {
+      // No parameters found - use entire prompt as text
+      promptText = promptWithoutUrl;
+      promptParams = '';
+      console.log(`[Ttapi] ⚠️ No parameters found in prompt`);
+    }
 
     // Create a replacement map for common banned words
     const bannedWordReplacements: { [key: string]: string } = {
@@ -150,7 +187,11 @@ Return ONLY the rewritten prompt text (no parameters, no explanations):`;
     }
     
     // Reconstruct the prompt: image URL (if present) + rewritten text + parameters
-    let rewrittenPrompt = finalText + promptParams;
+    let rewrittenPrompt = finalText;
+    if (promptParams) {
+      rewrittenPrompt = `${rewrittenPrompt} ${promptParams}`;
+      console.log(`[Ttapi] ✅ Re-added parameters to rewritten prompt: ${promptParams.substring(0, 100)}...`);
+    }
     if (imageUrl) {
       rewrittenPrompt = `${imageUrl} ${rewrittenPrompt}`;
       console.log(`[Ttapi] ✅ Re-added image URL to rewritten prompt`);
