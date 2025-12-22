@@ -1817,32 +1817,76 @@ export const generateJournalPage = async (
       }
     }
     
-    // CRITICAL: Extract --ar parameter and preserve other Midjourney parameters (--p, --sref, --sw, etc.)
-    // Midjourney interprets everything after --ar as parameters, so we need to move it to the end
-    // But we must preserve other valid Midjourney parameters that come after --ar
+    // CRITICAL: Extract ALL Midjourney parameters from anywhere in the prompt
+    // Parameters can appear before or after --ar, or without --ar at all
+    // Valid Midjourney parameters: --ar, --v, --s, --p, --sref, --sw, --no, --style, --chaos, --quality, --stylize, --weird, --tile, --relax, --turbo, etc.
     let extractedAspectRatio: string | null = null;
-    let extractedParameters: string = ''; // Store other parameters found after --ar as a string
-    const arMatch = prompt.match(/--ar\s+([^\s]+)/i);
-    if (arMatch) {
-      extractedAspectRatio = arMatch[1];
-      console.log(`[Ttapi] Found --ar ${extractedAspectRatio} in middle of prompt, extracting it`);
-      // Find the position where --ar starts
-      const arIndex = prompt.indexOf('--ar');
-      if (arIndex !== -1) {
-        // Extract everything after --ar (this includes the aspect ratio value and any following parameters)
-        const afterAr = prompt.substring(arIndex + '--ar'.length).trim();
-        // The first word is the aspect ratio value (already extracted in arMatch[1])
-        // Everything after the first word might be other parameters
-        const afterArValue = afterAr.substring(arMatch[1].length).trim();
-        if (afterArValue) {
-          // Preserve everything after the aspect ratio value as it might contain --p, --sref, etc.
-          extractedParameters = afterArValue;
-          console.log(`[Ttapi] Preserved parameters after --ar: ${extractedParameters}`);
-        }
-        // Get everything before --ar and trim it
-        prompt = prompt.substring(0, arIndex).trim();
-        console.log(`[Ttapi] Removed --ar and extracted parameters. New prompt: "${prompt}"`);
+    let extractedParameters: string[] = []; // Store all extracted parameters
+    
+    // List of valid Midjourney parameter names (case-insensitive)
+    const validParams = ['ar', 'v', 's', 'p', 'sref', 'sw', 'no', 'style', 'chaos', 'quality', 'stylize', 'weird', 'tile', 'relax', 'turbo', 'seed', 'fast', 'slow', 'repeat', 'video', 'iw', 'stop', 'aspect', 'w', 'h', 'version', 'niji', 'test', 'testp', 'creative'];
+    
+    // Extract all Midjourney parameters - find all --param patterns
+    // This regex finds --param followed by optional value(s), stopping at next --param or end
+    const allParameterMatches: Array<{ full: string; start: number; end: number }> = [];
+    const promptCopy = prompt;
+    
+    // Find all --param patterns
+    const paramPattern = /--([a-z]+)(?:\s+([^\s-]+(?:\s+[^\s-]+)*?))?(?=\s+--|$)/gi;
+    let match;
+    
+    while ((match = paramPattern.exec(promptCopy)) !== null) {
+      const paramName = match[1].toLowerCase();
+      if (validParams.includes(paramName)) {
+        allParameterMatches.push({
+          full: match[0].trim(),
+          start: match.index,
+          end: match.index + match[0].length
+        });
       }
+    }
+    
+    if (allParameterMatches.length > 0) {
+      console.log(`[Ttapi] Found ${allParameterMatches.length} Midjourney parameter(s) in prompt:`, allParameterMatches.map(p => p.full));
+      
+      // Process each parameter
+      const arParams: string[] = [];
+      const otherParams: string[] = [];
+      
+      allParameterMatches.forEach(param => {
+        if (param.full.toLowerCase().startsWith('--ar')) {
+          arParams.push(param.full);
+          // Extract aspect ratio value
+          const arMatch = param.full.match(/--ar\s+([^\s]+)/i);
+          if (arMatch) {
+            extractedAspectRatio = arMatch[1];
+            console.log(`[Ttapi] Extracted --ar ${extractedAspectRatio}`);
+          }
+        } else {
+          otherParams.push(param.full);
+        }
+      });
+      
+      // Store other parameters
+      if (otherParams.length > 0) {
+        extractedParameters = otherParams;
+        console.log(`[Ttapi] Extracted other parameters: ${extractedParameters.join(', ')}`);
+      }
+      
+      // Remove ALL parameters from the prompt (work backwards to preserve indices)
+      let cleanedPrompt = prompt;
+      allParameterMatches.reverse().forEach(param => {
+        // Remove from end to start to preserve indices
+        cleanedPrompt = cleanedPrompt.substring(0, param.start) + 
+                       cleanedPrompt.substring(param.end);
+      });
+      
+      // Clean up multiple spaces
+      cleanedPrompt = cleanedPrompt.replace(/\s+/g, ' ').trim();
+      prompt = cleanedPrompt;
+      console.log(`[Ttapi] Removed all parameters from prompt. New prompt length: ${prompt.length}`);
+    } else {
+      console.log(`[Ttapi] No Midjourney parameters found in prompt`);
     }
     
     // Clean the prompt to remove problematic phrases that Midjourney interprets as parameters
@@ -1974,19 +2018,17 @@ export const generateJournalPage = async (
       }
     }
 
-    // Re-add extracted parameters that were found after --ar (like --p, --sref, etc.)
-    // Remove any --ar from extractedParameters since we add it separately at the end
-    if (extractedParameters && extractedParameters.trim()) {
-      // Remove any --ar parameters from extractedParameters to avoid duplicates
-      let cleanedParams = extractedParameters.trim();
-      // Remove --ar and its value (e.g., "--ar 3:4" or "--ar 16:9")
-      cleanedParams = cleanedParams.replace(/--ar\s+[^\s]+/gi, '').trim();
-      // Clean up any double spaces
-      cleanedParams = cleanedParams.replace(/\s+/g, ' ');
+    // Re-add extracted parameters (like --v, --s, --p, --sref, --sw, --no, etc.)
+    // These should be added after --ar, --sref, and --p (if added by settings)
+    // But before --relax (if added for HOLD accounts)
+    if (extractedParameters && extractedParameters.length > 0) {
+      // Filter out any --ar parameters (we add that separately)
+      const paramsToAdd = extractedParameters.filter(p => !p.toLowerCase().startsWith('--ar'));
       
-      if (cleanedParams) {
-        prompt += ` ${cleanedParams}`;
-        console.log(`[Ttapi] Re-added extracted parameters (--ar removed): ${cleanedParams}`);
+      if (paramsToAdd.length > 0) {
+        const paramsString = paramsToAdd.join(' ');
+        prompt += ` ${paramsString}`;
+        console.log(`[Ttapi] Re-added extracted parameters: ${paramsString}`);
       }
     }
 
