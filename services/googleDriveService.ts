@@ -174,8 +174,22 @@ export async function uploadImagesToGoogleDrive(
     });
     
     if (!folderResponse.ok) {
-      const errorText = await folderResponse.text();
-      throw new Error(`Failed to create folder: ${folderResponse.status} - ${errorText}`);
+      let errorMessage = `Failed to create folder: ${folderResponse.status}`;
+      try {
+        const errorData = await folderResponse.json();
+        // Extract error message and details
+        const errorMsg = errorData.error || errorMessage;
+        const errorDetails = errorData.details || '';
+        errorMessage = errorMsg;
+        if (errorDetails) {
+          errorMessage += ` - ${errorDetails}`;
+        }
+      } catch {
+        // If JSON parsing fails, use text response
+        const errorText = await folderResponse.text();
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
     }
     
     const folderData = await folderResponse.json();
@@ -183,7 +197,9 @@ export async function uploadImagesToGoogleDrive(
     console.log(`[Google Drive] ✅ Folder created: ${folderId}`);
   } catch (error: any) {
     console.error(`[Google Drive] ❌ Failed to create folder:`, error);
-    throw new Error(`Failed to create Google Drive folder: ${error.message || 'Unknown error'}`);
+    // Preserve the full error message including OAuth troubleshooting steps
+    const errorMsg = error.message || 'Unknown error';
+    throw new Error(`Failed to create Google Drive folder: ${errorMsg}`);
   }
   
   // Upload images in parallel (with some concurrency limit)

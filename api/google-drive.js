@@ -71,7 +71,17 @@ export default async function handler(req, res) {
         });
       }
 
-      const accessToken = await refreshAccessToken();
+      let accessToken;
+      try {
+        accessToken = await refreshAccessToken();
+      } catch (tokenError) {
+        console.error('[Google Drive] Token refresh failed:', tokenError);
+        return res.status(500).json({ 
+          error: tokenError.message || 'Failed to refresh access token',
+          details: 'OAuth credentials are invalid. Please check:\n1. Client ID and Client Secret are correct\n2. Refresh token is valid (generate a new one if needed)\n3. OAuth consent screen is properly configured\n4. The refresh token was generated with the same Client ID'
+        });
+      }
+      
       const targetParentFolderId = parentFolderId || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU';
 
       const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
@@ -110,7 +120,16 @@ export default async function handler(req, res) {
         });
       }
 
-      const accessToken = await refreshAccessToken();
+      let accessToken;
+      try {
+        accessToken = await refreshAccessToken();
+      } catch (tokenError) {
+        console.error('[Google Drive] Token refresh failed:', tokenError);
+        return res.status(500).json({ 
+          error: tokenError.message || 'Failed to refresh access token',
+          details: 'OAuth credentials are invalid. Please check:\n1. Client ID and Client Secret are correct\n2. Refresh token is valid (generate a new one if needed)\n3. OAuth consent screen is properly configured\n4. The refresh token was generated with the same Client ID'
+        });
+      }
       const fileBuffer = Buffer.from(base64Data, 'base64');
       
       const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
