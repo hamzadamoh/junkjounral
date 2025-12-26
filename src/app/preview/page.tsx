@@ -3,9 +3,10 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, X, FileDown, Image as ImageIcon, FileText, Upload, Copy, Check } from 'lucide-react';
+import { Download, X, FileDown, Image as ImageIcon, FileText, Upload, Copy, Check, Cloud } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { uploadImagesToGoogleDrive, GoogleDriveUploadResult } from '@/services/googleDriveService';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,10 @@ function PreviewPageContent() {
   const [wordpressUrls, setWordpressUrls] = useState<Array<{ originalUrl: string; wordpressUrl: string | null; error?: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1);
+  const [uploadingToGoogleDrive, setUploadingToGoogleDrive] = useState(false);
+  const [googleDriveResult, setGoogleDriveResult] = useState<GoogleDriveUploadResult | null>(null);
+  const [googleDriveProgress, setGoogleDriveProgress] = useState({ completed: 0, total: 0 });
 
   useEffect(() => {
     if (!jobId) {
@@ -200,6 +205,44 @@ function PreviewPageContent() {
     }
   };
 
+  const uploadToGoogleDrive = async () => {
+    if (pages.length === 0) {
+      alert('No images to upload');
+      return;
+    }
+
+    const folderName = prompt(`Enter a name for the Google Drive folder (Account ${googleDriveAccount}):`);
+    if (!folderName || !folderName.trim()) {
+      return;
+    }
+
+    setUploadingToGoogleDrive(true);
+    setGoogleDriveResult(null);
+    setGoogleDriveProgress({ completed: 0, total: pages.length });
+
+    try {
+      const images = pages.map(url => ({ url, originalUrl: url }));
+      
+      const result = await uploadImagesToGoogleDrive(
+        folderName.trim(),
+        images,
+        (completed, total) => {
+          setGoogleDriveProgress({ completed, total });
+        },
+        googleDriveAccount
+      );
+
+      setGoogleDriveResult(result);
+      alert(`Successfully uploaded ${result.uploadedFiles.length} image(s) to Google Drive Account ${googleDriveAccount}${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+    } catch (error) {
+      console.error('Error uploading to Google Drive:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload images to Google Drive';
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setUploadingToGoogleDrive(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -276,6 +319,26 @@ function PreviewPageContent() {
               <Upload className="inline-block mr-2" size={20} />
               {uploading ? 'Uploading...' : 'Upload to WordPress'}
             </button>
+
+            <div className="flex gap-2 items-center">
+              <select
+                value={googleDriveAccount}
+                onChange={(e) => setGoogleDriveAccount(Number(e.target.value) as 1 | 2)}
+                className="gothic-input"
+                disabled={uploadingToGoogleDrive}
+              >
+                <option value="1">Google Drive Account 1</option>
+                <option value="2">Google Drive Account 2</option>
+              </select>
+              <button 
+                onClick={uploadToGoogleDrive} 
+                disabled={uploadingToGoogleDrive || pages.length === 0}
+                className="gothic-button bg-blue-600/20 border-blue-500 text-blue-400 hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Cloud className="inline-block mr-2" size={20} />
+                {uploadingToGoogleDrive ? `Uploading... (${googleDriveProgress.completed}/${googleDriveProgress.total})` : 'Upload to Google Drive'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -402,6 +465,85 @@ function PreviewPageContent() {
             </div>
             <div className="mt-4 text-sm text-gothic-parchment/60">
               💡 Tip: Copy all URLs and paste them into your Google Sheet!
+            </div>
+          </div>
+        )}
+
+        {/* Google Drive Upload Results */}
+        {googleDriveResult && (
+          <div className="mt-8 gothic-card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-display font-semibold text-gothic-gold">
+                Google Drive Upload Results (Account {googleDriveAccount})
+              </h2>
+              <button
+                onClick={() => {
+                  const urls = googleDriveResult.uploadedFiles.map(f => f.url).join('\n');
+                  if (urls) {
+                    navigator.clipboard.writeText(urls);
+                    alert('All Google Drive URLs copied to clipboard!');
+                  }
+                }}
+                className="gothic-button gothic-button-primary text-sm"
+              >
+                <Copy className="inline-block mr-2" size={16} />
+                Copy All URLs
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Cloud className="text-blue-400" size={20} />
+                  <span className="text-gothic-gold font-semibold">Folder Created</span>
+                </div>
+                <a
+                  href={googleDriveResult.folderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline break-all"
+                >
+                  {googleDriveResult.folderUrl}
+                </a>
+                <div className="mt-2 text-sm text-gothic-parchment/80">
+                  ✅ {googleDriveResult.uploadedFiles.length} images uploaded successfully
+                  {googleDriveResult.failed > 0 && (
+                    <span className="text-red-400 ml-2">⚠️ {googleDriveResult.failed} failed</span>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {googleDriveResult.uploadedFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="p-3 rounded-lg bg-gothic-gold/10 border border-gothic-gold/30"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gothic-parchment/60 mb-1">
+                          {file.filename}
+                        </div>
+                        <input
+                          type="text"
+                          readOnly
+                          value={file.url}
+                          className="w-full gothic-input bg-gothic-charcoal/50 text-gothic-parchment text-sm"
+                          onClick={(e) => (e.target as HTMLInputElement).select()}
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(file.url);
+                          alert('URL copied to clipboard!');
+                        }}
+                        className="gothic-button p-2"
+                        title="Copy URL"
+                      >
+                        <Copy size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

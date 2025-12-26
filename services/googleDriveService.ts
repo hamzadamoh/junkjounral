@@ -83,11 +83,12 @@ async function convertToJpg(imageUrl: string, quality: number = 0.92): Promise<s
 export async function uploadImagesToGoogleDrive(
   folderName: string,
   images: Array<{ url: string; originalUrl?: string }>,
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number) => void,
+  accountNumber: 1 | 2 = 1
 ): Promise<GoogleDriveUploadResult> {
-  console.log(`[Google Drive] Starting upload of ${images.length} images to folder: "${folderName}"`);
+  console.log(`[Google Drive Account ${accountNumber}] Starting upload of ${images.length} images to folder: "${folderName}"`);
   
-  const config = getGoogleDriveConfig();
+  const config = getGoogleDriveConfig(accountNumber);
   
   if (!config.clientId || !config.clientSecret || !config.refreshToken) {
     throw {
@@ -97,10 +98,10 @@ export async function uploadImagesToGoogleDrive(
   
   // Shuffle images to randomize order
   const shuffledImages = shuffleArray(images);
-  console.log(`[Google Drive] Shuffled ${shuffledImages.length} images to randomize order`);
+  console.log(`[Google Drive Account ${accountNumber}] Shuffled ${shuffledImages.length} images to randomize order`);
   
   // Convert all images to JPG
-  console.log(`[Google Drive] Converting ${shuffledImages.length} images to JPG format...`);
+  console.log(`[Google Drive Account ${accountNumber}] Converting ${shuffledImages.length} images to JPG format...`);
   const convertedImages: string[] = [];
   for (const img of shuffledImages) {
     try {
@@ -121,7 +122,7 @@ export async function uploadImagesToGoogleDrive(
           convertedImages.push(jpgBase64);
         } catch (corsError) {
           // CORS blocked - fall back to base64 URL if available
-          console.warn(`[Google Drive] CORS blocked for ${img.originalUrl}, using base64 data`);
+          console.warn(`[Google Drive Account ${accountNumber}] CORS blocked for ${img.originalUrl}, using base64 data`);
           if (img.url && img.url.startsWith('data:image')) {
             // Use the base64 data URL we already have
             if (img.url.startsWith('data:image/jpeg') || img.url.startsWith('data:image/jpg')) {
@@ -143,20 +144,20 @@ export async function uploadImagesToGoogleDrive(
         }
       }
     } catch (error) {
-      console.warn(`[Google Drive] Failed to convert image:`, error);
+      console.warn(`[Google Drive Account ${accountNumber}] Failed to convert image:`, error);
       // Last resort: use the url as-is if it's base64
       if (img.url && img.url.startsWith('data:image')) {
-        console.log(`[Google Drive] Using existing base64 data (conversion failed)`);
+        console.log(`[Google Drive Account ${accountNumber}] Using existing base64 data (conversion failed)`);
         convertedImages.push(img.url);
       } else {
-        console.warn(`[Google Drive] Skipping image (no valid data available):`, error);
+        console.warn(`[Google Drive Account ${accountNumber}] Skipping image (no valid data available):`, error);
       }
     }
   }
-  console.log(`[Google Drive] ✅ Converted ${convertedImages.length}/${shuffledImages.length} images to JPG`);
+  console.log(`[Google Drive Account ${accountNumber}] ✅ Converted ${convertedImages.length}/${shuffledImages.length} images to JPG`);
   
   // Create folder first
-  console.log(`[Google Drive] Creating folder: "${folderName}"...`);
+  console.log(`[Google Drive Account ${accountNumber}] Creating folder: "${folderName}"...`);
   let folderId: string;
   try {
     const folderResponse = await fetch('/api/google-drive', {
@@ -194,9 +195,9 @@ export async function uploadImagesToGoogleDrive(
     
     const folderData = await folderResponse.json();
     folderId = folderData.folderId;
-    console.log(`[Google Drive] ✅ Folder created: ${folderId}`);
+    console.log(`[Google Drive Account ${accountNumber}] ✅ Folder created: ${folderId}`);
   } catch (error: any) {
-    console.error(`[Google Drive] ❌ Failed to create folder:`, error);
+    console.error(`[Google Drive Account ${accountNumber}] ❌ Failed to create folder:`, error);
     // Preserve the full error message including OAuth troubleshooting steps
     const errorMsg = error.message || 'Unknown error';
     throw new Error(`Failed to create Google Drive folder: ${errorMsg}`);
@@ -207,7 +208,7 @@ export async function uploadImagesToGoogleDrive(
   let failed = 0;
   const maxConcurrent = 5; // Upload 5 images at a time
   
-  console.log(`[Google Drive] Uploading ${convertedImages.length} images...`);
+  console.log(`[Google Drive Account ${accountNumber}] Uploading ${convertedImages.length} images...`);
   
   for (let i = 0; i < convertedImages.length; i += maxConcurrent) {
     const batch = convertedImages.slice(i, i + maxConcurrent);
@@ -237,7 +238,7 @@ export async function uploadImagesToGoogleDrive(
         
         if (!uploadResponse.ok) {
           const errorText = await uploadResponse.text();
-          console.error(`[Google Drive] Upload error for image ${globalIndex + 1}:`, errorText);
+          console.error(`[Google Drive Account ${accountNumber}] Upload error for image ${globalIndex + 1}:`, errorText);
           failed++;
           return null;
         }
@@ -250,7 +251,7 @@ export async function uploadImagesToGoogleDrive(
             url: uploadData.webViewLink,
             id: uploadData.fileId,
           });
-          console.log(`[Google Drive] ✅ Uploaded image ${globalIndex + 1}/${convertedImages.length}: ${uploadData.webViewLink}`);
+          console.log(`[Google Drive Account ${accountNumber}] ✅ Uploaded image ${globalIndex + 1}/${convertedImages.length}: ${uploadData.webViewLink}`);
           
           // Progress callback
           if (onProgress) {
@@ -263,7 +264,7 @@ export async function uploadImagesToGoogleDrive(
           return null;
         }
       } catch (error) {
-        console.error(`[Google Drive] Error uploading image ${globalIndex + 1}:`, error);
+        console.error(`[Google Drive Account ${accountNumber}] Error uploading image ${globalIndex + 1}:`, error);
         failed++;
         return null;
       }
@@ -284,8 +285,8 @@ export async function uploadImagesToGoogleDrive(
   // Generate folder URL
   const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
   
-  console.log(`[Google Drive] ✅ Upload complete: ${uploadedFiles.length} successful, ${failed} failed`);
-  console.log(`[Google Drive] 📁 Folder URL: ${folderUrl}`);
+  console.log(`[Google Drive Account ${accountNumber}] ✅ Upload complete: ${uploadedFiles.length} successful, ${failed} failed`);
+  console.log(`[Google Drive Account ${accountNumber}] 📁 Folder URL: ${folderUrl}`);
   
   return {
     folderId,
