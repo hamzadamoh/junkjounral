@@ -108,6 +108,7 @@ const App: React.FC = () => {
   const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState<boolean>(false);
   const [imagesPerPromptToDownload, setImagesPerPromptToDownload] = useState<1 | 2 | 3 | 4>(4); // How many images to download per prompt
+  const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1); // Google Drive account to use
   const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
     message: string;
@@ -2406,7 +2407,7 @@ const App: React.FC = () => {
 
     try {
       setIsUploadingToGoogleDrive(true);
-      addLog(`[Google Drive] Preparing to upload ${filteredImages.length} images (${imagesPerPromptToDownload} per prompt) to folder: "${folderName}"...`, 'log');
+      addLog(`[Google Drive Account ${googleDriveAccount}] Preparing to upload ${filteredImages.length} images (${imagesPerPromptToDownload} per prompt) to folder: "${folderName}"...`, 'log');
 
       // Prepare images for upload
       const imagesToUpload = filteredImages.map(img => ({
@@ -2419,22 +2420,23 @@ const App: React.FC = () => {
         folderName.trim(),
         imagesToUpload,
         (uploaded, total) => {
-          addLog(`[Google Drive] Uploading ${uploaded}/${total} images...`, 'log');
-        }
+          addLog(`[Google Drive Account ${googleDriveAccount}] Uploading ${uploaded}/${total} images...`, 'log');
+        },
+        googleDriveAccount
       );
 
-      addLog(`[Google Drive] ✅ Successfully uploaded ${result.uploadedFiles.length} images!`, 'success');
+      addLog(`[Google Drive Account ${googleDriveAccount}] ✅ Successfully uploaded ${result.uploadedFiles.length} images!`, 'success');
       if (result.failed > 0) {
-        addLog(`[Google Drive] ⚠️ ${result.failed} images failed to upload`, 'warn');
+        addLog(`[Google Drive Account ${googleDriveAccount}] ⚠️ ${result.failed} images failed to upload`, 'warn');
       }
-      addLog(`[Google Drive] 📁 Folder URL: ${result.folderUrl}`, 'success');
+      addLog(`[Google Drive Account ${googleDriveAccount}] 📁 Folder URL: ${result.folderUrl}`, 'success');
       
       // Copy URLs to clipboard if possible
       const urls = result.uploadedFiles.map(f => f.url).join('\n');
       if (navigator.clipboard && urls) {
         try {
           await navigator.clipboard.writeText(urls);
-          addLog(`[Google Drive] 📋 URLs copied to clipboard!`, 'success');
+          addLog(`[Google Drive Account ${googleDriveAccount}] 📋 URLs copied to clipboard!`, 'success');
         } catch (clipError) {
           console.warn('Failed to copy to clipboard:', clipError);
         }
@@ -2442,8 +2444,8 @@ const App: React.FC = () => {
       
       // Show success modal
       setGoogleDriveModalData({
-        title: 'Upload Successful!',
-        message: `Successfully uploaded ${result.uploadedFiles.length} images to Google Drive. ${result.failed > 0 ? `(${result.failed} failed)` : ''} All images are stored in your Google Drive folder.`,
+        title: `Upload Successful! (Account ${googleDriveAccount})`,
+        message: `Successfully uploaded ${result.uploadedFiles.length} images to Google Drive Account ${googleDriveAccount}. ${result.failed > 0 ? `(${result.failed} failed)` : ''} All images are stored in your Google Drive folder.`,
         folderUrl: result.folderUrl,
         urls: result.uploadedFiles.map(f => f.url),
         type: 'success',
@@ -2464,7 +2466,7 @@ const App: React.FC = () => {
           'See GOOGLE_DRIVE_SETUP.md for detailed instructions.';
       }
       
-      addLog(`[Google Drive] ❌ Error: ${errorMessage}`, 'error');
+      addLog(`[Google Drive Account ${googleDriveAccount}] ❌ Error: ${errorMessage}`, 'error');
       
       // Show error modal
       setGoogleDriveModalData({
@@ -4017,24 +4019,35 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 >
                   <FileText size={18} /> Download PDF ({filteredCount})
                 </button>
-                <button 
-                  onClick={uploadToGoogleDrive}
-                  disabled={isUploadingToGoogleDrive}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                  title={imagesPerPromptToDownload === 4 
-                    ? 'Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)' 
-                    : `Upload the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
-                >
-                  {isUploadingToGoogleDrive ? (
-                    <>
-                      <RefreshCw size={18} className="animate-spin" /> Uploading... ({filteredCount})
-                    </>
-                  ) : (
-                    <>
-                      <Link size={18} /> Upload to Google Drive ({filteredCount})
-                    </>
-                  )}
-                </button>
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={googleDriveAccount}
+                    onChange={(e) => setGoogleDriveAccount(Number(e.target.value) as 1 | 2)}
+                    className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
+                    disabled={isUploadingToGoogleDrive}
+                  >
+                    <option value="1">Google Drive Account 1</option>
+                    <option value="2">Google Drive Account 2</option>
+                  </select>
+                  <button 
+                    onClick={uploadToGoogleDrive}
+                    disabled={isUploadingToGoogleDrive}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                    title={imagesPerPromptToDownload === 4 
+                      ? 'Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)' 
+                      : `Upload the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
+                  >
+                    {isUploadingToGoogleDrive ? (
+                      <>
+                        <RefreshCw size={18} className="animate-spin" /> Uploading... ({filteredCount})
+                      </>
+                    ) : (
+                      <>
+                        <Link size={18} /> Upload to Google Drive ({filteredCount})
+                      </>
+                    )}
+                  </button>
+                </div>
               </>
             )}
            <button 
