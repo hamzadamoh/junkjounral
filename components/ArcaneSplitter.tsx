@@ -993,21 +993,36 @@ Output ONLY keywords, one per line, nothing else:`
           }
         });
         
+        // Special handling for generic terms that shouldn't match unless exact
+        const genericTerms = ['color', 'palette', 'template', 'bundle', 'print', 'brand', 'seasons', 'fabric', 'procreate', 'benjamin', 'moore'];
+        const isGenericTerm = keywordWords.some(w => genericTerms.includes(w.toLowerCase()));
+        
+        // If it's a generic term and not an exact match, require ALL words to match
+        if (isGenericTerm && !exactMatch) {
+          const allWordsMatch = keywordWords.every(w => 
+            w.length >= 2 && (imageWords.has(w) || imageText.includes(w))
+          );
+          if (!allWordsMatch) {
+            score = -1000; // Heavily penalize generic terms that don't fully match
+            wordMatches = 0;
+          }
+        }
+        
         // If no matches at all, heavily penalize
         if (!exactMatch && wordMatches === 0) {
           score = -1000; // Heavy penalty for irrelevant keywords
         }
         
-        // Small bonus for higher volume (only if there's some relevance)
-        if (score > 0) {
-          score += Math.min(keyword.volume / 20, 30);
+        // Small bonus for higher volume (only if there's strong relevance)
+        if (score > 50) { // Only add volume bonus if there's meaningful relevance
+          score += Math.min(keyword.volume / 30, 20); // Reduced volume bonus
         }
         
         return { ...keyword, score, exactMatch, wordMatches };
       });
       
-      // Filter out keywords with negative scores (no relevance)
-      const relevantKeywords = scoredKeywords.filter(k => k.score > 0);
+      // Filter out keywords with negative scores or low relevance (minimum 50 points)
+      const relevantKeywords = scoredKeywords.filter(k => k.score >= 50);
       
       // Sort by relevance score first, then by volume
       relevantKeywords.sort((a, b) => {
@@ -1140,7 +1155,18 @@ ${keywordData}
 Primary keyword: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance score: ${Math.round(primaryKeyword.score)}${primaryKeyword.exactMatch ? ', EXACT MATCH' : ''})
 Secondary keywords: ${secondaryKeywords.map(k => `${k.keyword} (vol: ${k.volume}, score: ${Math.round(k.score)})`).join(', ')}
 
-Selection logic: Keywords were matched to image content. Selected keywords that best match the actual product themes shown in the images. Keywords with exact matches or word matches in the image descriptions were prioritized over raw volume. Only use keywords that actually relate to the images - do NOT use "color palette" unless the images are specifically about color palettes.
+🚨 CRITICAL INSTRUCTION FOR TITLE GENERATION:
+
+The primary keyword shown above is based on relevance scoring, but you MUST verify it matches the actual image content described in "Product Descriptions" above.
+
+**IF the primary keyword is a generic term** (like "color palette", "template", "bundle", "print", "brand", "seasons", "fabric", "procreate") **AND the Product Descriptions mention specific themes** (gnomes, forests, flowers, mushrooms, gardens, woodland, fairy tale, etc.), then:
+
+1. **DO NOT use the primary keyword in the title**
+2. **Use the most relevant secondary keyword instead** (one that matches the actual themes in the images)
+3. **The title must start with the thematic keyword** (e.g., "Enchanted Forest", "Whimsical Gnomes", "Delicate Flowers") NOT the generic term
+4. **Only use generic terms if the images are specifically about that concept** (e.g., actual color swatches/palettes)
+
+Selection logic: Keywords were matched to image content with strict relevance scoring. Generic terms are heavily penalized unless they fully match. Always prioritize thematic relevance over volume.
 
 Now generate:
 1. Title (≤ 140 characters, primary keyword first, digital intent)
