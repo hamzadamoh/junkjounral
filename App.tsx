@@ -107,7 +107,7 @@ const App: React.FC = () => {
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState<boolean>(false);
-  const [imagesPerPromptToDownload, setImagesPerPromptToDownload] = useState<1 | 2 | 3 | 4>(4); // How many images to download per prompt
+  const [selectedImagePositions, setSelectedImagePositions] = useState<Set<1 | 2 | 3 | 4>>(new Set([4])); // Selected image positions (1st, 2nd, 3rd, 4th, or 4 = All)
   const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1); // Google Drive account to use
   const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
@@ -2157,8 +2157,8 @@ const App: React.FC = () => {
     // Detect the actual number of images per prompt from the generated images
     const actualImagesPerPrompt = detectImagesPerPrompt(images);
     
-    // If "All" is selected, return all images
-    if (imagesPerPromptToDownload === 4 || imagesPerPromptToDownload > actualImagesPerPrompt) {
+    // If "All" (4) is selected, return all images
+    if (selectedImagePositions.has(4)) {
       return images; // Return all images
     }
     
@@ -2167,11 +2167,16 @@ const App: React.FC = () => {
     // Group images by prompt (every N images = 1 prompt, where N = actualImagesPerPrompt)
     for (let i = 0; i < images.length; i += actualImagesPerPrompt) {
       const promptGroup = images.slice(i, i + actualImagesPerPrompt);
-      // Select the Nth image from this prompt group (1-based to 0-based index)
-      const imageIndex = imagesPerPromptToDownload - 1; // Convert 1-4 to 0-3
-      if (promptGroup[imageIndex]) {
-        filtered.push(promptGroup[imageIndex]);
-      }
+      
+      // Select images based on selected positions
+      selectedImagePositions.forEach((position) => {
+        if (position !== 4) { // Skip "All" since we already handled it
+          const imageIndex = position - 1; // Convert 1-4 to 0-3
+          if (promptGroup[imageIndex]) {
+            filtered.push(promptGroup[imageIndex]);
+          }
+        }
+      });
     }
     
     return filtered;
@@ -2283,7 +2288,15 @@ const App: React.FC = () => {
       }
 
       // Show loading state
-      const loadingMsg = `Preparing ${filteredImages.length} images for download (${imagesPerPromptToDownload} per prompt)...`;
+      const positionsDesc = selectedImagePositions.has(4) 
+        ? 'all images' 
+        : Array.from(selectedImagePositions).sort().map(p => {
+            if (p === 1) return '1st';
+            if (p === 2) return '2nd';
+            if (p === 3) return '3rd';
+            return '4th';
+          }).join(' and ');
+      const loadingMsg = `Preparing ${filteredImages.length} images for download (${positionsDesc} from each prompt)...`;
       alert(loadingMsg);
 
       // Shuffle images to randomize order (so 4 images from each batch aren't grouped together)
@@ -2391,6 +2404,7 @@ const App: React.FC = () => {
       return;
     }
 
+
     // Filter images based on imagesPerPromptToDownload setting
     const filteredImages = filterImagesByPromptCount(completedImages);
     
@@ -2407,7 +2421,7 @@ const App: React.FC = () => {
 
     try {
       setIsUploadingToGoogleDrive(true);
-      addLog(`[Google Drive Account ${googleDriveAccount}] Preparing to upload ${filteredImages.length} images (${imagesPerPromptToDownload} per prompt) to folder: "${folderName}"...`, 'log');
+      addLog(`[Google Drive Account ${googleDriveAccount}] Preparing to upload ${filteredImages.length} images...`, 'log');
 
       // Prepare images for upload
       const imagesToUpload = filteredImages.map(img => ({
@@ -2453,25 +2467,11 @@ const App: React.FC = () => {
       setShowGoogleDriveModal(true);
     } catch (error: any) {
       console.error('Error uploading to Google Drive:', error);
+      addLog(`[Google Drive] ❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
       
-      // Extract error message - check if it's from the API response
-      let errorMessage = error.message || 'Unknown error occurred';
-      if (error.message && error.message.includes('401')) {
-        // OAuth error - provide helpful guidance
-        errorMessage = 'Authentication failed. Please check your Google Drive credentials:\n\n' +
-          '1. Verify your Client ID, Client Secret, and Refresh Token are correct\n' +
-          '2. Make sure the refresh token was generated with the same Client ID\n' +
-          '3. If the refresh token is expired, generate a new one\n' +
-          '4. Check that your OAuth consent screen is properly configured\n\n' +
-          'See GOOGLE_DRIVE_SETUP.md for detailed instructions.';
-      }
-      
-      addLog(`[Google Drive Account ${googleDriveAccount}] ❌ Error: ${errorMessage}`, 'error');
-      
-      // Show error modal
       setGoogleDriveModalData({
         title: 'Upload Failed',
-        message: errorMessage,
+        message: error.message || 'Unknown error occurred',
         type: 'error',
       });
       setShowGoogleDriveModal(true);
@@ -2498,7 +2498,15 @@ const App: React.FC = () => {
       }
 
       // Show loading state
-      const loadingMsg = `Preparing ${filteredImages.length} images for PDF (${imagesPerPromptToDownload} per prompt)...`;
+      const positionsDesc = selectedImagePositions.has(4) 
+        ? 'all images' 
+        : Array.from(selectedImagePositions).sort().map(p => {
+            if (p === 1) return '1st';
+            if (p === 2) return '2nd';
+            if (p === 3) return '3rd';
+            return '4th';
+          }).join(' and ');
+      const loadingMsg = `Preparing ${filteredImages.length} images for PDF (${positionsDesc} from each prompt)...`;
       alert(loadingMsg);
 
       const pdf = new jsPDF({
@@ -3956,34 +3964,59 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   )}
                 </button>
                 
-                {/* Images Per Prompt Selector */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title={`Detected ${detectedImagesPerPrompt} image(s) per prompt. Choose which image to download from each prompt.`}>
+                {/* Images Per Prompt Selector - Multi-select */}
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title={`Detected ${detectedImagesPerPrompt} image(s) per prompt. Select multiple positions to download (e.g., 1st and 2nd).`}>
                   <span className="text-xs text-slate-300 whitespace-nowrap">Image:</span>
                   <div className="flex gap-1">
                     {/* Show options based on detected images per prompt */}
-                    {Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).map((num) => (
-                      <button
-                        key={num}
-                        onClick={() => setImagesPerPromptToDownload(num as 1 | 2 | 3 | 4)}
-                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          imagesPerPromptToDownload === num
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        }`}
-                        title={`Download the ${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'} image from each prompt`}
-                      >
-                        {num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'}
-                      </button>
-                    ))}
+                    {Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).map((num) => {
+                      const position = num as 1 | 2 | 3 | 4;
+                      const isSelected = selectedImagePositions.has(position);
+                      return (
+                        <button
+                          key={num}
+                          onClick={() => {
+                            const newSet = new Set(selectedImagePositions);
+                            if (isSelected) {
+                              newSet.delete(position);
+                              // If removing the last item, add "All" as default
+                              if (newSet.size === 0) {
+                                newSet.add(4);
+                              }
+                            } else {
+                              newSet.delete(4); // Remove "All" if selecting specific positions
+                              newSet.add(position);
+                            }
+                            setSelectedImagePositions(newSet);
+                          }}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            isSelected
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                          title={`${isSelected ? 'Deselect' : 'Select'} the ${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'} image from each prompt`}
+                        >
+                          {num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'}
+                        </button>
+                      );
+                    })}
                     {/* Always show "All" option */}
                     <button
-                      onClick={() => setImagesPerPromptToDownload(4)}
+                      onClick={() => {
+                        if (selectedImagePositions.has(4)) {
+                          // If "All" is selected, deselect it and select first position
+                          setSelectedImagePositions(new Set([1]));
+                        } else {
+                          // Select "All" and clear other selections
+                          setSelectedImagePositions(new Set([4]));
+                        }
+                      }}
                       className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                        imagesPerPromptToDownload === 4
+                        selectedImagePositions.has(4)
                           ? 'bg-amber-600 text-white'
                           : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                       }`}
-                      title={`Download all ${detectedImagesPerPrompt} image(s) from each prompt`}
+                      title={`${selectedImagePositions.has(4) ? 'Deselect' : 'Select'} all ${detectedImagesPerPrompt} image(s) from each prompt`}
                     >
                       All
                     </button>
@@ -4004,18 +4037,28 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <button 
                   onClick={downloadAllAsZip}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title={imagesPerPromptToDownload === 4 
+                  title={selectedImagePositions.has(4) 
                     ? 'Download all images as ZIP file' 
-                    : `Download the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt as ZIP`}
+                    : `Download the ${Array.from(selectedImagePositions).sort().map(p => {
+                        if (p === 1) return '1st';
+                        if (p === 2) return '2nd';
+                        if (p === 3) return '3rd';
+                        return '4th';
+                      }).join(' and ')} image(s) from each prompt as ZIP`}
                 >
                   <Archive size={18} /> Download All ({filteredCount})
                 </button>
                 <button 
                   onClick={downloadAllAsPdf}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title={imagesPerPromptToDownload === 4 
+                  title={selectedImagePositions.has(4) 
                     ? 'Download all images as PDF' 
-                    : `Download the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt as PDF`}
+                    : `Download the ${Array.from(selectedImagePositions).sort().map(p => {
+                        if (p === 1) return '1st';
+                        if (p === 2) return '2nd';
+                        if (p === 3) return '3rd';
+                        return '4th';
+                      }).join(' and ')} image(s) from each prompt as PDF`}
                 >
                   <FileText size={18} /> Download PDF ({filteredCount})
                 </button>
@@ -4033,9 +4076,14 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     onClick={uploadToGoogleDrive}
                     disabled={isUploadingToGoogleDrive}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                    title={imagesPerPromptToDownload === 4 
+                    title={selectedImagePositions.has(4) 
                       ? 'Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)' 
-                      : `Upload the ${imagesPerPromptToDownload === 1 ? '1st' : imagesPerPromptToDownload === 2 ? '2nd' : '3rd'} image from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
+                      : `Upload the ${Array.from(selectedImagePositions).sort().map(p => {
+                          if (p === 1) return '1st';
+                          if (p === 2) return '2nd';
+                          if (p === 3) return '3rd';
+                          return '4th';
+                        }).join(' and ')} image(s) from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
                   >
                     {isUploadingToGoogleDrive ? (
                       <>
