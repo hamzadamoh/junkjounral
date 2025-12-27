@@ -996,7 +996,7 @@ Output ONLY keywords, one per line, nothing else:`
 8. No duplicate tags
 9. Title ≤ 140 characters
 10. Assume **DIGITAL PDF** unless stated
-11. No emojis
+11. Use emojis in description (✅, ✦) as shown in format
 12. No filler language
 
 ## 🔵 STEP 3 — LISTING CREATION
@@ -1051,9 +1051,9 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
 * Beautiful artwork
 * Stunning illustrations`
             },
-            {
-              role: 'user',
-              content: `Generate ONE Etsy listing for this product collection (${analyzedSlices.length} items):
+              {
+                role: 'user',
+                content: `Generate ONE Etsy listing for this product collection (${analyzedSlices.length} items):
 
 Product Descriptions:
 ${allPrompts}
@@ -1068,7 +1068,39 @@ Selection logic: Using highest volume keywords that match the product descriptio
 
 Now generate:
 1. Title (≤ 140 characters, primary keyword first, digital intent)
-2. Description (structured sections, 150-200 words)
+2. Description (MUST follow this EXACT format with emojis):
+✅ DESCRIPTION (ready to paste)
+
+[Opening sentence: Create [theme/style] projects with this [product name] junk journal printable kit.]
+
+[Paragraph: This digital collection includes [number] printable pages inspired by [themes, colors, elements].]
+
+[Paragraph: Designed for junk journaling, collage, scrapbooking, and [specific use cases], these pages work beautifully together while offering plenty of variety for layering and creative layouts.]
+
+✦ WHAT YOU GET
+
+• [Number] high-quality [theme] printable pages
+• [Feature 1]
+• [Feature 2]
+• [Feature 3]
+• Instant digital download (no physical item)
+
+✦ PERFECT FOR
+
+• [Use case 1]
+• [Use case 2]
+• [Use case 3]
+• [Use case 4]
+• [Use case 5]
+
+✦ FILE DETAILS
+
+• High-resolution digital files
+• Print at home or professionally
+• Personal crafting & journaling use
+
+[Closing sentence: This [product name] printable kit is ideal for crafters who love [target audience interests].]
+
 3. Exactly 13 tags (comma-separated, 1-20 characters each)
 
 Format your response as:
@@ -1076,7 +1108,7 @@ TITLE:
 [title]
 
 DESCRIPTION:
-[description]
+[description with exact format above]
 
 TAGS:
 tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13`
@@ -1408,16 +1440,39 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-slate-300">Generated Listing</h4>
                 <div className="space-y-3">
-                  {generatedListings.map((listing, index) => (
-                    <div key={index} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                      {listing.title && (
+                  {generatedListings.map((listing, index) => {
+                    // Filter keywords with volume >= 100 (long tail keywords)
+                    const longTailKeywords = csvKeywords
+                      .filter(k => k.volume >= 100)
+                      .sort((a, b) => b.volume - a.volume);
+                    
+                    return (
+                      <div key={index} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                        {listing.title && (
+                          <div className="mb-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-purple-400">Title</span>
+                              <button
+                                onClick={async () => {
+                                  await navigator.clipboard.writeText(listing.title!);
+                                  alert('Title copied to clipboard!');
+                                }}
+                                className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
+                              >
+                                <Copy className="w-3 h-3" />
+                                Copy
+                              </button>
+                            </div>
+                            <p className="text-sm font-semibold text-white">{listing.title}</p>
+                          </div>
+                        )}
                         <div className="mb-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-purple-400">Title</span>
+                            <span className="text-xs font-medium text-purple-400">Description</span>
                             <button
                               onClick={async () => {
-                                await navigator.clipboard.writeText(listing.title!);
-                                alert('Title copied to clipboard!');
+                                await navigator.clipboard.writeText(listing.description);
+                                alert('Description copied to clipboard!');
                               }}
                               className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
                             >
@@ -1425,49 +1480,65 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
                               Copy
                             </button>
                           </div>
-                          <p className="text-sm font-semibold text-white">{listing.title}</p>
+                          <p className="text-sm text-white whitespace-pre-wrap">{listing.description}</p>
                         </div>
-                      )}
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-purple-400">Description</span>
-                          <button
-                            onClick={async () => {
-                              await navigator.clipboard.writeText(listing.description);
-                              alert('Description copied to clipboard!');
-                            }}
-                            className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
-                          >
-                            <Copy className="w-3 h-3" />
-                            Copy
-                          </button>
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-purple-400">Tags ({listing.tags.length})</span>
+                            <button
+                              onClick={() => handleCopyTags(listing.tags, index)}
+                              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
+                            >
+                              {copiedTagsIndex === index ? (
+                                <>
+                                  <Check className="w-3 h-3" />
+                                  Copied!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  Copy Tags
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <span className="text-xs text-slate-300">{listing.tags.join(', ')}</span>
                         </div>
-                        <p className="text-sm text-white whitespace-pre-wrap">{listing.description}</p>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-purple-400">Tags ({listing.tags.length})</span>
-                          <button
-                            onClick={() => handleCopyTags(listing.tags, index)}
-                            className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
-                          >
-                            {copiedTagsIndex === index ? (
-                              <>
-                                <Check className="w-3 h-3" />
-                                Copied!
-                              </>
-                            ) : (
-                              <>
+                        
+                        {/* Long Tail Keywords Section */}
+                        {longTailKeywords.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-slate-700">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-medium text-amber-400">
+                                Long Tail Keywords (Volume ≥ 100) ({longTailKeywords.length})
+                              </span>
+                              <button
+                                onClick={async () => {
+                                  const keywordsText = longTailKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n');
+                                  await navigator.clipboard.writeText(keywordsText);
+                                  alert('Long tail keywords copied to clipboard!');
+                                }}
+                                className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
+                              >
                                 <Copy className="w-3 h-3" />
-                                Copy Tags
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <span className="text-xs text-slate-300">{listing.tags.join(', ')}</span>
+                                Copy
+                              </button>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              <div className="space-y-1">
+                                {longTailKeywords.map((keyword, idx) => (
+                                  <div key={idx} className="flex items-center justify-between text-xs">
+                                    <span className="text-slate-300">{keyword.keyword}</span>
+                                    <span className="text-amber-400 font-medium ml-2">vol: {keyword.volume}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
