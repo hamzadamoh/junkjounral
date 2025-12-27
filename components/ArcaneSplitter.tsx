@@ -953,47 +953,85 @@ Output ONLY keywords, one per line, nothing else:`
       // Extract key themes from image descriptions (lowercase for matching)
       const imageText = allPrompts.toLowerCase();
       
+      // Extract key words from image descriptions for better matching
+      const imageWords = new Set<string>();
+      const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'it', 'its', 'they', 'them', 'their']);
+      
+      // Extract meaningful words from image descriptions (2+ characters, not common words)
+      allPrompts.toLowerCase().split(/\s+/).forEach(word => {
+        const cleaned = word.replace(/[^\w]/g, '');
+        if (cleaned.length >= 2 && !commonWords.has(cleaned)) {
+          imageWords.add(cleaned);
+        }
+      });
+      
       // Match keywords to image content
       // Score keywords based on how well they match the image descriptions
       const scoredKeywords = csvKeywords.map(keyword => {
         const keywordLower = keyword.keyword.toLowerCase();
-        const words = keywordLower.split(/\s+/);
+        const keywordWords = keywordLower.split(/\s+/).map(w => w.replace(/[^\w]/g, ''));
         
         // Calculate match score
         let score = 0;
+        let exactMatch = false;
+        let wordMatches = 0;
         
-        // Exact match gets highest score
+        // Exact phrase match gets highest score
         if (imageText.includes(keywordLower)) {
-          score += 100;
+          score += 200;
+          exactMatch = true;
         }
         
-        // Word-by-word matching
-        words.forEach(word => {
-          if (imageText.includes(word)) {
-            score += 20;
+        // Word-by-word matching (check if keyword words appear in image)
+        keywordWords.forEach(word => {
+          if (word.length >= 2 && imageWords.has(word)) {
+            score += 50;
+            wordMatches++;
+          } else if (imageText.includes(word)) {
+            score += 30;
+            wordMatches++;
           }
         });
         
-        // Bonus for higher volume (but less important than relevance)
-        score += Math.min(keyword.volume / 10, 50);
+        // If no matches at all, heavily penalize
+        if (!exactMatch && wordMatches === 0) {
+          score = -1000; // Heavy penalty for irrelevant keywords
+        }
         
-        return { ...keyword, score };
+        // Small bonus for higher volume (only if there's some relevance)
+        if (score > 0) {
+          score += Math.min(keyword.volume / 20, 30);
+        }
+        
+        return { ...keyword, score, exactMatch, wordMatches };
       });
+      
+      // Filter out keywords with negative scores (no relevance)
+      const relevantKeywords = scoredKeywords.filter(k => k.score > 0);
       
       // Sort by relevance score first, then by volume
-      scoredKeywords.sort((a, b) => {
-        if (Math.abs(a.score - b.score) > 10) {
-          return b.score - a.score; // Sort by relevance score
+      relevantKeywords.sort((a, b) => {
+        // Prioritize exact matches
+        if (a.exactMatch && !b.exactMatch) return -1;
+        if (!a.exactMatch && b.exactMatch) return 1;
+        
+        // Then by score
+        if (Math.abs(a.score - b.score) > 20) {
+          return b.score - a.score;
         }
-        return b.volume - a.volume; // If scores are close, prefer higher volume
+        // If scores are close, prefer higher volume
+        return b.volume - a.volume;
       });
       
+      // If no relevant keywords found, fall back to all keywords sorted by volume
+      const sortedKeywords = relevantKeywords.length > 0 ? relevantKeywords : scoredKeywords.sort((a, b) => b.volume - a.volume);
+      
       // Select primary and secondary keywords (top relevant ones)
-      const primaryKeyword = scoredKeywords[0];
-      const secondaryKeywords = scoredKeywords.slice(1, 4); // 2-3 secondary keywords
+      const primaryKeyword = sortedKeywords[0];
+      const secondaryKeywords = sortedKeywords.slice(1, 4); // 2-3 secondary keywords
       
       // Get top 20 relevant keywords for the prompt
-      const topRelevantKeywords = scoredKeywords.slice(0, 20);
+      const topRelevantKeywords = sortedKeywords.slice(0, 20);
       
       // Format keyword data for the prompt
       const keywordData = [
@@ -1099,10 +1137,10 @@ ${allPrompts}
 Keyword Data (with search volumes):
 ${keywordData}
 
-Primary keyword: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance: ${Math.round(primaryKeyword.score)})
-Secondary keywords: ${secondaryKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join(', ')}
+Primary keyword: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance score: ${Math.round(primaryKeyword.score)}${primaryKeyword.exactMatch ? ', EXACT MATCH' : ''})
+Secondary keywords: ${secondaryKeywords.map(k => `${k.keyword} (vol: ${k.volume}, score: ${Math.round(k.score)})`).join(', ')}
 
-Selection logic: Keywords were matched to image content. Selected keywords that best match the actual product themes shown in the images, prioritizing relevance over raw volume.
+Selection logic: Keywords were matched to image content. Selected keywords that best match the actual product themes shown in the images. Keywords with exact matches or word matches in the image descriptions were prioritized over raw volume. Only use keywords that actually relate to the images - do NOT use "color palette" unless the images are specifically about color palettes.
 
 Now generate:
 1. Title (≤ 140 characters, primary keyword first, digital intent)
