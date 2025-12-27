@@ -791,20 +791,44 @@ NO text, NO explanation - ONLY the JSON array.`
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim());
       
-      // Parse CSV (assuming format: keyword,volume or keyword,volume,other)
+      // Parse CSV - only use first two columns: keyword,vol
       const keywords: Array<{ keyword: string; volume: number }> = [];
       
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
         
-        // Skip header row if it exists
-        if (i === 0 && (line.toLowerCase().includes('keyword') || line.toLowerCase().includes('volume'))) {
+        // Skip header row if it exists (check for keyword and vol/volume)
+        if (i === 0 && (line.toLowerCase().includes('keyword') && (line.toLowerCase().includes('vol') || line.toLowerCase().includes('volume')))) {
           continue;
         }
         
-        // Parse CSV line (handle quoted values)
-        const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+        // Parse CSV line - only use first two columns
+        // Handle quoted values and commas within quotes
+        const parts: string[] = [];
+        let currentPart = '';
+        let insideQuotes = false;
+        
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            insideQuotes = !insideQuotes;
+          } else if (char === ',' && !insideQuotes) {
+            parts.push(currentPart.trim().replace(/^"|"$/g, ''));
+            currentPart = '';
+            // Stop after second column
+            if (parts.length >= 2) break;
+          } else {
+            currentPart += char;
+          }
+        }
+        
+        // Add the last part if we haven't reached 2 columns yet
+        if (parts.length < 2 && currentPart) {
+          parts.push(currentPart.trim().replace(/^"|"$/g, ''));
+        }
+        
+        // Only process if we have at least 2 columns
         if (parts.length >= 2) {
           const keyword = parts[0];
           const volume = parseInt(parts[1]) || 0;
@@ -816,7 +840,7 @@ NO text, NO explanation - ONLY the JSON array.`
       
       setCsvKeywords(keywords);
       setCsvFile(file);
-      console.log(`[ArcaneSplitter] Loaded ${keywords.length} keywords from CSV`);
+      console.log(`[ArcaneSplitter] Loaded ${keywords.length} keywords from CSV (using only keyword and vol columns)`);
     } catch (err: any) {
       console.error('[ArcaneSplitter] CSV parsing error:', err);
       setError(`Failed to parse CSV: ${err.message}`);
@@ -1172,7 +1196,7 @@ tag1, tag2, tag3, ...`
                   className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-white cursor-pointer flex items-center justify-center gap-2 transition-colors"
                 >
                   <FileText className="w-4 h-4" />
-                  {csvFile ? csvFile.name : 'Upload CSV (keyword,volume)'}
+                  {csvFile ? csvFile.name : 'Upload CSV (keyword,vol)'}
                 </label>
               </div>
               
