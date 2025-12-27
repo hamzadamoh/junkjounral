@@ -1175,8 +1175,8 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       const tags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20).slice(0, 13);
       
       // Ensure exactly 13 tags
-      while (tags.length < 13 && sortedKeywords.length > tags.length) {
-        const remainingKeyword = sortedKeywords[tags.length];
+      while (tags.length < 13 && topRelevantKeywords.length > tags.length) {
+        const remainingKeyword = topRelevantKeywords[tags.length];
         if (remainingKeyword && remainingKeyword.keyword.length <= 20) {
           tags.push(remainingKeyword.keyword);
         } else {
