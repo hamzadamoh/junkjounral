@@ -944,24 +944,62 @@ Output ONLY keywords, one per line, nothing else:`
     setGeneratedListings([]);
     
     try {
-      // Sort keywords by volume (highest first)
-      const sortedKeywords = [...csvKeywords].sort((a, b) => b.volume - a.volume);
-      
-      // Select primary and secondary keywords
-      const primaryKeyword = sortedKeywords[0];
-      const secondaryKeywords = sortedKeywords.slice(1, 4); // 2-3 secondary keywords
-      
       // Combine all analyzed slices into one product description
       const allPrompts = analyzedSlices
         .map(s => s.prompt || s.description || '')
         .filter(Boolean)
         .join('\n\n');
       
+      // Extract key themes from image descriptions (lowercase for matching)
+      const imageText = allPrompts.toLowerCase();
+      
+      // Match keywords to image content
+      // Score keywords based on how well they match the image descriptions
+      const scoredKeywords = csvKeywords.map(keyword => {
+        const keywordLower = keyword.keyword.toLowerCase();
+        const words = keywordLower.split(/\s+/);
+        
+        // Calculate match score
+        let score = 0;
+        
+        // Exact match gets highest score
+        if (imageText.includes(keywordLower)) {
+          score += 100;
+        }
+        
+        // Word-by-word matching
+        words.forEach(word => {
+          if (imageText.includes(word)) {
+            score += 20;
+          }
+        });
+        
+        // Bonus for higher volume (but less important than relevance)
+        score += Math.min(keyword.volume / 10, 50);
+        
+        return { ...keyword, score };
+      });
+      
+      // Sort by relevance score first, then by volume
+      scoredKeywords.sort((a, b) => {
+        if (Math.abs(a.score - b.score) > 10) {
+          return b.score - a.score; // Sort by relevance score
+        }
+        return b.volume - a.volume; // If scores are close, prefer higher volume
+      });
+      
+      // Select primary and secondary keywords (top relevant ones)
+      const primaryKeyword = scoredKeywords[0];
+      const secondaryKeywords = scoredKeywords.slice(1, 4); // 2-3 secondary keywords
+      
+      // Get top 20 relevant keywords for the prompt
+      const topRelevantKeywords = scoredKeywords.slice(0, 20);
+      
       // Format keyword data for the prompt
       const keywordData = [
-        `Primary: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume})`,
-        ...secondaryKeywords.map(k => `Secondary: ${k.keyword} (vol: ${k.volume})`),
-        ...sortedKeywords.slice(4, 20).map(k => `${k.keyword} (vol: ${k.volume})`)
+        `Primary: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance score: ${Math.round(primaryKeyword.score)})`,
+        ...secondaryKeywords.map(k => `Secondary: ${k.keyword} (vol: ${k.volume}, relevance score: ${Math.round(k.score)})`),
+        ...topRelevantKeywords.slice(4).map(k => `${k.keyword} (vol: ${k.volume}, relevance score: ${Math.round(k.score)})`)
       ].join('\n');
       
       // Generate ONE listing using the Etsy SEO expert prompt
@@ -1061,10 +1099,10 @@ ${allPrompts}
 Keyword Data (with search volumes):
 ${keywordData}
 
-Primary keyword: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume})
-Secondary keywords: ${secondaryKeywords.map(k => k.keyword).join(', ')}
+Primary keyword: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance: ${Math.round(primaryKeyword.score)})
+Secondary keywords: ${secondaryKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join(', ')}
 
-Selection logic: Using highest volume keywords that match the product descriptions.
+Selection logic: Keywords were matched to image content. Selected keywords that best match the actual product themes shown in the images, prioritizing relevance over raw volume.
 
 Now generate:
 1. Title (≤ 140 characters, primary keyword first, digital intent)
