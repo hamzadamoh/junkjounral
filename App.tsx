@@ -107,7 +107,7 @@ const App: React.FC = () => {
   const [isUploadingStyleRef, setIsUploadingStyleRef] = useState<boolean>(false);
   const [isUploadingToGoogleDrive, setIsUploadingToGoogleDrive] = useState<boolean>(false);
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState<boolean>(false);
-  const [selectedImagePositions, setSelectedImagePositions] = useState<Set<1 | 2 | 3 | 4>>(new Set([4])); // Selected image positions (1st, 2nd, 3rd, 4th, or 4 = All)
+  const [selectedImagePositions, setSelectedImagePositions] = useState<Set<1 | 2 | 3 | 4>>(new Set([1, 2, 3, 4])); // Selected image positions (1st, 2nd, 3rd, 4th)
   const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1); // Google Drive account to use
   const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
@@ -2157,8 +2157,11 @@ const App: React.FC = () => {
     // Detect the actual number of images per prompt from the generated images
     const actualImagesPerPrompt = detectImagesPerPrompt(images);
     
-    // If "All" (4) is selected, return all images
-    if (selectedImagePositions.has(4)) {
+    // If all positions are selected, return all images
+    const allPositionsSelected = selectedImagePositions.size === actualImagesPerPrompt && 
+      Array.from({ length: actualImagesPerPrompt }, (_, i) => i + 1).every(pos => selectedImagePositions.has(pos as 1 | 2 | 3 | 4));
+    
+    if (allPositionsSelected) {
       return images; // Return all images
     }
     
@@ -2170,11 +2173,9 @@ const App: React.FC = () => {
       
       // Select images based on selected positions
       selectedImagePositions.forEach((position) => {
-        if (position !== 4) { // Skip "All" since we already handled it
-          const imageIndex = position - 1; // Convert 1-4 to 0-3
-          if (promptGroup[imageIndex]) {
-            filtered.push(promptGroup[imageIndex]);
-          }
+        const imageIndex = position - 1; // Convert 1-4 to 0-3
+        if (imageIndex < actualImagesPerPrompt && promptGroup[imageIndex]) {
+          filtered.push(promptGroup[imageIndex]);
         }
       });
     }
@@ -2288,14 +2289,12 @@ const App: React.FC = () => {
       }
 
       // Show loading state
-      const positionsDesc = selectedImagePositions.has(4) 
-        ? 'all images' 
-        : Array.from(selectedImagePositions).sort().map(p => {
-            if (p === 1) return '1st';
-            if (p === 2) return '2nd';
-            if (p === 3) return '3rd';
-            return '4th';
-          }).join(' and ');
+      const positionsDesc = Array.from(selectedImagePositions).sort().map(p => {
+        if (p === 1) return '1st';
+        if (p === 2) return '2nd';
+        if (p === 3) return '3rd';
+        return '4th';
+      }).join(' and ');
       const loadingMsg = `Preparing ${filteredImages.length} images for download (${positionsDesc} from each prompt)...`;
       alert(loadingMsg);
 
@@ -3979,12 +3978,13 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                             const newSet = new Set(selectedImagePositions);
                             if (isSelected) {
                               newSet.delete(position);
-                              // If removing the last item, add "All" as default
+                              // If removing the last item, select all positions as default
                               if (newSet.size === 0) {
-                                newSet.add(4);
+                                for (let i = 1; i <= detectedImagesPerPrompt; i++) {
+                                  newSet.add(i as 1 | 2 | 3 | 4);
+                                }
                               }
                             } else {
-                              newSet.delete(4); // Remove "All" if selecting specific positions
                               newSet.add(position);
                             }
                             setSelectedImagePositions(newSet);
@@ -4003,20 +4003,29 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     {/* Always show "All" option */}
                     <button
                       onClick={() => {
-                        if (selectedImagePositions.has(4)) {
-                          // If "All" is selected, deselect it and select first position
+                        const allSelected = Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos => 
+                          selectedImagePositions.has(pos as 1 | 2 | 3 | 4)
+                        );
+                        if (allSelected) {
+                          // If all are selected, deselect all and select just first position
                           setSelectedImagePositions(new Set([1]));
                         } else {
-                          // Select "All" and clear other selections
-                          setSelectedImagePositions(new Set([4]));
+                          // Select all positions
+                          const allPositions = new Set<1 | 2 | 3 | 4>();
+                          for (let i = 1; i <= detectedImagesPerPrompt; i++) {
+                            allPositions.add(i as 1 | 2 | 3 | 4);
+                          }
+                          setSelectedImagePositions(allPositions);
                         }
                       }}
                       className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                        selectedImagePositions.has(4)
+                        Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos => 
+                          selectedImagePositions.has(pos as 1 | 2 | 3 | 4)
+                        )
                           ? 'bg-amber-600 text-white'
                           : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                       }`}
-                      title={`${selectedImagePositions.has(4) ? 'Deselect' : 'Select'} all ${detectedImagesPerPrompt} image(s) from each prompt`}
+                      title={`${Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos => selectedImagePositions.has(pos as 1 | 2 | 3 | 4)) ? 'Deselect' : 'Select'} all ${detectedImagesPerPrompt} image(s) from each prompt`}
                     >
                       All
                     </button>
@@ -4037,9 +4046,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <button 
                   onClick={downloadAllAsZip}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title={selectedImagePositions.has(4) 
-                    ? 'Download all images as ZIP file' 
-                    : `Download the ${Array.from(selectedImagePositions).sort().map(p => {
+                  title={`Download the ${Array.from(selectedImagePositions).sort().map(p => {
                         if (p === 1) return '1st';
                         if (p === 2) return '2nd';
                         if (p === 3) return '3rd';
@@ -4051,9 +4058,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <button 
                   onClick={downloadAllAsPdf}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
-                  title={selectedImagePositions.has(4) 
-                    ? 'Download all images as PDF' 
-                    : `Download the ${Array.from(selectedImagePositions).sort().map(p => {
+                  title={`Download the ${Array.from(selectedImagePositions).sort().map(p => {
                         if (p === 1) return '1st';
                         if (p === 2) return '2nd';
                         if (p === 3) return '3rd';
@@ -4076,9 +4081,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     onClick={uploadToGoogleDrive}
                     disabled={isUploadingToGoogleDrive}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-                    title={selectedImagePositions.has(4) 
-                      ? 'Upload all images to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)' 
-                      : `Upload the ${Array.from(selectedImagePositions).sort().map(p => {
+                    title={`Upload the ${Array.from(selectedImagePositions).sort().map(p => {
                           if (p === 1) return '1st';
                           if (p === 2) return '2nd';
                           if (p === 3) return '3rd';

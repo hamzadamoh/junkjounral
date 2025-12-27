@@ -25,6 +25,8 @@ import {
   GripVertical,
   Link,
   ShoppingBag,
+  FileText,
+  Tag,
 } from 'lucide-react';
 import {
   SlicedImage,
@@ -68,6 +70,17 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false); // Upload progress
   const [wordPressUploadProgress, setWordPressUploadProgress] = useState({ completed: 0, total: 0 }); // WordPress upload progress
   const autoCrop = true; // Always auto-crop
+  
+  // Keyword Analysis & Listing Generation State
+  const [seedKeywords, setSeedKeywords] = useState<string[]>([]);
+  const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvKeywords, setCsvKeywords] = useState<Array<{ keyword: string; volume: number }>>([]);
+  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+  const [generatedListings, setGeneratedListings] = useState<Array<{ description: string; tags: string[] }>>([]);
+  const [isGeneratingListings, setIsGeneratingListings] = useState(false);
+  const [copiedSeedKeywords, setCopiedSeedKeywords] = useState(false);
+  const [copiedTagsIndex, setCopiedTagsIndex] = useState<number | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -699,6 +712,242 @@ NO text, NO explanation - ONLY the JSON array.`
     }
   }, [slices, hasApiKey]);
   
+  // Generate seed keywords from analyzed listings
+  const handleGenerateSeedKeywords = useCallback(async () => {
+    if (slices.length === 0 || !hasApiKey) {
+      setError('Please analyze some images first');
+      return;
+    }
+    
+    const analyzedSlices = slices.filter(s => s.prompt || s.description);
+    if (analyzedSlices.length === 0) {
+      setError('No analyzed images found. Please click "Analyze All" first.');
+      return;
+    }
+    
+    setIsGeneratingKeywords(true);
+    setError(null);
+    
+    try {
+      // Collect all prompts/descriptions
+      const allText = analyzedSlices
+        .map(s => s.prompt || s.description || '')
+        .filter(Boolean)
+        .join('\n\n');
+      
+      // Use OpenAI to extract seed keywords (1-2 words each)
+      const response = await fetch('/api/openai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a keyword extraction expert. Extract 15-30 seed keywords (1-2 words each) from the product descriptions. Output ONLY the keywords, one per line, no numbering, no bullets, no explanations.'
+            },
+            {
+              role: 'user',
+              content: `Extract seed keywords (1-2 words each) from these product descriptions:\n\n${allText}\n\nOutput only keywords, one per line:`
+            }
+          ],
+          max_tokens: 500,
+          temperature: 0.3,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate keywords');
+      }
+      
+      const data = await response.json();
+      const keywordsText = data.choices?.[0]?.message?.content || '';
+      
+      // Parse keywords (one per line)
+      const keywords = keywordsText
+        .split('\n')
+        .map(k => k.trim())
+        .filter(k => k && !k.match(/^\d+[\.\)]/) && k.length > 0)
+        .slice(0, 30); // Limit to 30 keywords
+      
+      setSeedKeywords(keywords);
+      console.log(`[ArcaneSplitter] Generated ${keywords.length} seed keywords`);
+    } catch (err: any) {
+      console.error('[ArcaneSplitter] Keyword generation error:', err);
+      setError(`Failed to generate keywords: ${err.message}`);
+    } finally {
+      setIsGeneratingKeywords(false);
+    }
+  }, [slices, hasApiKey]);
+  
+  // Handle CSV file upload
+  const handleCsvUpload = useCallback(async (file: File) => {
+    setIsProcessingCsv(true);
+    setError(null);
+    
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      // Parse CSV (assuming format: keyword,volume or keyword,volume,other)
+      const keywords: Array<{ keyword: string; volume: number }> = [];
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Skip header row if it exists
+        if (i === 0 && (line.toLowerCase().includes('keyword') || line.toLowerCase().includes('volume'))) {
+          continue;
+        }
+        
+        // Parse CSV line (handle quoted values)
+        const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+        if (parts.length >= 2) {
+          const keyword = parts[0];
+          const volume = parseInt(parts[1]) || 0;
+          if (keyword) {
+            keywords.push({ keyword, volume });
+          }
+        }
+      }
+      
+      setCsvKeywords(keywords);
+      setCsvFile(file);
+      console.log(`[ArcaneSplitter] Loaded ${keywords.length} keywords from CSV`);
+    } catch (err: any) {
+      console.error('[ArcaneSplitter] CSV parsing error:', err);
+      setError(`Failed to parse CSV: ${err.message}`);
+    } finally {
+      setIsProcessingCsv(false);
+    }
+  }, []);
+  
+  // Generate listings from CSV keywords
+  const handleGenerateListings = useCallback(async () => {
+    if (csvKeywords.length === 0) {
+      setError('Please upload a CSV file with keywords first');
+      return;
+    }
+    
+    if (slices.length === 0) {
+      setError('Please analyze some images first');
+      return;
+    }
+    
+    const analyzedSlices = slices.filter(s => s.prompt || s.description);
+    if (analyzedSlices.length === 0) {
+      setError('No analyzed images found. Please click "Analyze All" first.');
+      return;
+    }
+    
+    setIsGeneratingListings(true);
+    setError(null);
+    setGeneratedListings([]);
+    
+    try {
+      // Sort keywords by volume (highest first) and take top ones
+      const sortedKeywords = [...csvKeywords].sort((a, b) => b.volume - a.volume);
+      const topKeywords = sortedKeywords.slice(0, Math.min(20, sortedKeywords.length));
+      
+      // Generate one listing per analyzed slice
+      const listings: Array<{ description: string; tags: string[] }> = [];
+      
+      for (let i = 0; i < analyzedSlices.length; i++) {
+        const slice = analyzedSlices[i];
+        const prompt = slice.prompt || slice.description || '';
+        
+        // Select relevant keywords for this listing (rotate through top keywords)
+        const keywordIndex = i % topKeywords.length;
+        const selectedKeywords = topKeywords.slice(keywordIndex, keywordIndex + 5);
+        const keywordText = selectedKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join(', ');
+        
+        // Generate description and tags using OpenAI
+        const response = await fetch('/api/openai/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an Etsy listing expert. Generate SEO-optimized product descriptions and tags based on product images and keyword data.'
+              },
+              {
+                role: 'user',
+                content: `Generate an Etsy listing for this product:
+
+Product Description: ${prompt}
+
+Relevant Keywords (with search volume):
+${keywordText}
+
+Generate:
+1. A compelling product description (150-200 words) optimized for SEO
+2. A comma-separated list of 13 tags (Etsy allows 13 tags)
+
+Format your response as:
+DESCRIPTION:
+[description text]
+
+TAGS:
+tag1, tag2, tag3, ...`
+              }
+            ],
+            max_tokens: 800,
+            temperature: 0.7,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to generate listing ${i + 1}`);
+        }
+        
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        
+        // Parse description and tags
+        const descriptionMatch = content.match(/DESCRIPTION:\s*(.+?)(?=TAGS:|$)/is);
+        const tagsMatch = content.match(/TAGS:\s*(.+?)$/is);
+        
+        const description = descriptionMatch?.[1]?.trim() || prompt;
+        const tagsText = tagsMatch?.[1]?.trim() || '';
+        const tags = tagsText.split(',').map(t => t.trim()).filter(t => t).slice(0, 13);
+        
+        listings.push({ description, tags });
+      }
+      
+      setGeneratedListings(listings);
+      console.log(`[ArcaneSplitter] Generated ${listings.length} listings`);
+    } catch (err: any) {
+      console.error('[ArcaneSplitter] Listing generation error:', err);
+      setError(`Failed to generate listings: ${err.message}`);
+    } finally {
+      setIsGeneratingListings(false);
+    }
+  }, [csvKeywords, slices]);
+  
+  // Copy seed keywords (one per line)
+  const handleCopySeedKeywords = useCallback(async () => {
+    if (seedKeywords.length === 0) return;
+    const text = seedKeywords.join('\n');
+    await navigator.clipboard.writeText(text);
+    setCopiedSeedKeywords(true);
+    setTimeout(() => setCopiedSeedKeywords(false), 2000);
+  }, [seedKeywords]);
+  
+  // Copy tags (comma-separated)
+  const handleCopyTags = useCallback(async (tags: string[], index: number) => {
+    const text = tags.join(', ');
+    await navigator.clipboard.writeText(text);
+    setCopiedTagsIndex(index);
+    setTimeout(() => setCopiedTagsIndex(null), 2000);
+  }, []);
+  
   const analyzedCount = slices.filter(s => s.prompt).length;
   
   return (
@@ -844,6 +1093,162 @@ NO text, NO explanation - ONLY the JSON array.`
             </span>
           </div>
         </div>
+        
+        {/* Keyword Analysis & Listing Generation Tool */}
+        {analyzedCount > 0 && (
+          <div className="bg-slate-800/50 rounded-lg border border-purple-500/30 p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Tag className="w-5 h-5 text-purple-400" />
+              <h3 className="text-lg font-bold text-white">Keyword Analysis & Listing Generator</h3>
+            </div>
+            
+            {/* Step 1: Generate Seed Keywords */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-300">Step 1: Generate Seed Keywords</label>
+                <button
+                  onClick={handleGenerateSeedKeywords}
+                  disabled={isGeneratingKeywords || analyzedCount === 0}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-colors"
+                >
+                  {isGeneratingKeywords ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-4 h-4" />
+                      Generate Keywords
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {seedKeywords.length > 0 && (
+                <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400">Seed Keywords ({seedKeywords.length})</span>
+                    <button
+                      onClick={handleCopySeedKeywords}
+                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
+                    >
+                      {copiedSeedKeywords ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="max-h-32 overflow-y-auto">
+                    <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap">{seedKeywords.join('\n')}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Step 2: Upload CSV */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Step 2: Upload CSV with Keywords & Volume</label>
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleCsvUpload(file);
+                  }}
+                  className="hidden"
+                  id="csv-upload"
+                />
+                <label
+                  htmlFor="csv-upload"
+                  className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-white cursor-pointer flex items-center justify-center gap-2 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  {csvFile ? csvFile.name : 'Upload CSV (keyword,volume)'}
+                </label>
+              </div>
+              
+              {csvKeywords.length > 0 && (
+                <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
+                  <span className="text-xs text-slate-400">Loaded {csvKeywords.length} keywords from CSV</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Step 3: Generate Listings */}
+            {csvKeywords.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-slate-300">Step 3: Generate Descriptions & Tags</label>
+                  <button
+                    onClick={handleGenerateListings}
+                    disabled={isGeneratingListings || csvKeywords.length === 0}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium text-white flex items-center gap-2 transition-colors"
+                  >
+                    {isGeneratingListings ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Generate Listings
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Generated Listings */}
+            {generatedListings.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-slate-300">Generated Listings ({generatedListings.length})</h4>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {generatedListings.map((listing, index) => (
+                    <div key={index} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-purple-400">Listing {index + 1}</span>
+                        <button
+                          onClick={() => handleCopyTags(listing.tags, index)}
+                          className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-white flex items-center gap-1"
+                        >
+                          {copiedTagsIndex === index ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              Copied!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              Copy Tags
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-sm text-white whitespace-pre-wrap">{listing.description}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-slate-400">Tags: </span>
+                        <span className="text-xs text-slate-300">{listing.tags.join(', ')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Sliced Images Grid */}
         {slices.length > 0 && (
