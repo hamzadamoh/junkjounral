@@ -1119,12 +1119,14 @@ Use structured sections:
 * Exactly **13 tags**
 * 1–20 characters each
 * **MUST be from the keyword data provided above - DO NOT invent tags**
-* **DO NOT create variations like "art prints set of 3", "gnome hat pattern", "gnome hat for tree"**
+* **DO NOT create variations like "art prints set of 3", "home decor gift", "home decor boho", "art prints set"**
+* **DO NOT combine keywords or add new words**
 * **DO NOT add numbers, quantities, or extra words to keywords**
-* **Use ONLY the exact keywords from the CSV data provided**
+* **Use ONLY the exact keywords from the CSV data provided, or single words that appear in those keywords**
 * **If a keyword is too long (over 20 chars), you can use a shorter version that appears in the keyword data**
+* **Examples of VALID tags: "junk journaling", "scrapbooking", "ephemera", "gnomes" (if "gnomes" appears in a keyword)**
+* **Examples of INVALID tags: "art prints set of 3", "home decor gift", "art prints set" (these add words not in CSV)**
 * No commas inside tags
-* Tags must be exact matches to keywords from the CSV data (no modifications)
 
 ### FORMAT (VERY IMPORTANT)
 
@@ -1261,7 +1263,7 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       // Parse tags and validate they exist in CSV keywords
       const parsedTags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20);
       
-      // Validate tags against CSV keywords - STRICT: only exact matches or shorter versions
+      // Validate tags against CSV keywords - VERY STRICT: only exact matches or clear subsets
       const validatedTags = parsedTags.filter(tag => {
         const tagLower = tag.toLowerCase().trim();
         const tagWords = tagLower.split(/\s+/).filter(w => w.length > 0);
@@ -1271,33 +1273,37 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           const keywordLower = keyword.toLowerCase().trim();
           const keywordWords = keywordLower.split(/\s+/).filter(w => w.length > 0);
           
-          // Exact match (case-insensitive)
+          // 1. Exact match (case-insensitive)
           if (keywordLower === tagLower) return true;
           
-          // Tag is a single word that appears as whole word in keyword (e.g., "gnomes" in "whimsical gnomes")
-          // Only allow if tag is substantial (3+ chars)
+          // 2. Tag is a single word that appears as whole word in keyword (e.g., "gnomes" in "whimsical gnomes")
+          // Only allow if tag is substantial (3+ chars) and appears as a complete word
           if (tagWords.length === 1 && tagLower.length >= 3) {
             const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             if (wordBoundaryRegex.test(keywordLower)) return true;
           }
           
-          // Tag contains the full keyword (e.g., "junk journal" keyword in "junk journaling" tag)
-          // But ONLY if tag has same or fewer words than keyword (to prevent "art prints set of 3")
-          if (tagWords.length <= keywordWords.length && tagLower.includes(keywordLower)) {
-            // Make sure it's not just a partial match - the keyword should be at the start or as whole words
-            const keywordStart = tagLower.indexOf(keywordLower);
-            if (keywordStart === 0 || tagLower[keywordStart - 1] === ' ') {
-              return true;
-            }
+          // 3. Tag is the EXACT START of keyword (e.g., "junk journal" from "junk journaling")
+          // This allows natural word extensions but prevents adding new words
+          if (tagWords.length <= keywordWords.length && keywordLower.startsWith(tagLower + ' ')) {
+            return true;
           }
           
-          // Keyword contains the tag as whole words (e.g., "junk journal" keyword contains "journal" tag)
-          // But ONLY if tag is shorter/same length and appears as whole words
-          // AND tag must be at least 3 characters
-          if (tagWords.length <= keywordWords.length && tagLower.length >= 3 && keywordLower.includes(tagLower)) {
-            // Check if it's a whole word match, not just substring
-            const tagRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-            if (tagRegex.test(keywordLower)) return true;
+          // 4. Tag is the EXACT END of keyword (e.g., "journaling" from "junk journaling")
+          // Only if tag is a single word or the last words match exactly
+          if (tagWords.length <= keywordWords.length && keywordLower.endsWith(' ' + tagLower)) {
+            return true;
+          }
+          
+          // 5. Tag matches consecutive words in keyword (e.g., "junk journal" in "junk journal kits")
+          // But ONLY if tag words appear consecutively in the keyword
+          if (tagWords.length <= keywordWords.length && tagWords.length >= 2) {
+            const tagPhrase = tagWords.join(' ');
+            if (keywordLower.includes(' ' + tagPhrase + ' ') || 
+                keywordLower.startsWith(tagPhrase + ' ') || 
+                keywordLower.endsWith(' ' + tagPhrase)) {
+              return true;
+            }
           }
           
           return false;
