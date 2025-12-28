@@ -77,7 +77,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvKeywords, setCsvKeywords] = useState<Array<{ keyword: string; volume: number }>>([]);
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
-  const [generatedListings, setGeneratedListings] = useState<Array<{ title?: string; description: string; tags: string[] }>>([]);
+  const [generatedListings, setGeneratedListings] = useState<Array<{ title?: string; description: string; tags: string[]; filteredLongTailKeywords?: Array<{ keyword: string; volume: number }> }>>([]);
   const [isGeneratingListings, setIsGeneratingListings] = useState(false);
   const [copiedSeedKeywords, setCopiedSeedKeywords] = useState(false);
   const [copiedTagsIndex, setCopiedTagsIndex] = useState<number | null>(null);
@@ -1168,8 +1168,15 @@ The primary keyword shown above is based on relevance scoring, but you MUST veri
 
 Selection logic: Keywords were matched to image content with strict relevance scoring. Generic terms are heavily penalized unless they fully match. Always prioritize thematic relevance over volume.
 
+## 🎯 CRITICAL: Generate ALL from the SAME data
+
+You MUST generate the title, description, and tags ALL from:
+- The SAME product descriptions above (analyzed images)
+- The SAME keyword data provided
+- They MUST be consistent with each other and accurately reflect the actual image content
+
 Now generate:
-1. Title (≤ 140 characters, primary keyword first, digital intent)
+1. Title (≤ 140 characters, primary keyword first, digital intent) - MUST match the image themes
 2. Description (MUST follow this EXACT format with emojis):
 ✅ DESCRIPTION (ready to paste)
 
@@ -1203,7 +1210,13 @@ Now generate:
 
 [Closing sentence: This [product name] printable kit is ideal for crafters who love [target audience interests].]
 
-3. Exactly 13 tags (comma-separated, 1-20 characters each)
+3. Exactly 13 tags (comma-separated, 1-20 characters each) - MUST be from the keyword data provided and match the image themes
+
+**IMPORTANT**: All three (title, description, tags) must be:
+- Generated from the SAME product descriptions (analyzed images)
+- Generated from the SAME keyword data provided
+- Consistent with each other
+- Accurately reflect what's actually in the images
 
 Format your response as:
 TITLE:
@@ -1248,9 +1261,92 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
         }
       }
       
-      // Generate just ONE listing with title, description, and tags
-      setGeneratedListings([{ title, description, tags }]);
-      console.log(`[ArcaneSplitter] Generated 1 listing for ${analyzedSlices.length} images`);
+      // Get all keywords with volume >= 100 for filtering
+      const allLongTailKeywords = csvKeywords
+        .filter(k => k.volume >= 100)
+        .sort((a, b) => b.volume - a.volume);
+      
+      // Ask ChatGPT to filter long tail keywords to only junk journal related ones
+      let filteredLongTailKeywords: Array<{ keyword: string; volume: number }> = [];
+      
+      if (allLongTailKeywords.length > 0) {
+        try {
+          const filterResponse = await fetch('/api/openai/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an expert at identifying keywords relevant to junk journals, scrapbooking, and digital crafting supplies.
+
+Your task: Filter a list of keywords to ONLY include those that are relevant to:
+- Junk journals
+- Scrapbooking
+- Digital printables
+- Collage sheets
+- Ephemera packs
+- Journaling supplies
+- Craft papers
+- Printable art
+
+EXCLUDE keywords about:
+- Home decor (unless specifically journal/scrapbook related)
+- Furniture
+- Clothing (unless craft-related)
+- Food/cooking
+- General products unrelated to crafting/journaling
+
+Output ONLY a JSON array of keyword strings that are relevant. Format: ["keyword1", "keyword2", "keyword3"]`
+                },
+                {
+                  role: 'user',
+                  content: `Filter these keywords to only show ones related to junk journals and crafting:
+
+${allLongTailKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n')}
+
+Output ONLY a JSON array of the relevant keywords (just the keyword strings, no volumes).`
+                }
+              ],
+              max_tokens: 500,
+              temperature: 0.3,
+            }),
+          });
+          
+          if (filterResponse.ok) {
+            const filterData = await filterResponse.json();
+            const filterContent = filterData.choices?.[0]?.message?.content || '';
+            
+            // Try to parse JSON array
+            try {
+              const jsonMatch = filterContent.match(/\[.*?\]/s);
+              if (jsonMatch) {
+                const relevantKeywords = JSON.parse(jsonMatch[0]) as string[];
+                // Map back to full keyword objects with volumes
+                filteredLongTailKeywords = allLongTailKeywords.filter(k => 
+                  relevantKeywords.includes(k.keyword)
+                );
+              }
+            } catch (parseError) {
+              console.warn('[ArcaneSplitter] Failed to parse filtered keywords, using all keywords');
+              filteredLongTailKeywords = allLongTailKeywords;
+            }
+          } else {
+            console.warn('[ArcaneSplitter] Failed to filter keywords, using all keywords');
+            filteredLongTailKeywords = allLongTailKeywords;
+          }
+        } catch (filterError) {
+          console.warn('[ArcaneSplitter] Error filtering keywords, using all keywords:', filterError);
+          filteredLongTailKeywords = allLongTailKeywords;
+        }
+      }
+      
+      // Generate just ONE listing with title, description, tags, and filtered long tail keywords
+      setGeneratedListings([{ title, description, tags, filteredLongTailKeywords }]);
+      console.log(`[ArcaneSplitter] Generated 1 listing for ${analyzedSlices.length} images with ${filteredLongTailKeywords.length} filtered long tail keywords`);
     } catch (err: any) {
       console.error('[ArcaneSplitter] Listing generation error:', err);
       setError(`Failed to generate listings: ${err.message}`);
@@ -1543,10 +1639,8 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
                 <h4 className="text-sm font-medium text-slate-300">Generated Listing</h4>
                 <div className="space-y-3">
                   {generatedListings.map((listing, index) => {
-                    // Filter keywords with volume >= 100 (long tail keywords)
-                    const longTailKeywords = csvKeywords
-                      .filter(k => k.volume >= 100)
-                      .sort((a, b) => b.volume - a.volume);
+                    // Use ChatGPT-filtered long tail keywords
+                    const longTailKeywords = listing.filteredLongTailKeywords || [];
                     
                     return (
                       <div key={index} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
