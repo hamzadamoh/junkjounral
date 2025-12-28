@@ -774,16 +774,21 @@ You help sellers research keywords **before** writing listings.
 
 ## 🟢 STEP 1 — SEED KEYWORDS (FIRST AND ONLY OUTPUT)
 
-Before doing anything else, generate **SEED KEYWORDS ONLY**.
+Generate **SEED KEYWORDS ONLY** - these are simple 1-2 word terms that will be used for research to get actual keyword volumes from Etsy.
 
 ### SEED KEYWORD RULES
 
-* 1–2 words ONLY
+* **1–2 words ONLY** - simple, broad terms
 * No punctuation
 * No plurals unless common
 * Broad but relevant
 * Etsy autosuggest-friendly
-* Junk journal focused
+* **These are just starting points for research** - you will NOT get volumes here, just seed terms
+* **Analyze the product descriptions and generate seed keywords that:**
+  - Match the actual themes, subjects, and styles shown in the images
+  - Are relevant to junk journals, scrapbooking, and digital crafting
+  - Would be good starting points for Etsy keyword research
+  - Include both crafting terms AND theme-specific terms based on what you see
 
 ### FORMAT (VERY IMPORTANT)
 
@@ -798,6 +803,8 @@ keyword4
 ### Quantity
 
 * Provide **20–30 seed keywords**
+* These are just seed terms - the user will research these on Etsy to get actual keywords with volumes
+* Let the content guide you - if images show gardens, include garden-related seed terms; if they show gnomes, include gnome-related seed terms, etc.
 
 ### Group internally by intent, but **DO NOT label groups**.
 
@@ -806,11 +813,19 @@ keyword4
             },
             {
               role: 'user',
-              content: `Analyze these product descriptions and generate SEED KEYWORDS ONLY (20-30 keywords, 1-2 words each, one per line):
+              content: `Analyze these product descriptions carefully. Generate SEED KEYWORDS ONLY (20-30 simple 1-2 word terms, one per line).
 
+**IMPORTANT**: These are just seed keywords for research - simple terms that will be used to find actual keywords with volumes on Etsy. Do NOT include volumes or detailed keywords.
+
+Based on what you see in the images (themes, subjects, styles, colors, etc.), generate simple seed terms that:
+- Match the actual themes and subjects in the images (e.g., if you see gardens, butterflies, flowers, include: garden, butterfly, flowers)
+- Are relevant to junk journals and digital crafting (e.g., junk journal, printable, ephemera)
+- Would be good starting points for Etsy keyword research
+
+Product Descriptions:
 ${allText}
 
-Output ONLY keywords, one per line, nothing else:`
+Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
             }
           ],
           max_tokens: 500,
