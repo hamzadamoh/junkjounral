@@ -1119,10 +1119,12 @@ Use structured sections:
 * Exactly **13 tags**
 * 1–20 characters each
 * **MUST be from the keyword data provided above - DO NOT invent tags**
-* **DO NOT create variations like "art prints set of 3" - use only exact keywords from the data**
-* **DO NOT add numbers or quantities unless they're in the keyword data**
+* **DO NOT create variations like "art prints set of 3", "gnome hat pattern", "gnome hat for tree"**
+* **DO NOT add numbers, quantities, or extra words to keywords**
+* **Use ONLY the exact keywords from the CSV data provided**
+* **If a keyword is too long (over 20 chars), you can use a shorter version that appears in the keyword data**
 * No commas inside tags
-* Tags must match keywords from the CSV data exactly (you can shorten long keywords to fit 20 characters)
+* Tags must be exact matches to keywords from the CSV data (no modifications)
 
 ### FORMAT (VERY IMPORTANT)
 
@@ -1213,7 +1215,7 @@ Now generate:
 
 [Closing sentence: This [product name] printable kit is ideal for crafters who love [target audience interests].]
 
-3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: MUST be from the keyword data provided above. DO NOT invent tags. DO NOT create variations like "art prints set of 3" or add numbers. Use only exact keywords from the CSV data provided.**
+3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: MUST be EXACT keywords from the keyword data provided above. DO NOT invent tags. DO NOT create variations like "art prints set of 3", "gnome hat pattern", or "gnome hat for tree". DO NOT add numbers, quantities, or extra words. Use ONLY the exact keywords as they appear in the CSV data. If a keyword is too long, use a shorter version that exists in the keyword data.**
 
 **IMPORTANT**: All three (title, description, tags) must be:
 - Generated from the SAME product descriptions (analyzed images)
@@ -1259,18 +1261,40 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       // Parse tags and validate they exist in CSV keywords
       const parsedTags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20);
       
-      // Validate tags against CSV keywords (case-insensitive, allow partial matches)
+      // Validate tags against CSV keywords - STRICT: only exact matches or shorter versions
       const validatedTags = parsedTags.filter(tag => {
-        const tagLower = tag.toLowerCase();
-        // Check if tag matches any CSV keyword (exact match or contains)
+        const tagLower = tag.toLowerCase().trim();
+        const tagWords = tagLower.split(/\s+/);
+        
+        // Check if tag matches any CSV keyword
         return Array.from(validKeywordsSet).some(keyword => {
-          const keywordLower = keyword.toLowerCase();
+          const keywordLower = keyword.toLowerCase().trim();
+          const keywordWords = keywordLower.split(/\s+/);
+          
           // Exact match
           if (keywordLower === tagLower) return true;
-          // Tag is contained in keyword (e.g., "gnomes" matches "whimsical gnomes")
-          if (keywordLower.includes(tagLower)) return true;
-          // Keyword is contained in tag (e.g., "junk journal" matches "junk journaling")
-          if (tagLower.includes(keywordLower)) return true;
+          
+          // Tag is shorter version of keyword (e.g., "gnomes" from "whimsical gnomes")
+          // Only allow if tag is a single word that appears as whole word in keyword
+          if (tagWords.length === 1 && tagLower.length >= 3) {
+            const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            if (wordBoundaryRegex.test(keywordLower)) return true;
+          }
+          
+          // Tag contains the full keyword (e.g., "junk journal" keyword in "junk journaling" tag)
+          // But ONLY if tag has same or fewer words than keyword (to prevent "art prints set of 3")
+          if (tagWords.length <= keywordWords.length && tagLower.includes(keywordLower)) {
+            return true;
+          }
+          
+          // Keyword contains the tag (e.g., "junk journal" keyword contains "journal" tag)
+          // But ONLY if tag is shorter/same length and appears as whole words
+          if (tagWords.length <= keywordWords.length && keywordLower.includes(tagLower)) {
+            // Check if it's a whole word match, not just substring
+            const tagRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            if (tagRegex.test(keywordLower)) return true;
+          }
+          
           return false;
         });
       });
