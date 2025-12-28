@@ -1118,8 +1118,11 @@ Use structured sections:
 
 * Exactly **13 tags**
 * 1–20 characters each
-* From keyword data ONLY
+* **MUST be from the keyword data provided above - DO NOT invent tags**
+* **DO NOT create variations like "art prints set of 3" - use only exact keywords from the data**
+* **DO NOT add numbers or quantities unless they're in the keyword data**
 * No commas inside tags
+* Tags must match keywords from the CSV data exactly (you can shorten long keywords to fit 20 characters)
 
 ### FORMAT (VERY IMPORTANT)
 
@@ -1210,7 +1213,7 @@ Now generate:
 
 [Closing sentence: This [product name] printable kit is ideal for crafters who love [target audience interests].]
 
-3. Exactly 13 tags (comma-separated, 1-20 characters each) - MUST be from the keyword data provided and match the image themes
+3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: MUST be from the keyword data provided above. DO NOT invent tags. DO NOT create variations like "art prints set of 3" or add numbers. Use only exact keywords from the CSV data provided.**
 
 **IMPORTANT**: All three (title, description, tags) must be:
 - Generated from the SAME product descriptions (analyzed images)
@@ -1249,15 +1252,40 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       const title = titleMatch?.[1]?.trim() || '';
       const description = descriptionMatch?.[1]?.trim() || allPrompts;
       const tagsText = tagsMatch?.[1]?.trim() || '';
-      const tags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20).slice(0, 13);
       
-      // Ensure exactly 13 tags
-      while (tags.length < 13 && topRelevantKeywords.length > tags.length) {
-        const remainingKeyword = topRelevantKeywords[tags.length];
-        if (remainingKeyword && remainingKeyword.keyword.length <= 20) {
-          tags.push(remainingKeyword.keyword);
-        } else {
-          break;
+      // Create a set of all valid keywords from CSV (for validation)
+      const validKeywordsSet = new Set(csvKeywords.map(k => k.keyword.toLowerCase()));
+      
+      // Parse tags and validate they exist in CSV keywords
+      const parsedTags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20);
+      
+      // Validate tags against CSV keywords (case-insensitive, allow partial matches)
+      const validatedTags = parsedTags.filter(tag => {
+        const tagLower = tag.toLowerCase();
+        // Check if tag matches any CSV keyword (exact match or contains)
+        return Array.from(validKeywordsSet).some(keyword => {
+          const keywordLower = keyword.toLowerCase();
+          // Exact match
+          if (keywordLower === tagLower) return true;
+          // Tag is contained in keyword (e.g., "gnomes" matches "whimsical gnomes")
+          if (keywordLower.includes(tagLower)) return true;
+          // Keyword is contained in tag (e.g., "junk journal" matches "junk journaling")
+          if (tagLower.includes(keywordLower)) return true;
+          return false;
+        });
+      });
+      
+      // Fill remaining slots with valid keywords from CSV
+      let tags = [...validatedTags];
+      const usedKeywords = new Set(validatedTags.map(t => t.toLowerCase()));
+      
+      // Add more tags from top relevant keywords if needed
+      for (const keyword of topRelevantKeywords) {
+        if (tags.length >= 13) break;
+        const keywordLower = keyword.keyword.toLowerCase();
+        if (!usedKeywords.has(keywordLower) && keyword.keyword.length <= 20) {
+          tags.push(keyword.keyword);
+          usedKeywords.add(keywordLower);
         }
       }
       
