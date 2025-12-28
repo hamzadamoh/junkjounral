@@ -1264,18 +1264,18 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       // Validate tags against CSV keywords - STRICT: only exact matches or shorter versions
       const validatedTags = parsedTags.filter(tag => {
         const tagLower = tag.toLowerCase().trim();
-        const tagWords = tagLower.split(/\s+/);
+        const tagWords = tagLower.split(/\s+/).filter(w => w.length > 0);
         
         // Check if tag matches any CSV keyword
         return Array.from(validKeywordsSet).some(keyword => {
           const keywordLower = keyword.toLowerCase().trim();
-          const keywordWords = keywordLower.split(/\s+/);
+          const keywordWords = keywordLower.split(/\s+/).filter(w => w.length > 0);
           
-          // Exact match
+          // Exact match (case-insensitive)
           if (keywordLower === tagLower) return true;
           
-          // Tag is shorter version of keyword (e.g., "gnomes" from "whimsical gnomes")
-          // Only allow if tag is a single word that appears as whole word in keyword
+          // Tag is a single word that appears as whole word in keyword (e.g., "gnomes" in "whimsical gnomes")
+          // Only allow if tag is substantial (3+ chars)
           if (tagWords.length === 1 && tagLower.length >= 3) {
             const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             if (wordBoundaryRegex.test(keywordLower)) return true;
@@ -1284,12 +1284,17 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           // Tag contains the full keyword (e.g., "junk journal" keyword in "junk journaling" tag)
           // But ONLY if tag has same or fewer words than keyword (to prevent "art prints set of 3")
           if (tagWords.length <= keywordWords.length && tagLower.includes(keywordLower)) {
-            return true;
+            // Make sure it's not just a partial match - the keyword should be at the start or as whole words
+            const keywordStart = tagLower.indexOf(keywordLower);
+            if (keywordStart === 0 || tagLower[keywordStart - 1] === ' ') {
+              return true;
+            }
           }
           
-          // Keyword contains the tag (e.g., "junk journal" keyword contains "journal" tag)
+          // Keyword contains the tag as whole words (e.g., "junk journal" keyword contains "journal" tag)
           // But ONLY if tag is shorter/same length and appears as whole words
-          if (tagWords.length <= keywordWords.length && keywordLower.includes(tagLower)) {
+          // AND tag must be at least 3 characters
+          if (tagWords.length <= keywordWords.length && tagLower.length >= 3 && keywordLower.includes(tagLower)) {
             // Check if it's a whole word match, not just substring
             const tagRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             if (tagRegex.test(keywordLower)) return true;
@@ -1303,7 +1308,7 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       let tags = [...validatedTags];
       const usedKeywords = new Set(validatedTags.map(t => t.toLowerCase()));
       
-      // Add more tags from top relevant keywords if needed
+      // First, try to add from top relevant keywords (prioritize relevance)
       for (const keyword of topRelevantKeywords) {
         if (tags.length >= 13) break;
         const keywordLower = keyword.keyword.toLowerCase();
@@ -1312,6 +1317,25 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           usedKeywords.add(keywordLower);
         }
       }
+      
+      // If still not 13 tags, add from all CSV keywords sorted by volume
+      if (tags.length < 13) {
+        const allValidKeywords = csvKeywords
+          .filter(k => k.keyword.length <= 20)
+          .sort((a, b) => b.volume - a.volume);
+        
+        for (const keyword of allValidKeywords) {
+          if (tags.length >= 13) break;
+          const keywordLower = keyword.keyword.toLowerCase();
+          if (!usedKeywords.has(keywordLower)) {
+            tags.push(keyword.keyword);
+            usedKeywords.add(keywordLower);
+          }
+        }
+      }
+      
+      // Ensure we have exactly 13 tags (or as many as available)
+      tags = tags.slice(0, 13);
       
       // Get all keywords with volume >= 100 for filtering
       const allLongTailKeywords = csvKeywords
