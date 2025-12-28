@@ -1055,6 +1055,14 @@ Output ONLY keywords, one per line, nothing else:`
         ...topRelevantKeywords.slice(4).map(k => `${k.keyword} (vol: ${k.volume}, relevance score: ${Math.round(k.score)})`)
       ].join('\n');
       
+      // Prepare all CSV keywords for tag selection (sorted by volume, filtered to 1-20 chars)
+      const allValidKeywords = csvKeywords
+        .filter(k => k.keyword.length >= 1 && k.keyword.length <= 20)
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, 100); // Top 100 by volume for ChatGPT to choose from
+      
+      const keywordsForTagSelection = allValidKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n');
+      
       // Generate ONE listing using the Etsy SEO expert prompt
       const response = await fetch('/api/openai/chat', {
         method: 'POST',
@@ -1119,11 +1127,11 @@ Use structured sections:
 * Exactly **13 tags**
 * 1–20 characters each
 * **MUST be from the keyword data provided above - DO NOT invent tags**
-* **Use natural, readable tags like: "whimsical gnomes", "junk journaling", "scrapbooking", "fairy tale", "gnomes", "digital download", "printable pages"**
+* **Use natural, readable tags like: "junk journaling", "scrapbooking", "fairy tale", "gnomes", "ephemera", "printable pages"**
 * **You can use:**
-  - Exact keywords from the CSV data
-  - Single words that appear in keywords (e.g., "gnomes" from "whimsical gnomes")
-  - Two-word phrases that are exact matches or clear subsets of keywords
+  - Exact keywords from the CSV data (e.g., "junk journaling", "scrapbooking", "fairy tale")
+  - Single words that appear in keywords (e.g., "gnomes" from "gnomes ornaments", "ephemera" from "junk journal ephemera")
+* **DO NOT use partial multi-word phrases** (e.g., don't use "art prints digital" if the keyword is "art prints digital download set" - use the exact keyword or just "art" or "prints")
 * **DO NOT create variations like "art prints set of 3", "home decor gift", "home decor boho"**
 * **DO NOT add numbers, quantities, or extra words that aren't in the keyword data**
 * **Tags should be natural and readable, matching the image themes**
@@ -1162,6 +1170,9 @@ ${keywordData}
 
 Primary keyword: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance score: ${Math.round(primaryKeyword.score)}${primaryKeyword.exactMatch ? ', EXACT MATCH' : ''})
 Secondary keywords: ${secondaryKeywords.map(k => `${k.keyword} (vol: ${k.volume}, score: ${Math.round(k.score)})`).join(', ')}
+
+Available Keywords for Tags (select exactly 13 from this list):
+${keywordsForTagSelection}
 
 🚨 CRITICAL INSTRUCTION FOR TITLE GENERATION:
 
@@ -1218,7 +1229,7 @@ Now generate:
 
 [Closing sentence: This [product name] printable kit is ideal for crafters who love [target audience interests].]
 
-3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: MUST be from the keyword data provided above. Use natural, readable tags like "whimsical gnomes", "junk journaling", "scrapbooking", "fairy tale", "gnomes", "digital download". You can use exact keywords, single words from keywords, or two-word phrases that match keywords. DO NOT invent tags or add words not in the keyword data. Tags should match the image themes and be natural/readable.**
+3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: Select exactly 13 tags from the "Available Keywords for Tags" list provided above. Analyze the product descriptions and choose keywords that best match the image themes (gnomes, forests, gardens, etc.) and are relevant to junk journals/scrapbooking. Use exact keywords from the list - do NOT modify them. Prioritize keywords with good volume that match the image content.**
 
 **IMPORTANT**: All three (title, description, tags) must be:
 - Generated from the SAME product descriptions (analyzed images)
@@ -1261,88 +1272,43 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       // Create a set of all valid keywords from CSV (for validation)
       const validKeywordsSet = new Set(csvKeywords.map(k => k.keyword.toLowerCase()));
       
-      // Parse tags and validate they exist in CSV keywords
+      // Parse tags - ChatGPT should have selected them from the CSV keywords list
       const parsedTags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20);
       
-      // Validate tags against CSV keywords - ULTRA STRICT: only exact matches or clear subsets
+      // Validate tags are from CSV (exact matches or single words from keywords)
       const validatedTags = parsedTags.filter(tag => {
         const tagLower = tag.toLowerCase().trim();
         const tagWords = tagLower.split(/\s+/).filter(w => w.length > 0);
         
         // Check if tag matches any CSV keyword
-        let matched = false;
-        let matchedKeyword = '';
-        
         for (const keyword of validKeywordsSet) {
           const keywordLower = keyword.toLowerCase().trim();
-          const keywordWords = keywordLower.split(/\s+/).filter(w => w.length > 0);
           
-          // 1. Exact match (case-insensitive) - ALWAYS ALLOW
+          // Exact match
           if (keywordLower === tagLower) {
-            matched = true;
-            matchedKeyword = keyword;
-            break;
+            console.log(`[ArcaneSplitter] Validated tag: "${tag}" (exact match)`);
+            return true;
           }
           
-          // REJECT tags with MORE words than keyword (prevents "art prints set of 3" matching "art prints")
-          if (tagWords.length > keywordWords.length) continue;
-          
-          // 2. Tag is a single word that appears as whole word in keyword (e.g., "gnomes" in "whimsical gnomes")
-          // Only allow if tag is substantial (3+ chars) and appears as a complete word
+          // Single word that appears in keyword
           if (tagWords.length === 1 && tagLower.length >= 3) {
             const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             if (wordBoundaryRegex.test(keywordLower)) {
-              matched = true;
-              matchedKeyword = keyword;
-              break;
-            }
-          }
-          
-          // 3. Tag is the EXACT START of keyword (e.g., "junk journal" from "junk journaling")
-          // CRITICAL: Tag must have FEWER words than keyword AND be at the start
-          if (tagWords.length < keywordWords.length && keywordLower.startsWith(tagLower + ' ')) {
-            matched = true;
-            matchedKeyword = keyword;
-            break;
-          }
-          
-          // 4. Tag is the EXACT END of keyword (e.g., "journaling" from "junk journaling")
-          // CRITICAL: Tag must have FEWER words than keyword AND be at the end
-          if (tagWords.length < keywordWords.length && keywordLower.endsWith(' ' + tagLower)) {
-            matched = true;
-            matchedKeyword = keyword;
-            break;
-          }
-          
-          // 5. Tag matches consecutive words in keyword (e.g., "junk journal" in "junk journal kits")
-          // CRITICAL: Tag must have FEWER words than keyword AND appear consecutively
-          if (tagWords.length < keywordWords.length && tagWords.length >= 2) {
-            const tagPhrase = tagWords.join(' ');
-            // Must be at start, end, or surrounded by spaces (consecutive words)
-            if (keywordLower.startsWith(tagPhrase + ' ') || 
-                keywordLower.endsWith(' ' + tagPhrase) ||
-                keywordLower.includes(' ' + tagPhrase + ' ')) {
-              matched = true;
-              matchedKeyword = keyword;
-              break;
+              console.log(`[ArcaneSplitter] Validated tag: "${tag}" (single word from keyword)`);
+              return true;
             }
           }
         }
         
-        if (!matched) {
-          console.warn(`[ArcaneSplitter] Rejected invalid tag: "${tag}" - not found in CSV keywords`);
-        } else {
-          console.log(`[ArcaneSplitter] Validated tag: "${tag}" matched keyword: "${matchedKeyword}"`);
-        }
-        
-        return matched;
+        console.warn(`[ArcaneSplitter] Rejected invalid tag: "${tag}" - not found in CSV keywords`);
+        return false;
       });
       
-      // Fill remaining slots with valid keywords from CSV
+      // Fill remaining slots with valid keywords from CSV if ChatGPT didn't select enough
       let tags = [...validatedTags];
       const usedKeywords = new Set(validatedTags.map(t => t.toLowerCase()));
       
-      // First, try to add from top relevant keywords (prioritize relevance)
+      // Add from top relevant keywords (prioritize relevance)
       for (const keyword of topRelevantKeywords) {
         if (tags.length >= 13) break;
         const keywordLower = keyword.keyword.toLowerCase();
@@ -1354,10 +1320,6 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       
       // If still not 13 tags, add from all CSV keywords sorted by volume
       if (tags.length < 13) {
-        const allValidKeywords = csvKeywords
-          .filter(k => k.keyword.length <= 20)
-          .sort((a, b) => b.volume - a.volume);
-        
         for (const keyword of allValidKeywords) {
           if (tags.length >= 13) break;
           const keywordLower = keyword.keyword.toLowerCase();
