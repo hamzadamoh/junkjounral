@@ -77,6 +77,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvKeywords, setCsvKeywords] = useState<Array<{ keyword: string; volume: number }>>([]);
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+  const [productTheme, setProductTheme] = useState<string>('');
   const [generatedListings, setGeneratedListings] = useState<Array<{ title?: string; description: string; tags: string[]; filteredLongTailKeywords?: Array<{ keyword: string; volume: number }> }>>([]);
   const [isGeneratingListings, setIsGeneratingListings] = useState(false);
   const [copiedSeedKeywords, setCopiedSeedKeywords] = useState(false);
@@ -1393,6 +1394,8 @@ Output ONLY a JSON array of keyword strings that are relevant. Format: ["keyword
                   role: 'user',
                   content: `Analyze these product descriptions and select ALL relevant keywords from the list below.
 
+Product Theme: ${productTheme || 'Not specified - analyze from descriptions'}
+
 Product Descriptions:
 ${allPrompts}
 
@@ -1401,9 +1404,9 @@ ${allLongTailKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n')}
 
 **Select keywords that are:**
 1. Related to junk journals, scrapbooking, crafting (include these)
-2. **Theme-specific keywords that match the product** (e.g., if product shows gnomes/dwarfs, include ALL gnome/dwarf/fairy tale keywords; if it shows gardens/butterflies, include ALL garden/butterfly/flower/nature keywords)
+2. **Theme-specific keywords that match the product theme**${productTheme ? `: "${productTheme}"` : ''} (e.g., if theme is gnomes/dwarfs, include ALL gnome/dwarf/fairy tale keywords; if theme is gardens/butterflies, include ALL garden/butterfly/flower/nature keywords)
 
-**BE INCLUSIVE** - Include theme-specific keywords if they appear in the list and match the product themes described above. Do NOT filter them out.
+**BE INCLUSIVE** - Include theme-specific keywords if they appear in the list and match the product theme${productTheme ? ` "${productTheme}"` : ''} described above. Do NOT filter them out.
 
 Output ONLY a JSON array of the selected keywords (just the keyword strings, no volumes).`
                 }
@@ -1703,6 +1706,21 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 </div>
               )}
             </div>
+            
+            {/* Product Theme Input */}
+            {csvKeywords.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Product Theme (optional)</label>
+                <input
+                  type="text"
+                  value={productTheme}
+                  onChange={(e) => setProductTheme(e.target.value)}
+                  placeholder="e.g., gnomes, garden, butterflies, fairy tale, nature..."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <p className="text-xs text-slate-400">Enter the main theme to help filter relevant keywords (e.g., "gnomes", "garden", "butterflies")</p>
+              </div>
+            )}
             
             {/* Step 3: Generate Listings */}
             {csvKeywords.length > 0 && (
