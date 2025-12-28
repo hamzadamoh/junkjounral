@@ -1370,37 +1370,42 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
                   role: 'system',
                   content: `You are an expert at identifying keywords relevant to junk journals, scrapbooking, and digital crafting supplies.
 
-Your task: Filter a list of keywords to include those that are relevant to:
-- Junk journals, scrapbooking, digital printables, collage sheets, ephemera packs
-- Journaling supplies, craft papers, printable art
-- **Theme-specific keywords that match the product** (e.g., gnomes, dwarfs, fairy tale, forest, garden, mushrooms, etc. - if they appear in the keyword list and are relevant to the product)
+Your task: Select keywords from the list that are relevant to the product. Include BOTH:
+1. Junk journal/crafting keywords (junk journal, scrapbooking, ephemera, printable, etc.)
+2. **Theme-specific keywords** that match the product content (e.g., if product shows gnomes, include "gnomes", "gnome", "dwarf", "fairy tale", etc.; if it shows gardens, include "garden", "butterfly", "flowers", "nature", etc.)
 
-EXCLUDE keywords about:
-- Home decor (unless specifically journal/scrapbook related)
+**BE INCLUSIVE** - Include keywords if they:
+- Are related to junk journals, scrapbooking, crafting
+- Match the themes/subjects shown in the product (gnomes, dwarfs, gardens, butterflies, flowers, nature, pastel, whimsical, etc.)
+- Are relevant to the product being sold
+
+EXCLUDE ONLY keywords about:
 - Furniture
 - Clothing (unless craft-related)
 - Food/cooking
-- General products unrelated to crafting/journaling
+- Completely unrelated products
 
-**IMPORTANT**: Include theme-specific keywords (gnomes, dwarfs, fairy tale, etc.) if they're in the list and relevant to the product being sold.
+**CRITICAL**: Do NOT filter out theme-specific keywords. If the product shows gnomes/gardens/butterflies/etc., include those keywords from the list.
 
 Output ONLY a JSON array of keyword strings that are relevant. Format: ["keyword1", "keyword2", "keyword3"]`
                 },
                 {
                   role: 'user',
-                  content: `Analyze these product descriptions and filter keywords to show ones related to junk journals/crafting AND theme-specific keywords that match the product:
+                  content: `Analyze these product descriptions and select ALL relevant keywords from the list below.
 
 Product Descriptions:
-${allPrompts.substring(0, 500)}...
+${allPrompts}
 
-Keywords to filter:
+Keywords to select from (volume ≥ 100):
 ${allLongTailKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n')}
 
-Select keywords that are:
-1. Related to junk journals, scrapbooking, crafting
-2. Theme-specific keywords that match the product (gnomes, dwarfs, fairy tale, forest, etc.)
+**Select keywords that are:**
+1. Related to junk journals, scrapbooking, crafting (include these)
+2. **Theme-specific keywords that match the product** (e.g., if product shows gnomes/dwarfs, include ALL gnome/dwarf/fairy tale keywords; if it shows gardens/butterflies, include ALL garden/butterfly/flower/nature keywords)
 
-Output ONLY a JSON array of the relevant keywords (just the keyword strings, no volumes).`
+**BE INCLUSIVE** - Include theme-specific keywords if they appear in the list and match the product themes described above. Do NOT filter them out.
+
+Output ONLY a JSON array of the selected keywords (just the keyword strings, no volumes).`
                 }
               ],
               max_tokens: 500,
