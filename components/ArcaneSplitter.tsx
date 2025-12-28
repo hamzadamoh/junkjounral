@@ -1270,33 +1270,48 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
         const tagWords = tagLower.split(/\s+/).filter(w => w.length > 0);
         
         // Check if tag matches any CSV keyword
-        return Array.from(validKeywordsSet).some(keyword => {
+        let matched = false;
+        let matchedKeyword = '';
+        
+        for (const keyword of validKeywordsSet) {
           const keywordLower = keyword.toLowerCase().trim();
           const keywordWords = keywordLower.split(/\s+/).filter(w => w.length > 0);
           
           // 1. Exact match (case-insensitive) - ALWAYS ALLOW
-          if (keywordLower === tagLower) return true;
+          if (keywordLower === tagLower) {
+            matched = true;
+            matchedKeyword = keyword;
+            break;
+          }
           
           // REJECT tags with MORE words than keyword (prevents "art prints set of 3" matching "art prints")
-          if (tagWords.length > keywordWords.length) return false;
+          if (tagWords.length > keywordWords.length) continue;
           
           // 2. Tag is a single word that appears as whole word in keyword (e.g., "gnomes" in "whimsical gnomes")
           // Only allow if tag is substantial (3+ chars) and appears as a complete word
           if (tagWords.length === 1 && tagLower.length >= 3) {
             const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-            if (wordBoundaryRegex.test(keywordLower)) return true;
+            if (wordBoundaryRegex.test(keywordLower)) {
+              matched = true;
+              matchedKeyword = keyword;
+              break;
+            }
           }
           
           // 3. Tag is the EXACT START of keyword (e.g., "junk journal" from "junk journaling")
-          // CRITICAL: Tag must have FEWER words than keyword
+          // CRITICAL: Tag must have FEWER words than keyword AND be at the start
           if (tagWords.length < keywordWords.length && keywordLower.startsWith(tagLower + ' ')) {
-            return true;
+            matched = true;
+            matchedKeyword = keyword;
+            break;
           }
           
           // 4. Tag is the EXACT END of keyword (e.g., "journaling" from "junk journaling")
-          // CRITICAL: Tag must have FEWER words than keyword
+          // CRITICAL: Tag must have FEWER words than keyword AND be at the end
           if (tagWords.length < keywordWords.length && keywordLower.endsWith(' ' + tagLower)) {
-            return true;
+            matched = true;
+            matchedKeyword = keyword;
+            break;
           }
           
           // 5. Tag matches consecutive words in keyword (e.g., "junk journal" in "junk journal kits")
@@ -1307,13 +1322,20 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
             if (keywordLower.startsWith(tagPhrase + ' ') || 
                 keywordLower.endsWith(' ' + tagPhrase) ||
                 keywordLower.includes(' ' + tagPhrase + ' ')) {
-              return true;
+              matched = true;
+              matchedKeyword = keyword;
+              break;
             }
           }
-          
-          // REJECT anything else - no partial matches, no combinations, no additions
-          return false;
-        });
+        }
+        
+        if (!matched) {
+          console.warn(`[ArcaneSplitter] Rejected invalid tag: "${tag}" - not found in CSV keywords`);
+        } else {
+          console.log(`[ArcaneSplitter] Validated tag: "${tag}" matched keyword: "${matchedKeyword}"`);
+        }
+        
+        return matched;
       });
       
       // Fill remaining slots with valid keywords from CSV
