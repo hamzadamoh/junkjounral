@@ -1355,15 +1355,10 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
                   role: 'system',
                   content: `You are an expert at identifying keywords relevant to junk journals, scrapbooking, and digital crafting supplies.
 
-Your task: Filter a list of keywords to ONLY include those that are relevant to:
-- Junk journals
-- Scrapbooking
-- Digital printables
-- Collage sheets
-- Ephemera packs
-- Journaling supplies
-- Craft papers
-- Printable art
+Your task: Filter a list of keywords to include those that are relevant to:
+- Junk journals, scrapbooking, digital printables, collage sheets, ephemera packs
+- Journaling supplies, craft papers, printable art
+- **Theme-specific keywords that match the product** (e.g., gnomes, dwarfs, fairy tale, forest, garden, mushrooms, etc. - if they appear in the keyword list and are relevant to the product)
 
 EXCLUDE keywords about:
 - Home decor (unless specifically journal/scrapbook related)
@@ -1372,13 +1367,23 @@ EXCLUDE keywords about:
 - Food/cooking
 - General products unrelated to crafting/journaling
 
+**IMPORTANT**: Include theme-specific keywords (gnomes, dwarfs, fairy tale, etc.) if they're in the list and relevant to the product being sold.
+
 Output ONLY a JSON array of keyword strings that are relevant. Format: ["keyword1", "keyword2", "keyword3"]`
                 },
                 {
                   role: 'user',
-                  content: `Filter these keywords to only show ones related to junk journals and crafting:
+                  content: `Analyze these product descriptions and filter keywords to show ones related to junk journals/crafting AND theme-specific keywords that match the product:
 
+Product Descriptions:
+${allPrompts.substring(0, 500)}...
+
+Keywords to filter:
 ${allLongTailKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n')}
+
+Select keywords that are:
+1. Related to junk journals, scrapbooking, crafting
+2. Theme-specific keywords that match the product (gnomes, dwarfs, fairy tale, forest, etc.)
 
 Output ONLY a JSON array of the relevant keywords (just the keyword strings, no volumes).`
                 }
