@@ -1119,13 +1119,14 @@ Use structured sections:
 * Exactly **13 tags**
 * 1–20 characters each
 * **MUST be from the keyword data provided above - DO NOT invent tags**
-* **DO NOT create variations like "art prints set of 3", "home decor gift", "home decor boho", "art prints set"**
-* **DO NOT combine keywords or add new words**
-* **DO NOT add numbers, quantities, or extra words to keywords**
-* **Use ONLY the exact keywords from the CSV data provided, or single words that appear in those keywords**
-* **If a keyword is too long (over 20 chars), you can use a shorter version that appears in the keyword data**
-* **Examples of VALID tags: "junk journaling", "scrapbooking", "ephemera", "gnomes" (if "gnomes" appears in a keyword)**
-* **Examples of INVALID tags: "art prints set of 3", "home decor gift", "art prints set" (these add words not in CSV)**
+* **Use natural, readable tags like: "whimsical gnomes", "junk journaling", "scrapbooking", "fairy tale", "gnomes", "digital download", "printable pages"**
+* **You can use:**
+  - Exact keywords from the CSV data
+  - Single words that appear in keywords (e.g., "gnomes" from "whimsical gnomes")
+  - Two-word phrases that are exact matches or clear subsets of keywords
+* **DO NOT create variations like "art prints set of 3", "home decor gift", "home decor boho"**
+* **DO NOT add numbers, quantities, or extra words that aren't in the keyword data**
+* **Tags should be natural and readable, matching the image themes**
 * No commas inside tags
 
 ### FORMAT (VERY IMPORTANT)
@@ -1217,7 +1218,7 @@ Now generate:
 
 [Closing sentence: This [product name] printable kit is ideal for crafters who love [target audience interests].]
 
-3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: MUST be EXACT keywords from the keyword data provided above. DO NOT invent tags. DO NOT create variations like "art prints set of 3", "gnome hat pattern", or "gnome hat for tree". DO NOT add numbers, quantities, or extra words. Use ONLY the exact keywords as they appear in the CSV data. If a keyword is too long, use a shorter version that exists in the keyword data.**
+3. Exactly 13 tags (comma-separated, 1-20 characters each) - **CRITICAL: MUST be from the keyword data provided above. Use natural, readable tags like "whimsical gnomes", "junk journaling", "scrapbooking", "fairy tale", "gnomes", "digital download". You can use exact keywords, single words from keywords, or two-word phrases that match keywords. DO NOT invent tags or add words not in the keyword data. Tags should match the image themes and be natural/readable.**
 
 **IMPORTANT**: All three (title, description, tags) must be:
 - Generated from the SAME product descriptions (analyzed images)
@@ -1263,7 +1264,7 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
       // Parse tags and validate they exist in CSV keywords
       const parsedTags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20);
       
-      // Validate tags against CSV keywords - VERY STRICT: only exact matches or clear subsets
+      // Validate tags against CSV keywords - ULTRA STRICT: only exact matches or clear subsets
       const validatedTags = parsedTags.filter(tag => {
         const tagLower = tag.toLowerCase().trim();
         const tagWords = tagLower.split(/\s+/).filter(w => w.length > 0);
@@ -1273,8 +1274,11 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           const keywordLower = keyword.toLowerCase().trim();
           const keywordWords = keywordLower.split(/\s+/).filter(w => w.length > 0);
           
-          // 1. Exact match (case-insensitive)
+          // 1. Exact match (case-insensitive) - ALWAYS ALLOW
           if (keywordLower === tagLower) return true;
+          
+          // REJECT tags with MORE words than keyword (prevents "art prints set of 3" matching "art prints")
+          if (tagWords.length > keywordWords.length) return false;
           
           // 2. Tag is a single word that appears as whole word in keyword (e.g., "gnomes" in "whimsical gnomes")
           // Only allow if tag is substantial (3+ chars) and appears as a complete word
@@ -1284,28 +1288,30 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           }
           
           // 3. Tag is the EXACT START of keyword (e.g., "junk journal" from "junk journaling")
-          // This allows natural word extensions but prevents adding new words
-          if (tagWords.length <= keywordWords.length && keywordLower.startsWith(tagLower + ' ')) {
+          // CRITICAL: Tag must have FEWER words than keyword
+          if (tagWords.length < keywordWords.length && keywordLower.startsWith(tagLower + ' ')) {
             return true;
           }
           
           // 4. Tag is the EXACT END of keyword (e.g., "journaling" from "junk journaling")
-          // Only if tag is a single word or the last words match exactly
-          if (tagWords.length <= keywordWords.length && keywordLower.endsWith(' ' + tagLower)) {
+          // CRITICAL: Tag must have FEWER words than keyword
+          if (tagWords.length < keywordWords.length && keywordLower.endsWith(' ' + tagLower)) {
             return true;
           }
           
           // 5. Tag matches consecutive words in keyword (e.g., "junk journal" in "junk journal kits")
-          // But ONLY if tag words appear consecutively in the keyword
-          if (tagWords.length <= keywordWords.length && tagWords.length >= 2) {
+          // CRITICAL: Tag must have FEWER words than keyword AND appear consecutively
+          if (tagWords.length < keywordWords.length && tagWords.length >= 2) {
             const tagPhrase = tagWords.join(' ');
-            if (keywordLower.includes(' ' + tagPhrase + ' ') || 
-                keywordLower.startsWith(tagPhrase + ' ') || 
-                keywordLower.endsWith(' ' + tagPhrase)) {
+            // Must be at start, end, or surrounded by spaces (consecutive words)
+            if (keywordLower.startsWith(tagPhrase + ' ') || 
+                keywordLower.endsWith(' ' + tagPhrase) ||
+                keywordLower.includes(' ' + tagPhrase + ' ')) {
               return true;
             }
           }
           
+          // REJECT anything else - no partial matches, no combinations, no additions
           return false;
         });
       });
