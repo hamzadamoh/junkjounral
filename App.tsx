@@ -38,6 +38,7 @@ import { generateJournalPage as generateWithTtapi } from './services/ttapiServic
 import { generatePromptWithChatGPT, analyzeReferenceImage, generateImageSpecificSubjectList } from './services/chatgptService';
 import { uploadImageToWordPress } from './services/imageHostingService';
 import { uploadImagesToGoogleDrive, GoogleDriveUploadResult } from './services/googleDriveService';
+import { getGoogleDriveConfig } from './services/env';
 import ArcaneSplitter from './components/ArcaneSplitter';
 import EtsyShopAnalyzer from './components/EtsyShopAnalyzer';
 
@@ -75,6 +76,7 @@ const App: React.FC = () => {
   const [bulkImagesPerPrompt, setBulkImagesPerPrompt] = useState<1 | 2 | 4>(4); // Images per prompt for Midjourney
   const [showArcaneSplitter, setShowArcaneSplitter] = useState<boolean>(false); // Show Arcane Splitter for grid image processing
   const [showEtsyAnalyzer, setShowEtsyAnalyzer] = useState<boolean>(false); // Show Etsy Shop Analyzer
+  const [showGoogleDriveGridGenerator, setShowGoogleDriveGridGenerator] = useState<boolean>(false); // Show Google Drive Grid Generator
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
   const [settings, setSettings] = useState<GenerationSettings>({
@@ -114,6 +116,14 @@ const App: React.FC = () => {
   const [gridPages, setGridPages] = useState<string[]>([]); // Generated grid pages
   const [numGridPages, setNumGridPages] = useState<number>(1); // Number of grid pages to generate
   const [isGeneratingGrids, setIsGeneratingGrids] = useState<boolean>(false); // Grid generation status
+  const [googleDriveFolders, setGoogleDriveFolders] = useState<Array<{ id: string; name: string }>>([]); // Google Drive folders
+  const [selectedDriveFolderId, setSelectedDriveFolderId] = useState<string>(''); // Selected Google Drive folder
+  const [selectedDriveFolderName, setSelectedDriveFolderName] = useState<string>(''); // Selected folder name
+  const [loadingDriveFolders, setLoadingDriveFolders] = useState<boolean>(false); // Loading folders state
+  const [loadingDriveImages, setLoadingDriveImages] = useState<boolean>(false); // Loading images state
+  const [driveImages, setDriveImages] = useState<Array<{ id: string; name: string; url: string; thumbnailUrl: string }>>([]); // Images from Google Drive
+  const [uploadingGridsToDrive, setUploadingGridsToDrive] = useState<boolean>(false); // Uploading grids to Google Drive
+  const [gridUploadResult, setGridUploadResult] = useState<{ folderUrl?: string; uploaded?: number; failed?: number } | null>(null); // Upload result
   const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
     message: string;
@@ -2761,6 +2771,261 @@ const App: React.FC = () => {
     }
   };
 
+  // Google Drive Grid Generator Functions
+  const loadDriveFolders = async () => {
+    setLoadingDriveFolders(true);
+    try {
+      const config = getGoogleDriveConfig();
+      const response = await fetch('/api/google-drive/list-folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          refreshToken: config.refreshToken,
+          parentFolderId: config.parentFolderId,
+          accountNumber: googleDriveAccount,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to load folders');
+      }
+
+      const data = await response.json();
+      setGoogleDriveFolders(data.folders || []);
+    } catch (error: any) {
+      console.error('Error loading folders:', error);
+      alert(`Failed to load folders: ${error.message}`);
+    } finally {
+      setLoadingDriveFolders(false);
+    }
+  };
+
+  const loadDriveImages = async () => {
+    if (!selectedDriveFolderId) {
+      alert('Please select a folder first');
+      return;
+    }
+
+    setLoadingDriveImages(true);
+    setDriveImages([]);
+    try {
+      const config = getGoogleDriveConfig();
+      const response = await fetch('/api/google-drive/list-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderId: selectedDriveFolderId,
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          refreshToken: config.refreshToken,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to load images');
+      }
+
+      const data = await response.json();
+      setDriveImages(data.images || []);
+    } catch (error: any) {
+      console.error('Error loading images:', error);
+      alert(`Failed to load images: ${error.message}`);
+    } finally {
+      setLoadingDriveImages(false);
+    }
+  };
+
+  const generateDriveGrids = async () => {
+    if (driveImages.length === 0) {
+      alert('No images available. Please load images from a folder first.');
+      return;
+    }
+
+    if (numGridPages < 1) {
+      alert('Please enter a valid number of grid pages (at least 1)');
+      return;
+    }
+
+    setIsGeneratingGrids(true);
+    setGridPages([]);
+
+    try {
+      const imagesPerGrid = 12;
+      const availableImages = driveImages.length;
+
+      if (availableImages < imagesPerGrid) {
+        alert(`You need at least ${imagesPerGrid} images to create a grid. You have ${availableImages}.`);
+        setIsGeneratingGrids(false);
+        return;
+      }
+
+      const shuffledImages = shuffleArray(driveImages);
+      const generatedGrids: string[] = [];
+
+      for (let gridIndex = 0; gridIndex < numGridPages; gridIndex++) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          throw new Error('Could not get canvas context');
+        }
+
+        const rows = 3;
+        const cols = 4;
+        const padding = 20;
+        const totalPaddingWidth = padding * (cols + 1);
+        const totalPaddingHeight = padding * (rows + 1);
+        const cellWidth = (3000 - totalPaddingWidth) / cols;
+        const cellHeight = (3000 - totalPaddingHeight) / rows;
+
+        canvas.width = 3000;
+        canvas.height = 3000;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const imageIndex = gridIndex * imagesPerGrid + row * cols + col;
+            
+            if (imageIndex >= availableImages) {
+              break;
+            }
+
+            const imageUrl = shuffledImages[imageIndex].url;
+            const x = padding + col * (cellWidth + padding);
+            const y = padding + row * (cellHeight + padding);
+
+            await new Promise<void>((resolve) => {
+              const img = new window.Image();
+              img.crossOrigin = 'anonymous';
+              
+              img.onload = () => {
+                try {
+                  const imgAspect = img.width / img.height;
+                  const cellAspect = cellWidth / cellHeight;
+                  
+                  let drawWidth = cellWidth;
+                  let drawHeight = cellHeight;
+                  let drawX = x;
+                  let drawY = y;
+                  
+                  if (imgAspect > cellAspect) {
+                    drawWidth = cellHeight * imgAspect;
+                    drawX = x - (drawWidth - cellWidth) / 2;
+                  } else {
+                    drawHeight = cellWidth / imgAspect;
+                    drawY = y - (drawHeight - cellHeight) / 2;
+                  }
+                  
+                  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+                  resolve();
+                } catch (err) {
+                  console.error('Error drawing image:', err);
+                  resolve();
+                }
+              };
+              
+              img.onerror = () => {
+                console.error('Failed to load image:', imageUrl);
+                resolve();
+              };
+              
+              img.src = imageUrl;
+            });
+          }
+        }
+
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
+          }, 'image/png');
+        });
+
+        const gridUrl = URL.createObjectURL(blob);
+        generatedGrids.push(gridUrl);
+      }
+
+      setGridPages(generatedGrids);
+      alert(`Successfully generated ${generatedGrids.length} grid page(s)!`);
+    } catch (error) {
+      console.error('Error generating grids:', error);
+      alert('Failed to generate grids. Please try again.');
+    } finally {
+      setIsGeneratingGrids(false);
+    }
+  };
+
+  const uploadDriveGridsToGoogleDrive = async () => {
+    if (gridPages.length === 0) {
+      alert('No grids to upload');
+      return;
+    }
+
+    setUploadingGridsToDrive(true);
+    setGridUploadResult(null);
+
+    try {
+      const config = getGoogleDriveConfig();
+      const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
+
+      const gridPagesBase64 = await Promise.all(
+        gridPages.map(async (gridUrl) => {
+          const response = await fetch(gridUrl);
+          const blob = await response.blob();
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(reader.result as string);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        })
+      );
+
+      const response = await fetch('/api/google-drive/upload-grids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderName,
+          gridPages: gridPagesBase64,
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          refreshToken: config.refreshToken,
+          accountNumber: googleDriveAccount,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload grids');
+      }
+
+      const data = await response.json();
+      setGridUploadResult({
+        folderUrl: data.folderUrl,
+        uploaded: data.uploaded,
+        failed: data.failed,
+      });
+
+      alert(`Successfully uploaded ${data.uploaded} grid(s) to Google Drive!${data.failed > 0 ? ` (${data.failed} failed)` : ''}`);
+    } catch (error: any) {
+      console.error('Error uploading grids:', error);
+      alert(`Failed to upload grids: ${error.message}`);
+    } finally {
+      setUploadingGridsToDrive(false);
+    }
+  };
+
   // --- Render Steps ---
 
   const renderThemeSelection = () => {
@@ -2793,6 +3058,248 @@ const App: React.FC = () => {
             onPromptsGenerated={handleArcaneSplitterPrompts}
             onClose={() => setShowArcaneSplitter(false)}
           />
+        </div>
+      );
+    }
+
+    // If Google Drive Grid Generator is open, show it
+    if (showGoogleDriveGridGenerator) {
+      return (
+        <div className="animate-fade-in max-w-6xl mx-auto px-4">
+          <div className="mb-8 flex items-center gap-4">
+            <button 
+              onClick={() => setShowGoogleDriveGridGenerator(false)} 
+              className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+            >
+              <ChevronLeft />
+            </button>
+            <h2 className="text-3xl font-serif text-slate-100">Google Drive Grid Generator</h2>
+          </div>
+
+          <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700 space-y-6">
+            {/* Account Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Google Drive Account</label>
+              <select
+                value={googleDriveAccount}
+                onChange={(e) => setGoogleDriveAccount(Number(e.target.value) as 1 | 2)}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-gothic-gold transition-colors"
+              >
+                <option value="1">Google Drive Account 1</option>
+                <option value="2">Google Drive Account 2</option>
+              </select>
+            </div>
+
+            {/* Load Folders */}
+            <div>
+              <button
+                onClick={loadDriveFolders}
+                disabled={loadingDriveFolders}
+                className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loadingDriveFolders ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Loading Folders...
+                  </>
+                ) : (
+                  <>
+                    <Folder size={18} />
+                    Load Folders
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Folder Selection */}
+            {googleDriveFolders.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Select Folder</label>
+                <select
+                  value={selectedDriveFolderId}
+                  onChange={(e) => {
+                    const folder = googleDriveFolders.find(f => f.id === e.target.value);
+                    setSelectedDriveFolderId(e.target.value);
+                    setSelectedDriveFolderName(folder?.name || '');
+                    setDriveImages([]);
+                    setGridPages([]);
+                  }}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-gothic-gold transition-colors"
+                >
+                  <option value="">-- Select a folder --</option>
+                  {googleDriveFolders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Load Images */}
+            {selectedDriveFolderId && (
+              <div>
+                <button
+                  onClick={loadDriveImages}
+                  disabled={loadingDriveImages}
+                  className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingDriveImages ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Loading Images...
+                    </>
+                  ) : (
+                    <>
+                      <Download size={18} />
+                      Load Images from Folder
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Images Count */}
+            {driveImages.length > 0 && (
+              <div className="p-4 bg-gothic-gold/10 border border-gothic-gold/30 rounded">
+                <p className="text-gothic-gold">
+                  ✓ Loaded {driveImages.length} image(s) from "{selectedDriveFolderName}"
+                </p>
+              </div>
+            )}
+
+            {/* Grid Generation */}
+            {driveImages.length > 0 && (
+              <div className="space-y-4 pt-4 border-t border-slate-700">
+                <div className="flex gap-4 items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Number of Grid Pages
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={Math.ceil(driveImages.length / 12)}
+                      value={numGridPages}
+                      onChange={(e) => setNumGridPages(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-gothic-gold transition-colors"
+                      placeholder="1"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">
+                      Maximum: {Math.ceil(driveImages.length / 12)} pages (based on {driveImages.length} available images)
+                    </p>
+                  </div>
+                  <button
+                    onClick={generateDriveGrids}
+                    disabled={isGeneratingGrids || driveImages.length < 12}
+                    className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 disabled:bg-amber-800 disabled:cursor-not-allowed text-black font-medium rounded-lg transition-colors"
+                  >
+                    {isGeneratingGrids ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Grid3x3 size={18} />
+                        Generate Grids
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {driveImages.length < 12 && (
+                  <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded text-yellow-300 text-sm">
+                    ⚠️ You need at least 12 images to create a grid. You currently have {driveImages.length} images.
+                  </div>
+                )}
+
+                {gridPages.length > 0 && (
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+                      <h3 className="text-xl font-serif text-slate-100">
+                        Generated Grids ({gridPages.length})
+                      </h3>
+                      <div className="flex gap-3 items-center">
+                        <button
+                          onClick={uploadDriveGridsToGoogleDrive}
+                          disabled={uploadingGridsToDrive || gridPages.length === 0}
+                          className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm"
+                        >
+                          {uploadingGridsToDrive ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={16} />
+                              Upload to Google Drive
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={downloadAllGrids}
+                          className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
+                        >
+                          <Download size={16} />
+                          Download All Grids
+                        </button>
+                      </div>
+                    </div>
+                    {gridUploadResult && (
+                      <div className="mb-4 p-3 bg-emerald-900/20 border border-emerald-500/30 rounded">
+                        <p className="text-emerald-300 text-sm">
+                          ✓ Uploaded {gridUploadResult.uploaded} grid(s) to Google Drive
+                          {gridUploadResult.failed && gridUploadResult.failed > 0 && ` (${gridUploadResult.failed} failed)`}
+                        </p>
+                        {gridUploadResult.folderUrl && (
+                          <a
+                            href={gridUploadResult.folderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-300 hover:underline text-sm mt-1 block"
+                          >
+                            Open Folder →
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {gridPages.map((gridUrl, index) => (
+                        <div
+                          key={index}
+                          className="bg-white rounded-lg overflow-hidden shadow-lg border border-gray-200 group"
+                        >
+                          <div className="relative aspect-square bg-gray-100">
+                            <img
+                              src={gridUrl}
+                              alt={`Grid page ${index + 1}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => downloadGrid(gridUrl, index)}
+                                  className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors text-sm"
+                                >
+                                  <FileDown size={16} />
+                                  Download
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="p-3 text-center">
+                            <p className="text-sm text-gray-600">Grid Page {index + 1}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -3620,6 +4127,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Etsy Shop Analyzer</h3>
               <p className="text-sm text-slate-400">
                 Analyze Etsy shop performance, listings, views, favorites, and sales data
+              </p>
+            </div>
+          </button>
+
+          {/* Google Drive Grid Generator Option */}
+          <button
+            onClick={() => setShowGoogleDriveGridGenerator(true)}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <Grid3x3 className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Google Drive Grid Generator</h3>
+              <p className="text-sm text-slate-400">
+                Create grid layouts from images stored in your Google Drive folders
               </p>
             </div>
           </button>
