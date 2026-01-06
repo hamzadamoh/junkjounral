@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless Function - Consolidated Google Drive operations
- * Handles: create-folder and upload-file operations
- * This reduces 2 functions to 1 to stay within Vercel Hobby plan limit
+ * Handles: create-folder, upload-file, list-folders, list-images, and upload-grids operations
+ * This reduces multiple functions to 1 to stay within Vercel Hobby plan limit
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { operation, folderName, folderId, filename, base64Data, mimeType, clientId, clientSecret, refreshToken, parentFolderId } = req.body;
+    const { operation, folderName, folderId, filename, base64Data, mimeType, clientId, clientSecret, refreshToken, parentFolderId, gridPages } = req.body;
 
     if (!clientId || !clientSecret || !refreshToken) {
       return res.status(400).json({ 
@@ -199,9 +199,217 @@ export default async function handler(req, res) {
         webContentLink: fileData.webContentLink,
       });
 
+    // Handle list-folders operation
+    } else if (operation === 'list-folders' || (!operation && !folderName && !filename && !gridPages && parentFolderId !== undefined)) {
+      const accessToken = await refreshAccessToken();
+
+      // List folders in the parent folder (or root if not specified)
+      const query = parentFolderId 
+        ? `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+        : `mimeType='application/vnd.google-apps.folder' and trashed=false`;
+
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents)&orderBy=name`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(response.status).json({ 
+          error: `Failed to list folders: ${response.status} - ${errorText}` 
+        });
+      }
+
+      const data = await response.json();
+      return res.status(200).json({ folders: data.files || [] });
+
+    // Handle list-images operation
+    } else if (operation === 'list-images' || (!operation && folderId && !folderName && !filename && !gridPages)) {
+      if (!folderId) {
+        return res.status(400).json({ 
+          error: 'Missing required parameter: folderId' 
+        });
+      }
+
+      const accessToken = await refreshAccessToken();
+
+      // List image files in the folder
+      const imageMimeTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/bmp',
+      ];
+      const mimeTypeQuery = imageMimeTypes.map(mime => `mimeType='${mime}'`).join(' or ');
+
+      const query = `'${folderId}' in parents and (${mimeTypeQuery}) and trashed=false`;
+
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink,thumbnailLink)&orderBy=name`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(response.status).json({ 
+          error: `Failed to list images: ${response.status} - ${errorText}` 
+        });
+      }
+
+      const data = await response.json();
+      
+      // Get download URLs for each image
+      const images = await Promise.all(
+        (data.files || []).map(async (file) => {
+          try {
+            const downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&access_token=${accessToken}`;
+            
+            return {
+              id: file.id,
+              name: file.name,
+              url: downloadUrl,
+              thumbnailUrl: file.thumbnailLink || downloadUrl,
+            };
+          } catch (error) {
+            console.error(`Error processing file ${file.id}:`, error);
+            return null;
+          }
+        })
+      );
+
+      const validImages = images.filter(img => img !== null);
+      return res.status(200).json({ images: validImages });
+
+    // Handle upload-grids operation
+    } else if (operation === 'upload-grids' || (!operation && gridPages && Array.isArray(gridPages))) {
+      if (!folderName || !gridPages || gridPages.length === 0) {
+        return res.status(400).json({ 
+          error: 'Missing required parameters: folderName and gridPages array' 
+        });
+      }
+
+      const accessToken = await refreshAccessToken();
+
+      // Create folder in root (not in parent folder)
+      const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          // No parents = root folder
+        }),
+      });
+
+      if (!folderResponse.ok) {
+        const errorText = await folderResponse.text();
+        throw new Error(`Failed to create folder: ${folderResponse.status} - ${errorText}`);
+      }
+
+      const folderData = await folderResponse.json();
+      const targetFolderId = folderData.id;
+
+      // Upload grid pages
+      const uploadedFiles = [];
+      let failed = 0;
+
+      for (let i = 0; i < gridPages.length; i++) {
+        try {
+          const gridPage = gridPages[i];
+          const fileName = `grid-page-${i + 1}.png`;
+          
+          const base64Content = gridPage.includes(',') ? gridPage.split(',')[1] : gridPage;
+          const fileBuffer = Buffer.from(base64Content, 'base64');
+
+          const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          
+          const metadata = {
+            name: fileName,
+            parents: [targetFolderId],
+          };
+          
+          const metadataJson = JSON.stringify(metadata);
+          
+          const parts = [
+            `--${boundary}\r\n`,
+            `Content-Type: application/json; charset=UTF-8\r\n`,
+            `\r\n`,
+            `${metadataJson}\r\n`,
+            `--${boundary}\r\n`,
+            `Content-Type: image/png\r\n`,
+            `\r\n`,
+          ];
+          
+          const multipartBody = Buffer.concat([
+            Buffer.from(parts.join(''), 'utf8'),
+            fileBuffer,
+            Buffer.from(`\r\n--${boundary}--`, 'utf8'),
+          ]);
+
+          const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': `multipart/related; boundary=${boundary}`,
+            },
+            body: multipartBody,
+          });
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            console.error(`[Google Drive] Failed to upload grid page ${i + 1}:`, errorText);
+            failed++;
+            continue;
+          }
+
+          const uploadData = await uploadResponse.json();
+
+          const fileResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${uploadData.id}?fields=id,name,webViewLink`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          });
+
+          const fileData = fileResponse.ok ? await fileResponse.json() : uploadData;
+          
+          uploadedFiles.push({
+            filename: fileName,
+            url: fileData.webViewLink || `https://drive.google.com/file/d/${uploadData.id}/view`,
+            id: uploadData.id,
+          });
+        } catch (error) {
+          console.error(`[Google Drive] Error uploading grid page ${i + 1}:`, error);
+          failed++;
+        }
+      }
+
+      const folderUrl = `https://drive.google.com/drive/folders/${targetFolderId}`;
+
+      return res.status(200).json({
+        success: true,
+        folderId: targetFolderId,
+        folderUrl,
+        uploadedFiles,
+        uploaded: uploadedFiles.length,
+        failed,
+      });
+
     } else {
       return res.status(400).json({ 
-        error: 'Invalid operation. Use ?operation=create-folder or ?operation=upload-file, or provide appropriate parameters.' 
+        error: 'Invalid operation. Use ?operation=create-folder, upload-file, list-folders, list-images, or upload-grids, or provide appropriate parameters.' 
       });
     }
 

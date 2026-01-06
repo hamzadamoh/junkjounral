@@ -400,10 +400,11 @@ function PreviewPageContent() {
         })
       );
 
-      const response = await fetch('/api/google-drive/upload-grids', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'upload-grids',
           folderName,
           gridPages: gridPagesBase64,
           clientId: config.clientId,

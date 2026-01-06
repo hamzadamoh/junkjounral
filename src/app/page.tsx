@@ -39,10 +39,11 @@ export default function Home() {
       const config = getGoogleDriveConfig(googleDriveAccount);
       // For account 2, we'd need to check env.ts for accountNumber support
       // For now, using account 1
-      const response = await fetch('/api/google-drive/list-folders', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'list-folders',
           clientId: config.clientId,
           clientSecret: config.clientSecret,
           refreshToken: config.refreshToken,
@@ -76,10 +77,11 @@ export default function Home() {
     setImages([]);
     try {
       const config = getGoogleDriveConfig(googleDriveAccount);
-      const response = await fetch('/api/google-drive/list-images', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'list-images',
           folderId: selectedFolderId,
           clientId: config.clientId,
           clientSecret: config.clientSecret,
@@ -277,10 +279,11 @@ export default function Home() {
         })
       );
 
-      const response = await fetch('/api/google-drive/upload-grids', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'upload-grids',
           folderName,
           gridPages: gridPagesBase64,
           clientId: config.clientId,

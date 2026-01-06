@@ -2776,10 +2776,11 @@ const App: React.FC = () => {
     setLoadingDriveFolders(true);
     try {
       const config = getGoogleDriveConfig(googleDriveAccount);
-      const response = await fetch('/api/google-drive/list-folders', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'list-folders',
           clientId: config.clientId,
           clientSecret: config.clientSecret,
           refreshToken: config.refreshToken,
@@ -2832,10 +2833,11 @@ const App: React.FC = () => {
     setDriveImages([]);
     try {
       const config = getGoogleDriveConfig(googleDriveAccount);
-      const response = await fetch('/api/google-drive/list-images', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'list-images',
           folderId: selectedDriveFolderId,
           clientId: config.clientId,
           clientSecret: config.clientSecret,
@@ -3019,10 +3021,11 @@ const App: React.FC = () => {
         })
       );
 
-      const response = await fetch('/api/google-drive/upload-grids', {
+      const response = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          operation: 'upload-grids',
           folderName,
           gridPages: gridPagesBase64,
           clientId: config.clientId,
