@@ -3011,44 +3011,27 @@ const App: React.FC = () => {
     try {
       const config = getGoogleDriveConfig(googleDriveAccount);
 
-      const gridPagesBase64 = await Promise.all(
-        gridPages.map(async (gridUrl) => {
-          const response = await fetch(gridUrl);
-          const blob = await response.blob();
-          return new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              resolve(reader.result as string);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        })
-      );
-
-      const response = await fetch('/api/google-drive', {
+      // Step 1: Create folder
+      const folderResponse = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          operation: 'upload-grids',
-          folderName,
-          gridPages: gridPagesBase64,
+          operation: 'create-grid-folder',
+          folderName: folderName.trim(),
           clientId: config.clientId,
           clientSecret: config.clientSecret,
           refreshToken: config.refreshToken,
-          accountNumber: googleDriveAccount,
         }),
       });
 
-      if (!response.ok) {
-        let errorMessage = `Failed to upload grids: ${response.status} ${response.statusText}`;
+      if (!folderResponse.ok) {
+        let errorMessage = `Failed to create folder: ${folderResponse.status} ${folderResponse.statusText}`;
         try {
-          const error = await response.json();
+          const error = await folderResponse.json();
           errorMessage = error.error || errorMessage;
         } catch (e) {
-          // If response is not JSON, try to get text
           try {
-            const errorText = await response.text();
+            const errorText = await folderResponse.text();
             errorMessage = errorText || errorMessage;
           } catch (textError) {
             // Use default error message
@@ -3057,20 +3040,68 @@ const App: React.FC = () => {
         throw new Error(errorMessage);
       }
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        const text = await response.text();
-        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      const folderData = await folderResponse.json();
+      const folderId = folderData.folderId;
+      const folderUrl = folderData.folderUrl;
+
+      // Step 2: Upload images one at a time to avoid memory issues
+      let uploaded = 0;
+      let failed = 0;
+
+      for (let i = 0; i < gridPages.length; i++) {
+        try {
+          // Convert blob URL to base64
+          const response = await fetch(gridPages[i]);
+          const blob = await response.blob();
+          const base64Image = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(reader.result as string);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          // Upload single image
+          const uploadResponse = await fetch('/api/google-drive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              operation: 'upload-single-grid',
+              folderId,
+              base64Image,
+              fileName: `grid-page-${i + 1}.png`,
+              clientId: config.clientId,
+              clientSecret: config.clientSecret,
+              refreshToken: config.refreshToken,
+            }),
+          });
+
+          if (!uploadResponse.ok) {
+            const error = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }));
+            console.error(`Failed to upload grid ${i + 1}:`, error);
+            failed++;
+          } else {
+            uploaded++;
+          }
+
+          // Small delay between uploads
+          if (i < gridPages.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error: any) {
+          console.error(`Error uploading grid ${i + 1}:`, error);
+          failed++;
+        }
       }
+
       setGridUploadResult({
-        folderUrl: data.folderUrl,
-        uploaded: data.uploaded,
-        failed: data.failed,
+        folderUrl,
+        uploaded,
+        failed,
       });
 
-      alert(`Successfully uploaded ${data.uploaded} grid(s) to Google Drive!${data.failed > 0 ? ` (${data.failed} failed)` : ''}`);
+      alert(`Successfully uploaded ${uploaded} grid(s) to Google Drive!${failed > 0 ? ` (${failed} failed)` : ''}\n\nFolder: ${folderName}`);
     } catch (error: any) {
       console.error('Error uploading grids:', error);
       alert(`Failed to upload grids: ${error.message}`);

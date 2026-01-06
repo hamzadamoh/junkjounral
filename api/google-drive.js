@@ -361,11 +361,11 @@ export default async function handler(req, res) {
       
       return res.status(200).send(Buffer.from(imageBuffer));
 
-    // Handle upload-grids operation
-    } else if (operation === 'upload-grids' || (!operation && gridPages && Array.isArray(gridPages))) {
-      if (!folderName || !gridPages || gridPages.length === 0) {
+    // Handle create-grid-folder operation (creates folder and returns folderId)
+    } else if (operation === 'create-grid-folder') {
+      if (!folderName) {
         return res.status(400).json({ 
-          error: 'Missing required parameters: folderName and gridPages array' 
+          error: 'Missing required parameter: folderName' 
         });
       }
 
@@ -391,92 +391,92 @@ export default async function handler(req, res) {
       }
 
       const folderData = await folderResponse.json();
-      const targetFolderId = folderData.id;
-
-      // Upload grid pages
-      const uploadedFiles = [];
-      let failed = 0;
-
-      for (let i = 0; i < gridPages.length; i++) {
-        try {
-          const gridPage = gridPages[i];
-          const fileName = `grid-page-${i + 1}.png`;
-          
-          const base64Content = gridPage.includes(',') ? gridPage.split(',')[1] : gridPage;
-          const fileBuffer = Buffer.from(base64Content, 'base64');
-
-          const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-          
-          const metadata = {
-            name: fileName,
-            parents: [targetFolderId],
-          };
-          
-          const metadataJson = JSON.stringify(metadata);
-          
-          const parts = [
-            `--${boundary}\r\n`,
-            `Content-Type: application/json; charset=UTF-8\r\n`,
-            `\r\n`,
-            `${metadataJson}\r\n`,
-            `--${boundary}\r\n`,
-            `Content-Type: image/png\r\n`,
-            `\r\n`,
-          ];
-          
-          const multipartBody = Buffer.concat([
-            Buffer.from(parts.join(''), 'utf8'),
-            fileBuffer,
-            Buffer.from(`\r\n--${boundary}--`, 'utf8'),
-          ]);
-
-          const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': `multipart/related; boundary=${boundary}`,
-            },
-            body: multipartBody,
-          });
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            console.error(`[Google Drive] Failed to upload grid page ${i + 1}:`, errorText);
-            failed++;
-            continue;
-          }
-
-          const uploadData = await uploadResponse.json();
-
-          const fileResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${uploadData.id}?fields=id,name,webViewLink`, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-          });
-
-          const fileData = fileResponse.ok ? await fileResponse.json() : uploadData;
-          
-          uploadedFiles.push({
-            filename: fileName,
-            url: fileData.webViewLink || `https://drive.google.com/file/d/${uploadData.id}/view`,
-            id: uploadData.id,
-          });
-        } catch (error) {
-          console.error(`[Google Drive] Error uploading grid page ${i + 1}:`, error);
-          failed++;
-        }
-      }
-
-      const folderUrl = `https://drive.google.com/drive/folders/${targetFolderId}`;
+      const folderUrl = `https://drive.google.com/drive/folders/${folderData.id}`;
 
       return res.status(200).json({
         success: true,
-        folderId: targetFolderId,
+        folderId: folderData.id,
         folderUrl,
-        uploadedFiles,
-        uploaded: uploadedFiles.length,
-        failed,
       });
+
+    // Handle upload-single-grid operation (uploads one grid image at a time)
+    } else if (operation === 'upload-single-grid') {
+      const { folderId, base64Image, fileName } = req.body;
+
+      if (!folderId || !base64Image || !fileName) {
+        return res.status(400).json({ 
+          error: 'Missing required parameters: folderId, base64Image, fileName' 
+        });
+      }
+
+      const accessToken = await refreshAccessToken();
+
+      try {
+        const base64Content = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+        const fileBuffer = Buffer.from(base64Content, 'base64');
+
+        const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        
+        const metadata = {
+          name: fileName,
+          parents: [folderId],
+        };
+        
+        const metadataJson = JSON.stringify(metadata);
+        
+        const parts = [
+          `--${boundary}\r\n`,
+          `Content-Type: application/json; charset=UTF-8\r\n`,
+          `\r\n`,
+          `${metadataJson}\r\n`,
+          `--${boundary}\r\n`,
+          `Content-Type: image/png\r\n`,
+          `\r\n`,
+        ];
+        
+        const multipartBody = Buffer.concat([
+          Buffer.from(parts.join(''), 'utf8'),
+          fileBuffer,
+          Buffer.from(`\r\n--${boundary}--`, 'utf8'),
+        ]);
+
+        const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': `multipart/related; boundary=${boundary}`,
+          },
+          body: multipartBody,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          throw new Error(`Failed to upload file: ${uploadResponse.status} - ${errorText}`);
+        }
+
+        const uploadData = await uploadResponse.json();
+
+        const fileResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${uploadData.id}?fields=id,name,webViewLink`, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        const fileData = fileResponse.ok ? await fileResponse.json() : uploadData;
+        
+        return res.status(200).json({
+          success: true,
+          fileId: uploadData.id,
+          fileName: fileData.name,
+          url: fileData.webViewLink || `https://drive.google.com/file/d/${uploadData.id}/view`,
+        });
+      } catch (error) {
+        console.error('[Google Drive] Error uploading grid image:', error);
+        return res.status(500).json({
+          success: false,
+          error: error.message || 'Failed to upload grid image',
+        });
+      }
 
     } else {
       return res.status(400).json({ 
