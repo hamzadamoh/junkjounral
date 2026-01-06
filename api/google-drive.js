@@ -12,24 +12,36 @@ export default async function handler(req, res) {
   try {
     const { operation, folderName, folderId, filename, base64Data, mimeType, clientId, clientSecret, refreshToken, parentFolderId, gridPages } = req.body || {};
     const queryParams = req.query || {};
-
-    if (!clientId || !clientSecret || !refreshToken) {
+    
+    // For proxy-image (GET request), credentials come from query params
+    const isProxyImage = operation === 'proxy-image' || (!operation && req.method === 'GET' && queryParams.fileId);
+    
+    // Only validate credentials from body for non-proxy operations
+    if (!isProxyImage && (!clientId || !clientSecret || !refreshToken)) {
       return res.status(400).json({ 
         error: 'Missing required parameters: clientId, clientSecret, refreshToken' 
       });
     }
 
     // Helper function to refresh access token
-    const refreshAccessToken = async () => {
+    const refreshAccessToken = async (useQueryParams = false) => {
+      const credClientId = useQueryParams ? (queryParams.clientId || clientId) : clientId;
+      const credClientSecret = useQueryParams ? (queryParams.clientSecret || clientSecret) : clientSecret;
+      const credRefreshToken = useQueryParams ? (queryParams.refreshToken || refreshToken) : refreshToken;
+
+      if (!credClientId || !credClientSecret || !credRefreshToken) {
+        throw new Error('Missing credentials for token refresh');
+      }
+
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: refreshToken,
+          client_id: credClientId,
+          client_secret: credClientSecret,
+          refresh_token: credRefreshToken,
           grant_type: 'refresh_token',
         }),
       });
@@ -282,52 +294,25 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ images });
 
-    // Handle proxy-image operation
-    } else if (operation === 'proxy-image' || (!operation && req.method === 'GET' && queryParams.fileId)) {
+    // Handle proxy-image operation (must be checked early since it uses GET)
+    } else if (isProxyImage) {
       if (req.method !== 'GET') {
         return res.status(405).json({ message: 'Method not allowed' });
       }
 
       const fileId = queryParams.fileId;
-      const proxyClientId = queryParams.clientId || clientId;
-      const proxyClientSecret = queryParams.clientSecret || clientSecret;
-      const proxyRefreshToken = queryParams.refreshToken || refreshToken;
 
       if (!fileId) {
         return res.status(400).json({ error: 'Missing fileId parameter' });
       }
 
-      if (!proxyClientId || !proxyClientSecret || !proxyRefreshToken) {
+      if (!queryParams.clientId || !queryParams.clientSecret || !queryParams.refreshToken) {
         return res.status(400).json({ 
           error: 'Missing required parameters: clientId, clientSecret, refreshToken' 
         });
       }
 
-      // Helper function to refresh access token for proxy
-      const refreshAccessTokenForProxy = async () => {
-        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            client_id: proxyClientId,
-            client_secret: proxyClientSecret,
-            refresh_token: proxyRefreshToken,
-            grant_type: 'refresh_token',
-          }),
-        });
-
-        if (!tokenResponse.ok) {
-          const errorText = await tokenResponse.text();
-          throw new Error(`Failed to refresh access token: ${errorText}`);
-        }
-
-        const tokenData = await tokenResponse.json();
-        return tokenData.access_token;
-      };
-
-      const accessToken = await refreshAccessTokenForProxy();
+      const accessToken = await refreshAccessToken(true);
 
       // Fetch the image from Google Drive
       const imageResponse = await fetch(
