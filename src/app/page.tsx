@@ -11,7 +11,8 @@ import { getGoogleDriveConfig } from '../../../services/env';
 
 export default function Home() {
   const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1);
-  const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
+  const [folders, setFolders] = useState<Array<{ id: string; name: string; createdTime?: string; modifiedTime?: string }>>([]);
+  const [folderSearchQuery, setFolderSearchQuery] = useState<string>(''); // Search query for folders
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
   const [selectedFolderName, setSelectedFolderName] = useState<string>('');
   const [loadingFolders, setLoadingFolders] = useState(false);
@@ -465,11 +466,19 @@ export default function Home() {
             {/* Folder Selection */}
             {folders.length > 0 && (
               <div>
+                <label className="block text-gothic-parchment mb-2">Search Folders</label>
+                <input
+                  type="text"
+                  value={folderSearchQuery}
+                  onChange={(e) => setFolderSearchQuery(e.target.value)}
+                  placeholder="Type to search folders..."
+                  className="gothic-input w-full mb-2"
+                />
                 <label className="block text-gothic-parchment mb-2">Select Folder</label>
                 <select
                   value={selectedFolderId}
                   onChange={(e) => {
-                    const folder = folders.find(f => f.id === e.target.value);
+                    const folder = filteredFolders.find(f => f.id === e.target.value);
                     setSelectedFolderId(e.target.value);
                     setSelectedFolderName(folder?.name || '');
                     setImages([]);
@@ -478,12 +487,18 @@ export default function Home() {
                   className="gothic-input w-full"
                 >
                   <option value="">-- Select a folder --</option>
-                  {folders.map((folder) => (
+                  {filteredFolders.map((folder) => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}
                     </option>
                   ))}
                 </select>
+                {filteredFolders.length === 0 && folderSearchQuery && (
+                  <p className="mt-2 text-sm text-slate-400">No folders found matching "{folderSearchQuery}"</p>
+                )}
+                <p className="mt-2 text-xs text-slate-500">
+                  Showing {filteredFolders.length} of {folders.length} folders
+                </p>
               </div>
             )}
 

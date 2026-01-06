@@ -222,24 +222,48 @@ export default async function handler(req, res) {
         ? `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
         : `mimeType='application/vnd.google-apps.folder' and trashed=false`;
 
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents)&orderBy=name`,
-        {
+      // Fetch folders with pagination to get all folders, including creation and modified dates
+      const maxFolders = 1000; // Reasonable limit
+      const pageSize = 100;
+      let allFolders = [];
+      let pageToken = null;
+      let hasMore = true;
+
+      while (hasMore && allFolders.length < maxFolders) {
+        let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents,createdTime,modifiedTime),nextPageToken&orderBy=modifiedTime desc&pageSize=${pageSize}`;
+        if (pageToken) {
+          url += `&pageToken=${encodeURIComponent(pageToken)}`;
+        }
+
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return res.status(response.status).json({ 
-          error: `Failed to list folders: ${response.status} - ${errorText}` 
         });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return res.status(response.status).json({ 
+            error: `Failed to list folders: ${response.status} - ${errorText}` 
+          });
+        }
+
+        const data = await response.json();
+        const folders = data.files || [];
+        allFolders = allFolders.concat(folders);
+        
+        pageToken = data.nextPageToken;
+        hasMore = !!pageToken && allFolders.length < maxFolders;
       }
 
-      const data = await response.json();
-      return res.status(200).json({ folders: data.files || [] });
+      // Sort by modifiedTime (newest first)
+      allFolders.sort((a, b) => {
+        const timeA = a.modifiedTime || a.createdTime || '';
+        const timeB = b.modifiedTime || b.createdTime || '';
+        return timeB.localeCompare(timeA); // Descending order (newest first)
+      });
+
+      return res.status(200).json({ folders: allFolders });
 
     // Handle list-images operation
     } else if (operation === 'list-images' || (!operation && folderId && !folderName && !filename && !gridPages)) {

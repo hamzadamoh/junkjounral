@@ -116,7 +116,8 @@ const App: React.FC = () => {
   const [gridPages, setGridPages] = useState<string[]>([]); // Generated grid pages
   const [numGridPages, setNumGridPages] = useState<number>(1); // Number of grid pages to generate
   const [isGeneratingGrids, setIsGeneratingGrids] = useState<boolean>(false); // Grid generation status
-  const [googleDriveFolders, setGoogleDriveFolders] = useState<Array<{ id: string; name: string }>>([]); // Google Drive folders
+  const [googleDriveFolders, setGoogleDriveFolders] = useState<Array<{ id: string; name: string; createdTime?: string; modifiedTime?: string }>>([]); // Google Drive folders
+  const [folderSearchQuery, setFolderSearchQuery] = useState<string>(''); // Search query for folders
   const [selectedDriveFolderId, setSelectedDriveFolderId] = useState<string>(''); // Selected Google Drive folder
   const [selectedDriveFolderName, setSelectedDriveFolderName] = useState<string>(''); // Selected folder name
   const [loadingDriveFolders, setLoadingDriveFolders] = useState<boolean>(false); // Loading folders state
@@ -2772,6 +2773,13 @@ const App: React.FC = () => {
   };
 
   // Google Drive Grid Generator Functions
+  // Filter folders based on search query
+  const filteredDriveFolders = googleDriveFolders.filter(folder => {
+    if (!folderSearchQuery.trim()) return true;
+    const query = folderSearchQuery.toLowerCase();
+    return folder.name.toLowerCase().includes(query);
+  });
+
   const loadDriveFolders = async () => {
     setLoadingDriveFolders(true);
     try {
@@ -3258,11 +3266,19 @@ const App: React.FC = () => {
             {/* Folder Selection */}
             {googleDriveFolders.length > 0 && (
               <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Search Folders</label>
+                <input
+                  type="text"
+                  value={folderSearchQuery}
+                  onChange={(e) => setFolderSearchQuery(e.target.value)}
+                  placeholder="Type to search folders..."
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 placeholder-slate-400 focus:outline-none focus:border-gothic-gold transition-colors mb-2"
+                />
                 <label className="block text-sm font-medium text-slate-300 mb-2">Select Folder</label>
                 <select
                   value={selectedDriveFolderId}
                   onChange={(e) => {
-                    const folder = googleDriveFolders.find(f => f.id === e.target.value);
+                    const folder = filteredDriveFolders.find(f => f.id === e.target.value);
                     setSelectedDriveFolderId(e.target.value);
                     setSelectedDriveFolderName(folder?.name || '');
                     setDriveImages([]);
@@ -3271,12 +3287,18 @@ const App: React.FC = () => {
                   className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-gothic-gold transition-colors"
                 >
                   <option value="">-- Select a folder --</option>
-                  {googleDriveFolders.map((folder) => (
+                  {filteredDriveFolders.map((folder) => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}
                     </option>
                   ))}
                 </select>
+                {filteredDriveFolders.length === 0 && folderSearchQuery && (
+                  <p className="mt-2 text-sm text-slate-400">No folders found matching "{folderSearchQuery}"</p>
+                )}
+                <p className="mt-2 text-xs text-slate-500">
+                  Showing {filteredDriveFolders.length} of {googleDriveFolders.length} folders
+                </p>
               </div>
             )}
 
