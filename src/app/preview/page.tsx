@@ -377,12 +377,17 @@ function PreviewPageContent() {
       return;
     }
 
+    // Ask user for folder name
+    const folderName = prompt('Enter a name for the Google Drive folder:', `Grid Pages ${new Date().toISOString().split('T')[0]}`);
+    if (!folderName || !folderName.trim()) {
+      return; // User cancelled or entered empty name
+    }
+
     setUploadingGridsToDrive(true);
     setGridUploadResult(null);
 
     try {
       const config = getGoogleDriveConfig(googleDriveAccount);
-      const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
 
       // Convert blob URLs to base64
       const gridPagesBase64 = await Promise.all(
@@ -415,11 +420,29 @@ function PreviewPageContent() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload grids');
+        let errorMessage = `Failed to upload grids: ${response.status} ${response.statusText}`;
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, try to get text
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+          } catch (textError) {
+            // Use default error message
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        const text = await response.text();
+        throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      }
       setGridUploadResult({
         folderUrl: data.folderUrl,
         uploaded: data.uploaded,
