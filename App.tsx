@@ -24,7 +24,9 @@ import {
   Folder,
   Square,
   CheckSquare,
-  ShoppingBag
+  ShoppingBag,
+  Grid3x3,
+  Loader2
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -109,6 +111,9 @@ const App: React.FC = () => {
   const [showGoogleDriveModal, setShowGoogleDriveModal] = useState<boolean>(false);
   const [selectedImagePositions, setSelectedImagePositions] = useState<Set<1 | 2 | 3 | 4>>(new Set([1, 2, 3, 4])); // Selected image positions (1st, 2nd, 3rd, 4th)
   const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1); // Google Drive account to use
+  const [gridPages, setGridPages] = useState<string[]>([]); // Generated grid pages
+  const [numGridPages, setNumGridPages] = useState<number>(1); // Number of grid pages to generate
+  const [isGeneratingGrids, setIsGeneratingGrids] = useState<boolean>(false); // Grid generation status
   const [googleDriveModalData, setGoogleDriveModalData] = useState<{
     title: string;
     message: string;
@@ -2590,6 +2595,147 @@ const App: React.FC = () => {
     }
   };
 
+  // Grid Generator Function
+  const generateGrids = async () => {
+    const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
+    
+    if (completedImages.length === 0) {
+      alert('No completed images available to create grids');
+      return;
+    }
+
+    // Filter images based on selected positions
+    const filteredImages = filterImagesByPromptCount(completedImages);
+    
+    if (filteredImages.length === 0) {
+      alert('No images available after filtering');
+      return;
+    }
+
+    if (numGridPages < 1) {
+      alert('Please enter a valid number of grid pages (at least 1)');
+      return;
+    }
+
+    setIsGeneratingGrids(true);
+    setGridPages([]);
+
+    try {
+      const imagesPerGrid = 12; // 3 rows x 4 columns
+      const totalImagesNeeded = numGridPages * imagesPerGrid;
+      const availableImages = filteredImages.length;
+
+      if (availableImages < imagesPerGrid) {
+        alert(`You need at least ${imagesPerGrid} images to create a grid. You have ${availableImages}.`);
+        setIsGeneratingGrids(false);
+        return;
+      }
+
+      const generatedGrids: string[] = [];
+
+      // Create each grid page
+      for (let gridIndex = 0; gridIndex < numGridPages; gridIndex++) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          throw new Error('Could not get canvas context');
+        }
+
+        // Grid dimensions: 3 rows x 4 columns
+        const rows = 3;
+        const cols = 4;
+        const cellWidth = 1200 / cols; // Total width: 1200px
+        const cellHeight = 1600 / rows; // Total height: 1600px
+
+        canvas.width = 1200;
+        canvas.height = 1600;
+
+        // Fill background with white
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw images in grid
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const imageIndex = gridIndex * imagesPerGrid + row * cols + col;
+            
+            // If we run out of images, stop
+            if (imageIndex >= availableImages) {
+              break;
+            }
+
+            const imageUrl = filteredImages[imageIndex].url!;
+            const x = col * cellWidth;
+            const y = row * cellHeight;
+
+            // Load and draw image
+            await new Promise<void>((resolve, reject) => {
+              const img = new window.Image();
+              img.crossOrigin = 'anonymous';
+              
+              img.onload = () => {
+                try {
+                  // Draw image to fit the cell
+                  ctx.drawImage(img, x, y, cellWidth, cellHeight);
+                  resolve();
+                } catch (err) {
+                  console.error('Error drawing image:', err);
+                  resolve(); // Continue even if one image fails
+                }
+              };
+              
+              img.onerror = () => {
+                console.error('Failed to load image:', imageUrl);
+                resolve(); // Continue even if one image fails
+              };
+              
+              img.src = imageUrl;
+            });
+          }
+        }
+
+        // Convert canvas to blob URL
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
+          }, 'image/png');
+        });
+
+        const gridUrl = URL.createObjectURL(blob);
+        generatedGrids.push(gridUrl);
+      }
+
+      setGridPages(generatedGrids);
+      alert(`Successfully generated ${generatedGrids.length} grid page(s)!`);
+    } catch (error) {
+      console.error('Error generating grids:', error);
+      alert('Failed to generate grids. Please try again.');
+    } finally {
+      setIsGeneratingGrids(false);
+    }
+  };
+
+  const downloadGrid = (gridUrl: string, index: number) => {
+    const a = document.createElement('a');
+    a.href = gridUrl;
+    a.download = `grid-page-${index + 1}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const downloadAllGrids = async () => {
+    for (let i = 0; i < gridPages.length; i++) {
+      downloadGrid(gridPages[i], i);
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  };
+
   // --- Render Steps ---
 
   const renderThemeSelection = () => {
@@ -4114,6 +4260,112 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
           </button>
         </div>
       </div>
+
+        {/* Grid Generator Tool */}
+        {completedCount > 0 && (
+          <div className="mb-6 p-4 bg-slate-800/50 border border-slate-700 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-serif text-slate-100 mb-1">
+                  Grid Generator
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Create grid layouts (3 rows × 4 columns = 12 images per grid)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-end mb-4">
+              <div className="flex-1">
+                <label className="block text-slate-300 mb-2 text-sm">
+                  Number of Grid Pages
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={Math.ceil(filteredCount / 12)}
+                  value={numGridPages}
+                  onChange={(e) => setNumGridPages(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500 transition-colors"
+                  placeholder="1"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Maximum: {Math.ceil(filteredCount / 12)} pages (based on {filteredCount} available images)
+                </p>
+              </div>
+              <button
+                onClick={generateGrids}
+                disabled={isGeneratingGrids || filteredCount < 12}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+              >
+                {isGeneratingGrids ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Grid3x3 size={18} />
+                    Generate Grids
+                  </>
+                )}
+              </button>
+            </div>
+
+            {filteredCount < 12 && (
+              <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded text-yellow-300 text-sm">
+                ⚠️ You need at least 12 images to create a grid. You currently have {filteredCount} images.
+              </div>
+            )}
+
+            {gridPages.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-serif text-slate-100">
+                    Generated Grids ({gridPages.length})
+                  </h4>
+                  <button
+                    onClick={downloadAllGrids}
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Download All Grids
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {gridPages.map((gridUrl, index) => (
+                    <div
+                      key={index}
+                      className="bg-white rounded-lg overflow-hidden shadow-lg border border-gray-200 group"
+                    >
+                      <div className="relative aspect-[3/4] bg-gray-100">
+                        <img
+                          src={gridUrl}
+                          alt={`Grid page ${index + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => downloadGrid(gridUrl, index)}
+                              className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors text-sm"
+                            >
+                              <FileDown size={16} />
+                              Download
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-3 text-center">
+                        <p className="text-sm text-gray-600">Grid Page {index + 1}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Grid Layout: 3 columns - Show all images */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
