@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, FileDown, Image as ImageIcon, FileText, Upload, Copy, Check, Grid3x3, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { getGoogleDriveConfig } from '../../../services/env';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ function PreviewPageContent() {
   const [gridPages, setGridPages] = useState<string[]>([]);
   const [numGridPages, setNumGridPages] = useState<number>(1);
   const [isGeneratingGrids, setIsGeneratingGrids] = useState(false);
+  const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1);
+  const [uploadingGridsToDrive, setUploadingGridsToDrive] = useState(false);
+  const [gridUploadResult, setGridUploadResult] = useState<{ folderUrl?: string; uploaded?: number; failed?: number } | null>(null);
 
   useEffect(() => {
     if (!jobId) {
@@ -367,6 +371,69 @@ function PreviewPageContent() {
     }
   };
 
+  const uploadGridsToGoogleDrive = async () => {
+    if (gridPages.length === 0) {
+      alert('No grids to upload');
+      return;
+    }
+
+    setUploadingGridsToDrive(true);
+    setGridUploadResult(null);
+
+    try {
+      const config = getGoogleDriveConfig();
+      const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
+
+      // Convert blob URLs to base64
+      const gridPagesBase64 = await Promise.all(
+        gridPages.map(async (gridUrl) => {
+          const response = await fetch(gridUrl);
+          const blob = await response.blob();
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(reader.result as string);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        })
+      );
+
+      const response = await fetch('/api/google-drive/upload-grids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderName,
+          gridPages: gridPagesBase64,
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          refreshToken: config.refreshToken,
+          accountNumber: googleDriveAccount,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload grids');
+      }
+
+      const data = await response.json();
+      setGridUploadResult({
+        folderUrl: data.folderUrl,
+        uploaded: data.uploaded,
+        failed: data.failed,
+      });
+
+      alert(`Successfully uploaded ${data.uploaded} grid(s) to Google Drive!${data.failed > 0 ? ` (${data.failed} failed)` : ''}`);
+    } catch (error: any) {
+      console.error('Error uploading grids:', error);
+      alert(`Failed to upload grids: ${error.message}`);
+    } finally {
+      setUploadingGridsToDrive(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -556,18 +623,64 @@ function PreviewPageContent() {
 
             {gridPages.length > 0 && (
               <div className="mt-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
                   <h3 className="text-xl font-display font-semibold text-gothic-gold">
                     Generated Grids ({gridPages.length})
                   </h3>
-                  <button
-                    onClick={downloadAllGrids}
-                    className="gothic-button gothic-button-primary"
-                  >
-                    <Download className="inline-block mr-2" size={16} />
-                    Download All Grids
-                  </button>
+                  <div className="flex gap-3 items-center">
+                    <select
+                      value={googleDriveAccount}
+                      onChange={(e) => setGoogleDriveAccount(Number(e.target.value) as 1 | 2)}
+                      className="gothic-input"
+                      disabled={uploadingGridsToDrive}
+                    >
+                      <option value="1">Google Drive Account 1</option>
+                      <option value="2">Google Drive Account 2</option>
+                    </select>
+                    <button
+                      onClick={uploadGridsToGoogleDrive}
+                      disabled={uploadingGridsToDrive || gridPages.length === 0}
+                      className="gothic-button bg-gothic-gold/20 border-gothic-gold text-gothic-gold hover:bg-gothic-gold/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {uploadingGridsToDrive ? (
+                        <>
+                          <Loader2 className="inline-block mr-2 animate-spin" size={16} />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="inline-block mr-2" size={16} />
+                          Upload to Google Drive
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={downloadAllGrids}
+                      className="gothic-button gothic-button-primary"
+                    >
+                      <Download className="inline-block mr-2" size={16} />
+                      Download All Grids
+                    </button>
+                  </div>
                 </div>
+                {gridUploadResult && (
+                  <div className="mb-4 p-3 bg-gothic-gold/10 border border-gothic-gold/30 rounded">
+                    <p className="text-gothic-gold text-sm">
+                      ✓ Uploaded {gridUploadResult.uploaded} grid(s) to Google Drive
+                      {gridUploadResult.failed && gridUploadResult.failed > 0 && ` (${gridUploadResult.failed} failed)`}
+                    </p>
+                    {gridUploadResult.folderUrl && (
+                      <a
+                        href={gridUploadResult.folderUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gothic-gold hover:underline text-sm mt-1 block"
+                      >
+                        Open Folder →
+                      </a>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {gridPages.map((gridUrl, index) => (
                     <motion.div
