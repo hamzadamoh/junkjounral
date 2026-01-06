@@ -441,7 +441,7 @@ export default async function handler(req, res) {
           `\r\n`,
           `${metadataJson}\r\n`,
           `--${boundary}\r\n`,
-          `Content-Type: image/png\r\n`,
+          `Content-Type: image/jpeg\r\n`,
           `\r\n`,
         ];
         

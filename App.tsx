@@ -3050,16 +3050,58 @@ const App: React.FC = () => {
 
       for (let i = 0; i < gridPages.length; i++) {
         try {
-          // Convert blob URL to base64
+          // Convert blob URL to base64 with compression
           const response = await fetch(gridPages[i]);
           const blob = await response.blob();
+          
+          // Compress image to reduce size (max 2000x2000 to stay under 4MB limit)
           const base64Image = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              resolve(reader.result as string);
+            const img = document.createElement('img');
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                reject(new Error('Could not get canvas context'));
+                return;
+              }
+
+              // Calculate new dimensions (max 2000px on longest side)
+              let width = img.width;
+              let height = img.height;
+              const maxDimension = 2000;
+              
+              if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                  height = (height / width) * maxDimension;
+                  width = maxDimension;
+                } else {
+                  width = (width / height) * maxDimension;
+                  height = maxDimension;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              
+              // Draw and compress
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convert to JPEG with compression to reduce size (quality 0.85)
+              canvas.toBlob((blob) => {
+                if (!blob) {
+                  reject(new Error('Failed to compress image'));
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  resolve(reader.result as string);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              }, 'image/jpeg', 0.85);
             };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            img.onerror = reject;
+            img.src = URL.createObjectURL(blob);
           });
 
           // Upload single image
@@ -3070,7 +3112,7 @@ const App: React.FC = () => {
               operation: 'upload-single-grid',
               folderId,
               base64Image,
-              fileName: `grid-page-${i + 1}.png`,
+              fileName: `grid-page-${i + 1}.jpg`,
               clientId: config.clientId,
               clientSecret: config.clientSecret,
               refreshToken: config.refreshToken,
