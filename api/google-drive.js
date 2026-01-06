@@ -4,12 +4,14 @@
  * This reduces multiple functions to 1 to stay within Vercel Hobby plan limit
  */
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  // Allow both POST and GET requests (GET for proxy-image)
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
   try {
-    const { operation, folderName, folderId, filename, base64Data, mimeType, clientId, clientSecret, refreshToken, parentFolderId, gridPages } = req.body;
+    const { operation, folderName, folderId, filename, base64Data, mimeType, clientId, clientSecret, refreshToken, parentFolderId, gridPages } = req.body || {};
+    const queryParams = req.query || {};
 
     if (!clientId || !clientSecret || !refreshToken) {
       return res.status(400).json({ 
@@ -268,27 +270,91 @@ export default async function handler(req, res) {
 
       const data = await response.json();
       
-      // Get download URLs for each image
-      const images = await Promise.all(
-        (data.files || []).map(async (file) => {
-          try {
-            const downloadUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&access_token=${accessToken}`;
-            
-            return {
-              id: file.id,
-              name: file.name,
-              url: downloadUrl,
-              thumbnailUrl: file.thumbnailLink || downloadUrl,
-            };
-          } catch (error) {
-            console.error(`Error processing file ${file.id}:`, error);
-            return null;
-          }
-        })
+      // Return proxy URLs instead of direct Google Drive URLs to avoid CORS issues
+      const images = (data.files || []).map((file) => {
+        return {
+          id: file.id,
+          name: file.name,
+          url: `/api/google-drive?operation=proxy-image&fileId=${file.id}&clientId=${encodeURIComponent(clientId)}&clientSecret=${encodeURIComponent(clientSecret)}&refreshToken=${encodeURIComponent(refreshToken)}`,
+          thumbnailUrl: file.thumbnailLink || `/api/google-drive?operation=proxy-image&fileId=${file.id}&clientId=${encodeURIComponent(clientId)}&clientSecret=${encodeURIComponent(clientSecret)}&refreshToken=${encodeURIComponent(refreshToken)}`,
+        };
+      });
+
+      return res.status(200).json({ images });
+
+    // Handle proxy-image operation
+    } else if (operation === 'proxy-image' || (!operation && req.method === 'GET' && queryParams.fileId)) {
+      if (req.method !== 'GET') {
+        return res.status(405).json({ message: 'Method not allowed' });
+      }
+
+      const fileId = queryParams.fileId;
+      const proxyClientId = queryParams.clientId || clientId;
+      const proxyClientSecret = queryParams.clientSecret || clientSecret;
+      const proxyRefreshToken = queryParams.refreshToken || refreshToken;
+
+      if (!fileId) {
+        return res.status(400).json({ error: 'Missing fileId parameter' });
+      }
+
+      if (!proxyClientId || !proxyClientSecret || !proxyRefreshToken) {
+        return res.status(400).json({ 
+          error: 'Missing required parameters: clientId, clientSecret, refreshToken' 
+        });
+      }
+
+      // Helper function to refresh access token for proxy
+      const refreshAccessTokenForProxy = async () => {
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            client_id: proxyClientId,
+            client_secret: proxyClientSecret,
+            refresh_token: proxyRefreshToken,
+            grant_type: 'refresh_token',
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          const errorText = await tokenResponse.text();
+          throw new Error(`Failed to refresh access token: ${errorText}`);
+        }
+
+        const tokenData = await tokenResponse.json();
+        return tokenData.access_token;
+      };
+
+      const accessToken = await refreshAccessTokenForProxy();
+
+      // Fetch the image from Google Drive
+      const imageResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
       );
 
-      const validImages = images.filter(img => img !== null);
-      return res.status(200).json({ images: validImages });
+      if (!imageResponse.ok) {
+        return res.status(imageResponse.status).json({ 
+          error: `Failed to fetch image: ${imageResponse.statusText}` 
+        });
+      }
+
+      // Get the image buffer
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+
+      // Return the image with appropriate headers
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      
+      return res.status(200).send(Buffer.from(imageBuffer));
 
     // Handle upload-grids operation
     } else if (operation === 'upload-grids' || (!operation && gridPages && Array.isArray(gridPages))) {
