@@ -2631,6 +2631,8 @@ const App: React.FC = () => {
         return;
       }
 
+      // Shuffle images randomly
+      const shuffledImages = shuffleArray(filteredImages);
       const generatedGrids: string[] = [];
 
       // Create each grid page
@@ -2642,14 +2644,17 @@ const App: React.FC = () => {
           throw new Error('Could not get canvas context');
         }
 
-        // Grid dimensions: 3 rows x 4 columns
+        // Grid dimensions: 3 rows x 4 columns, 3000x3000 pixels
         const rows = 3;
         const cols = 4;
-        const cellWidth = 1200 / cols; // Total width: 1200px
-        const cellHeight = 1600 / rows; // Total height: 1600px
+        const padding = 20; // Padding between cells
+        const totalPaddingWidth = padding * (cols + 1); // Padding on both sides + between columns
+        const totalPaddingHeight = padding * (rows + 1); // Padding on both sides + between rows
+        const cellWidth = (3000 - totalPaddingWidth) / cols;
+        const cellHeight = (3000 - totalPaddingHeight) / rows;
 
-        canvas.width = 1200;
-        canvas.height = 1600;
+        canvas.width = 3000;
+        canvas.height = 3000;
 
         // Fill background with white
         ctx.fillStyle = '#ffffff';
@@ -2665,9 +2670,9 @@ const App: React.FC = () => {
               break;
             }
 
-            const imageUrl = filteredImages[imageIndex].url!;
-            const x = col * cellWidth;
-            const y = row * cellHeight;
+            const imageUrl = shuffledImages[imageIndex].url!;
+            const x = padding + col * (cellWidth + padding);
+            const y = padding + row * (cellHeight + padding);
 
             // Load and draw image
             await new Promise<void>((resolve, reject) => {
@@ -2676,8 +2681,28 @@ const App: React.FC = () => {
               
               img.onload = () => {
                 try {
-                  // Draw image to fit the cell
-                  ctx.drawImage(img, x, y, cellWidth, cellHeight);
+                  // Calculate aspect ratios
+                  const imgAspect = img.width / img.height;
+                  const cellAspect = cellWidth / cellHeight;
+                  
+                  let drawWidth = cellWidth;
+                  let drawHeight = cellHeight;
+                  let drawX = x;
+                  let drawY = y;
+                  
+                  // Fit image to cell while maintaining aspect ratio (cover mode)
+                  if (imgAspect > cellAspect) {
+                    // Image is wider - fit to height
+                    drawWidth = cellHeight * imgAspect;
+                    drawX = x - (drawWidth - cellWidth) / 2;
+                  } else {
+                    // Image is taller - fit to width
+                    drawHeight = cellWidth / imgAspect;
+                    drawY = y - (drawHeight - cellHeight) / 2;
+                  }
+                  
+                  // Draw image to fill cell (cover mode)
+                  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
                   resolve();
                 } catch (err) {
                   console.error('Error drawing image:', err);
@@ -4338,7 +4363,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                       key={index}
                       className="bg-white rounded-lg overflow-hidden shadow-lg border border-gray-200 group"
                     >
-                      <div className="relative aspect-[3/4] bg-gray-100">
+                      <div className="relative aspect-square bg-gray-100">
                         <img
                           src={gridUrl}
                           alt={`Grid page ${index + 1}`}
