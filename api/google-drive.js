@@ -264,26 +264,46 @@ export default async function handler(req, res) {
 
       const query = `'${folderId}' in parents and (${mimeTypeQuery}) and trashed=false`;
 
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink,thumbnailLink)&orderBy=name`,
-        {
+      // Fetch images with pagination to get up to 120 images
+      const maxImages = 120;
+      const pageSize = 100;
+      let allFiles = [];
+      let pageToken = null;
+      let hasMore = true;
+
+      while (hasMore && allFiles.length < maxImages) {
+        let url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink,thumbnailLink),nextPageToken&orderBy=name&pageSize=${pageSize}`;
+        if (pageToken) {
+          url += `&pageToken=${encodeURIComponent(pageToken)}`;
+        }
+
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return res.status(response.status).json({ 
-          error: `Failed to list images: ${response.status} - ${errorText}` 
         });
-      }
 
-      const data = await response.json();
+        if (!response.ok) {
+          const errorText = await response.text();
+          return res.status(response.status).json({ 
+            error: `Failed to list images: ${response.status} - ${errorText}` 
+          });
+        }
+
+        const data = await response.json();
+        const files = data.files || [];
+        
+        // Add files up to the max limit
+        const remaining = maxImages - allFiles.length;
+        allFiles = allFiles.concat(files.slice(0, remaining));
+        
+        // Check if there are more pages
+        pageToken = data.nextPageToken;
+        hasMore = !!pageToken && allFiles.length < maxImages;
+      }
       
       // Return proxy URLs instead of direct Google Drive URLs to avoid CORS issues
-      const images = (data.files || []).map((file) => {
+      const images = allFiles.map((file) => {
         return {
           id: file.id,
           name: file.name,
