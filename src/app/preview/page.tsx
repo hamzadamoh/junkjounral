@@ -3,10 +3,9 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, X, FileDown, Image as ImageIcon, FileText, Upload, Copy, Check, Cloud } from 'lucide-react';
+import { Download, X, FileDown, Image as ImageIcon, FileText, Upload, Copy, Check, Grid3x3, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { uploadImagesToGoogleDrive, GoogleDriveUploadResult } from '@/services/googleDriveService';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +21,9 @@ function PreviewPageContent() {
   const [wordpressUrls, setWordpressUrls] = useState<Array<{ originalUrl: string; wordpressUrl: string | null; error?: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1);
-  const [uploadingToGoogleDrive, setUploadingToGoogleDrive] = useState(false);
-  const [googleDriveResult, setGoogleDriveResult] = useState<GoogleDriveUploadResult | null>(null);
-  const [googleDriveProgress, setGoogleDriveProgress] = useState({ completed: 0, total: 0 });
+  const [gridPages, setGridPages] = useState<string[]>([]);
+  const [numGridPages, setNumGridPages] = useState<number>(1);
+  const [isGeneratingGrids, setIsGeneratingGrids] = useState(false);
 
   useEffect(() => {
     if (!jobId) {
@@ -205,41 +203,132 @@ function PreviewPageContent() {
     }
   };
 
-  const uploadToGoogleDrive = async () => {
+  const generateGrids = async () => {
     if (pages.length === 0) {
-      alert('No images to upload');
+      alert('No images available to create grids');
       return;
     }
 
-    const folderName = prompt(`Enter a name for the Google Drive folder (Account ${googleDriveAccount}):`);
-    if (!folderName || !folderName.trim()) {
+    if (numGridPages < 1) {
+      alert('Please enter a valid number of grid pages (at least 1)');
       return;
     }
 
-    setUploadingToGoogleDrive(true);
-    setGoogleDriveResult(null);
-    setGoogleDriveProgress({ completed: 0, total: pages.length });
+    setIsGeneratingGrids(true);
+    setGridPages([]);
 
     try {
-      const images = pages.map(url => ({ url, originalUrl: url }));
-      
-      const result = await uploadImagesToGoogleDrive(
-        folderName.trim(),
-        images,
-        (completed, total) => {
-          setGoogleDriveProgress({ completed, total });
-        },
-        googleDriveAccount
-      );
+      const imagesPerGrid = 12; // 3 rows x 4 columns
+      const totalImagesNeeded = numGridPages * imagesPerGrid;
+      const availableImages = pages.length;
 
-      setGoogleDriveResult(result);
-      alert(`Successfully uploaded ${result.uploadedFiles.length} image(s) to Google Drive Account ${googleDriveAccount}${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+      if (availableImages < imagesPerGrid) {
+        alert(`You need at least ${imagesPerGrid} images to create a grid. You have ${availableImages}.`);
+        setIsGeneratingGrids(false);
+        return;
+      }
+
+      const generatedGrids: string[] = [];
+
+      // Create each grid page
+      for (let gridIndex = 0; gridIndex < numGridPages; gridIndex++) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          throw new Error('Could not get canvas context');
+        }
+
+        // Grid dimensions: 3 rows x 4 columns
+        const rows = 3;
+        const cols = 4;
+        const cellWidth = 1200 / cols; // Total width: 1200px
+        const cellHeight = 1600 / rows; // Total height: 1600px
+
+        canvas.width = 1200;
+        canvas.height = 1600;
+
+        // Fill background with white
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw images in grid
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const imageIndex = gridIndex * imagesPerGrid + row * cols + col;
+            
+            // If we run out of images, stop
+            if (imageIndex >= availableImages) {
+              break;
+            }
+
+            const imageUrl = pages[imageIndex];
+            const x = col * cellWidth;
+            const y = row * cellHeight;
+
+            // Load and draw image
+            await new Promise<void>((resolve, reject) => {
+              const img = new window.Image();
+              img.crossOrigin = 'anonymous';
+              
+              img.onload = () => {
+                try {
+                  // Draw image to fit the cell
+                  ctx.drawImage(img, x, y, cellWidth, cellHeight);
+                  resolve();
+                } catch (err) {
+                  console.error('Error drawing image:', err);
+                  resolve(); // Continue even if one image fails
+                }
+              };
+              
+              img.onerror = () => {
+                console.error('Failed to load image:', imageUrl);
+                resolve(); // Continue even if one image fails
+              };
+              
+              img.src = imageUrl;
+            });
+          }
+        }
+
+        // Convert canvas to blob URL
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob'));
+            }
+          }, 'image/png');
+        });
+
+        const gridUrl = URL.createObjectURL(blob);
+        generatedGrids.push(gridUrl);
+      }
+
+      setGridPages(generatedGrids);
     } catch (error) {
-      console.error('Error uploading to Google Drive:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to upload images to Google Drive';
-      alert(`Error: ${errorMessage}`);
+      console.error('Error generating grids:', error);
+      alert('Failed to generate grids. Please try again.');
     } finally {
-      setUploadingToGoogleDrive(false);
+      setIsGeneratingGrids(false);
+    }
+  };
+
+  const downloadGrid = (gridUrl: string, index: number) => {
+    const a = document.createElement('a');
+    a.href = gridUrl;
+    a.download = `grid-page-${index + 1}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const downloadAllGrids = async () => {
+    for (let i = 0; i < gridPages.length; i++) {
+      downloadGrid(gridPages[i], i);
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   };
 
@@ -319,26 +408,6 @@ function PreviewPageContent() {
               <Upload className="inline-block mr-2" size={20} />
               {uploading ? 'Uploading...' : 'Upload to WordPress'}
             </button>
-
-            <div className="flex gap-2 items-center">
-              <select
-                value={googleDriveAccount}
-                onChange={(e) => setGoogleDriveAccount(Number(e.target.value) as 1 | 2)}
-                className="gothic-input"
-                disabled={uploadingToGoogleDrive}
-              >
-                <option value="1">Google Drive Account 1</option>
-                <option value="2">Google Drive Account 2</option>
-              </select>
-              <button 
-                onClick={uploadToGoogleDrive} 
-                disabled={uploadingToGoogleDrive || pages.length === 0}
-                className="gothic-button bg-blue-600/20 border-blue-500 text-blue-400 hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Cloud className="inline-block mr-2" size={20} />
-                {uploadingToGoogleDrive ? `Uploading... (${googleDriveProgress.completed}/${googleDriveProgress.total})` : 'Upload to Google Drive'}
-              </button>
-            </div>
           </div>
         </div>
 
@@ -390,6 +459,117 @@ function PreviewPageContent() {
             <Link href="/generate" className="text-gothic-gold hover:underline mt-4 inline-block">
               Generate new pages
             </Link>
+          </div>
+        )}
+
+        {/* Grid Generator Tool */}
+        {pages.length > 0 && (
+          <div className="mt-8 gothic-card">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-display font-semibold text-gothic-gold mb-2">
+                  Grid Generator
+                </h2>
+                <p className="text-gothic-parchment/60 text-sm">
+                  Create grid layouts (3 rows × 4 columns = 12 images per grid)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-end mb-6">
+              <div className="flex-1">
+                <label className="block text-gothic-parchment mb-2">
+                  Number of Grid Pages
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={Math.ceil(pages.length / 12)}
+                  value={numGridPages}
+                  onChange={(e) => setNumGridPages(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="gothic-input w-full"
+                  placeholder="1"
+                />
+                <p className="text-xs text-gothic-parchment/60 mt-1">
+                  Maximum: {Math.ceil(pages.length / 12)} pages (based on {pages.length} available images)
+                </p>
+              </div>
+              <button
+                onClick={generateGrids}
+                disabled={isGeneratingGrids || pages.length < 12}
+                className="gothic-button gothic-button-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGeneratingGrids ? (
+                  <>
+                    <Loader2 className="inline-block mr-2 animate-spin" size={20} />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Grid3x3 className="inline-block mr-2" size={20} />
+                    Generate Grids
+                  </>
+                )}
+              </button>
+            </div>
+
+            {pages.length < 12 && (
+              <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded text-yellow-300 text-sm">
+                ⚠️ You need at least 12 images to create a grid. You currently have {pages.length} images.
+              </div>
+            )}
+
+            {gridPages.length > 0 && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-display font-semibold text-gothic-gold">
+                    Generated Grids ({gridPages.length})
+                  </h3>
+                  <button
+                    onClick={downloadAllGrids}
+                    className="gothic-button gothic-button-primary"
+                  >
+                    <Download className="inline-block mr-2" size={16} />
+                    Download All Grids
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {gridPages.map((gridUrl, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="gothic-card p-0 overflow-hidden group"
+                    >
+                      <div className="relative aspect-[3/4] bg-gothic-charcoal">
+                        <Image
+                          src={gridUrl}
+                          alt={`Grid page ${index + 1}`}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          unoptimized
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => downloadGrid(gridUrl, index)}
+                              className="gothic-button gothic-button-primary"
+                            >
+                              <FileDown size={16} className="mr-2" />
+                              Download
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-3 text-center">
+                        <p className="text-sm text-gothic-parchment/60">Grid Page {index + 1}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -465,85 +645,6 @@ function PreviewPageContent() {
             </div>
             <div className="mt-4 text-sm text-gothic-parchment/60">
               💡 Tip: Copy all URLs and paste them into your Google Sheet!
-            </div>
-          </div>
-        )}
-
-        {/* Google Drive Upload Results */}
-        {googleDriveResult && (
-          <div className="mt-8 gothic-card">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-display font-semibold text-gothic-gold">
-                Google Drive Upload Results (Account {googleDriveAccount})
-              </h2>
-              <button
-                onClick={() => {
-                  const urls = googleDriveResult.uploadedFiles.map(f => f.url).join('\n');
-                  if (urls) {
-                    navigator.clipboard.writeText(urls);
-                    alert('All Google Drive URLs copied to clipboard!');
-                  }
-                }}
-                className="gothic-button gothic-button-primary text-sm"
-              >
-                <Copy className="inline-block mr-2" size={16} />
-                Copy All URLs
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-500/30">
-                <div className="flex items-center gap-2 mb-2">
-                  <Cloud className="text-blue-400" size={20} />
-                  <span className="text-gothic-gold font-semibold">Folder Created</span>
-                </div>
-                <a
-                  href={googleDriveResult.folderUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 underline break-all"
-                >
-                  {googleDriveResult.folderUrl}
-                </a>
-                <div className="mt-2 text-sm text-gothic-parchment/80">
-                  ✅ {googleDriveResult.uploadedFiles.length} images uploaded successfully
-                  {googleDriveResult.failed > 0 && (
-                    <span className="text-red-400 ml-2">⚠️ {googleDriveResult.failed} failed</span>
-                  )}
-                </div>
-              </div>
-              <div className="max-h-96 overflow-y-auto space-y-2">
-                {googleDriveResult.uploadedFiles.map((file, index) => (
-                  <div
-                    key={index}
-                    className="p-3 rounded-lg bg-gothic-gold/10 border border-gothic-gold/30"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gothic-parchment/60 mb-1">
-                          {file.filename}
-                        </div>
-                        <input
-                          type="text"
-                          readOnly
-                          value={file.url}
-                          className="w-full gothic-input bg-gothic-charcoal/50 text-gothic-parchment text-sm"
-                          onClick={(e) => (e.target as HTMLInputElement).select()}
-                        />
-                      </div>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(file.url);
-                          alert('URL copied to clipboard!');
-                        }}
-                        className="gothic-button p-2"
-                        title="Copy URL"
-                      >
-                        <Copy size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         )}
