@@ -201,7 +201,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       console.log(`[ArcaneSplitter] Fetching Etsy listing: ${listingId}`);
 
       // Use the Vercel proxy to avoid CORS issues
-      const response = await fetch(`/api/etsy/listing?listingId=${listingId}`);
+      const response = await fetch(`/api/etsy?operation=listing&listingId=${listingId}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

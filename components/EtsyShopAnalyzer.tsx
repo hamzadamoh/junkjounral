@@ -67,12 +67,13 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
     setResult(null);
 
     try {
-      const response = await fetch('/api/etsy/analyze', {
+      const response = await fetch('/api/etsy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          operation: 'analyze',
           shopUrl: shopUrl.trim(),
           apiKey: apiKey.trim() || undefined,
         }),
@@ -107,12 +108,13 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
     if (listingIds.length === 0) return;
     
     try {
-      const fetchResponse = await fetch('/api/etsy/fetch-images', {
+      const fetchResponse = await fetch('/api/etsy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          operation: 'fetch-images',
           listingIds,
           apiKey: apiKey.trim() || undefined,
         }),
@@ -292,12 +294,13 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
     try {
       // Step 1: Fetch image URLs from Etsy API
       
-      const fetchResponse = await fetch('/api/etsy/fetch-images', {
+      const fetchResponse = await fetch('/api/etsy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          operation: 'fetch-images',
           listingIds,
           apiKey: apiKey.trim() || undefined,
         }),
@@ -321,7 +324,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
         
         try {
           // Download the image via proxy to bypass CORS
-          const proxyUrl = `/api/etsy/proxy-image?url=${encodeURIComponent(fetchResult.image_url)}`;
+          const proxyUrl = `/api/etsy?operation=proxy-image&url=${encodeURIComponent(fetchResult.image_url)}`;
           const imageResponse = await fetch(proxyUrl);
           if (!imageResponse.ok) {
             throw new Error(`Failed to download image: ${imageResponse.statusText}`);

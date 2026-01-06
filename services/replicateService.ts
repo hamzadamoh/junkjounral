@@ -141,12 +141,13 @@ export const generateJournalPage = async (
       try {
         // Use Vercel serverless function proxy (no CORS issues)
         // The API route runs on the server and forwards to Replicate
-        response = await fetch('/api/replicate/predictions', {
+        response = await fetch('/api/replicate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            operation: 'create-prediction',
             version: modelIdentifier,
             input: inputParams
           })
@@ -277,7 +278,7 @@ const pollReplicatePrediction = async (
   while (attempts < maxAttempts) {
     try {
       // Use Vercel serverless function proxy (no CORS issues)
-      const response = await fetch(`/api/replicate/predictions/${predictionId}`, {
+      const response = await fetch(`/api/replicate?operation=get-prediction&id=${predictionId}`, {
         headers: {
           'Content-Type': 'application/json',
         }
@@ -370,7 +371,7 @@ const getModelVersion = async (model: string): Promise<string> => {
     // Try to get the latest version for the model
     try {
       // Use Vercel serverless function proxy (no CORS issues)
-      const response = await fetch(`/api/replicate/models/${model}/versions`, {
+      const response = await fetch(`/api/replicate?operation=get-model-versions&model=${model}`, {
         headers: {
           'Content-Type': 'application/json',
         }
