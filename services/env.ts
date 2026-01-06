@@ -147,26 +147,40 @@ export const getSupabaseConfig = () => {
 };
 
 export const getGoogleDriveConfig = (accountNumber: 1 | 2 = 1) => {
-  const suffix = accountNumber === 2 ? '_2' : '';
-  
   // Check process.env first
   if (typeof process !== 'undefined' && process.env) {
+    if (accountNumber === 2) {
+      return {
+        clientId: process.env.VITE_GOOGLE_DRIVE_2_CLIENT_ID || '',
+        clientSecret: process.env.VITE_GOOGLE_DRIVE_2_CLIENT_SECRET || '',
+        refreshToken: process.env.VITE_GOOGLE_DRIVE_2_REFRESH_TOKEN || '',
+        parentFolderId: process.env.VITE_GOOGLE_DRIVE_2_PARENT_FOLDER_ID || process.env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
+      };
+    }
     return {
-      clientId: process.env[`VITE_GOOGLE_DRIVE${suffix}_CLIENT_ID`] || (accountNumber === 1 ? process.env.VITE_GOOGLE_DRIVE_CLIENT_ID : '') || '',
-      clientSecret: process.env[`VITE_GOOGLE_DRIVE${suffix}_CLIENT_SECRET`] || (accountNumber === 1 ? process.env.VITE_GOOGLE_DRIVE_CLIENT_SECRET : '') || '',
-      refreshToken: process.env[`VITE_GOOGLE_DRIVE${suffix}_REFRESH_TOKEN`] || (accountNumber === 1 ? process.env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN : '') || '',
-      parentFolderId: process.env[`VITE_GOOGLE_DRIVE${suffix}_PARENT_FOLDER_ID`] || (accountNumber === 1 ? process.env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID : '') || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
+      clientId: process.env.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
+      clientSecret: process.env.VITE_GOOGLE_DRIVE_CLIENT_SECRET || '',
+      refreshToken: process.env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN || '',
+      parentFolderId: process.env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
   
   // Check globalThis mock
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env) {
     const env = (globalThis as any).import.meta.env;
+    if (accountNumber === 2) {
+      return {
+        clientId: env.VITE_GOOGLE_DRIVE_2_CLIENT_ID || '',
+        clientSecret: env.VITE_GOOGLE_DRIVE_2_CLIENT_SECRET || '',
+        refreshToken: env.VITE_GOOGLE_DRIVE_2_REFRESH_TOKEN || '',
+        parentFolderId: env.VITE_GOOGLE_DRIVE_2_PARENT_FOLDER_ID || env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
+      };
+    }
     return {
-      clientId: env[`VITE_GOOGLE_DRIVE${suffix}_CLIENT_ID`] || (accountNumber === 1 ? env.VITE_GOOGLE_DRIVE_CLIENT_ID : '') || '',
-      clientSecret: env[`VITE_GOOGLE_DRIVE${suffix}_CLIENT_SECRET`] || (accountNumber === 1 ? env.VITE_GOOGLE_DRIVE_CLIENT_SECRET : '') || '',
-      refreshToken: env[`VITE_GOOGLE_DRIVE${suffix}_REFRESH_TOKEN`] || (accountNumber === 1 ? env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN : '') || '',
-      parentFolderId: env[`VITE_GOOGLE_DRIVE${suffix}_PARENT_FOLDER_ID`] || (accountNumber === 1 ? env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID : '') || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
+      clientId: env.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
+      clientSecret: env.VITE_GOOGLE_DRIVE_CLIENT_SECRET || '',
+      refreshToken: env.VITE_GOOGLE_DRIVE_REFRESH_TOKEN || '',
+      parentFolderId: env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
   
@@ -175,11 +189,19 @@ export const getGoogleDriveConfig = (accountNumber: 1 | 2 = 1) => {
   // @ts-ignore
   try {
     const env = import.meta.env;
+    if (accountNumber === 2) {
+      return {
+        clientId: (env?.VITE_GOOGLE_DRIVE_2_CLIENT_ID as string) || '',
+        clientSecret: (env?.VITE_GOOGLE_DRIVE_2_CLIENT_SECRET as string) || '',
+        refreshToken: (env?.VITE_GOOGLE_DRIVE_2_REFRESH_TOKEN as string) || '',
+        parentFolderId: (env?.VITE_GOOGLE_DRIVE_2_PARENT_FOLDER_ID as string) || (env?.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID as string) || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
+      };
+    }
     return {
-      clientId: (env?.[`VITE_GOOGLE_DRIVE${suffix}_CLIENT_ID`] as string) || (accountNumber === 1 ? (env?.VITE_GOOGLE_DRIVE_CLIENT_ID as string) : '') || '',
-      clientSecret: (env?.[`VITE_GOOGLE_DRIVE${suffix}_CLIENT_SECRET`] as string) || (accountNumber === 1 ? (env?.VITE_GOOGLE_DRIVE_CLIENT_SECRET as string) : '') || '',
-      refreshToken: (env?.[`VITE_GOOGLE_DRIVE${suffix}_REFRESH_TOKEN`] as string) || (accountNumber === 1 ? (env?.VITE_GOOGLE_DRIVE_REFRESH_TOKEN as string) : '') || '',
-      parentFolderId: (env?.[`VITE_GOOGLE_DRIVE${suffix}_PARENT_FOLDER_ID`] as string) || (accountNumber === 1 ? (env?.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID as string) : '') || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
+      clientId: (env?.VITE_GOOGLE_DRIVE_CLIENT_ID as string) || '',
+      clientSecret: (env?.VITE_GOOGLE_DRIVE_CLIENT_SECRET as string) || '',
+      refreshToken: (env?.VITE_GOOGLE_DRIVE_REFRESH_TOKEN as string) || '',
+      parentFolderId: (env?.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID as string) || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   } catch {
     return {

@@ -381,7 +381,7 @@ function PreviewPageContent() {
     setGridUploadResult(null);
 
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
 
       // Convert blob URLs to base64

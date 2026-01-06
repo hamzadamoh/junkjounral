@@ -36,7 +36,7 @@ export default function Home() {
   const loadFolders = async () => {
     setLoadingFolders(true);
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       // For account 2, we'd need to check env.ts for accountNumber support
       // For now, using account 1
       const response = await fetch('/api/google-drive/list-folders', {
@@ -75,7 +75,7 @@ export default function Home() {
     setLoadingImages(true);
     setImages([]);
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       const response = await fetch('/api/google-drive/list-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -258,7 +258,7 @@ export default function Home() {
     setGridUploadResult(null);
 
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
 
       // Convert blob URLs to base64

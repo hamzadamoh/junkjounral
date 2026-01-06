@@ -2775,7 +2775,7 @@ const App: React.FC = () => {
   const loadDriveFolders = async () => {
     setLoadingDriveFolders(true);
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       const response = await fetch('/api/google-drive/list-folders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2789,8 +2789,27 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to load folders');
+        // Try to parse as JSON first, if that fails, get text
+        let errorMessage = `Failed to load folders: ${response.status}`;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch (e) {
+            errorMessage = `Failed to parse error response: ${response.status}`;
+          }
+        } else {
+          // Response is HTML (likely 404 page)
+          const errorText = await response.text();
+          if (errorText.includes('404') || errorText.includes('Not Found')) {
+            errorMessage = 'API route not found. Please check if the route is deployed correctly.';
+          } else {
+            errorMessage = `Server error: ${response.status}. ${errorText.substring(0, 100)}`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -2812,7 +2831,7 @@ const App: React.FC = () => {
     setLoadingDriveImages(true);
     setDriveImages([]);
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       const response = await fetch('/api/google-drive/list-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2825,8 +2844,16 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to load images');
+        // Try to parse as JSON first, if that fails, get text
+        let errorMessage = `Failed to load images: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -2974,7 +3001,7 @@ const App: React.FC = () => {
     setGridUploadResult(null);
 
     try {
-      const config = getGoogleDriveConfig();
+      const config = getGoogleDriveConfig(googleDriveAccount);
       const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
 
       const gridPagesBase64 = await Promise.all(
