@@ -95,7 +95,7 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setImages(data.images || []);
+      setImages((data.images || []).slice(0, 120));
     } catch (error: any) {
       console.error('Error loading images:', error);
       alert(`Failed to load images: ${error.message}`);

@@ -2859,7 +2859,7 @@ const App: React.FC = () => {
       }
 
       const data = await response.json();
-      setDriveImages(data.images || []);
+      setDriveImages((data.images || []).slice(0, 120));
     } catch (error: any) {
       console.error('Error loading images:', error);
       alert(`Failed to load images: ${error.message}`);
