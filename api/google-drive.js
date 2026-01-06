@@ -404,15 +404,26 @@ export default async function handler(req, res) {
       const { folderId, base64Image, fileName } = req.body;
 
       if (!folderId || !base64Image || !fileName) {
+        console.error('[Google Drive] Missing parameters:', { folderId: !!folderId, base64Image: !!base64Image, fileName: !!fileName });
         return res.status(400).json({ 
           error: 'Missing required parameters: folderId, base64Image, fileName' 
         });
       }
 
-      const accessToken = await refreshAccessToken();
+      let accessToken;
+      try {
+        accessToken = await refreshAccessToken();
+      } catch (tokenError) {
+        console.error('[Google Drive] Token refresh failed:', tokenError);
+        return res.status(500).json({
+          success: false,
+          error: `Failed to refresh access token: ${tokenError.message}`,
+        });
+      }
 
       try {
         const base64Content = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+        console.log(`[Google Drive] Uploading ${fileName}, base64 length: ${base64Content.length}, folderId: ${folderId}`);
         const fileBuffer = Buffer.from(base64Content, 'base64');
 
         const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -451,7 +462,8 @@ export default async function handler(req, res) {
 
         if (!uploadResponse.ok) {
           const errorText = await uploadResponse.text();
-          throw new Error(`Failed to upload file: ${uploadResponse.status} - ${errorText}`);
+          console.error(`[Google Drive] Upload failed (${uploadResponse.status}):`, errorText.substring(0, 200));
+          throw new Error(`Failed to upload file: ${uploadResponse.status} - ${errorText.substring(0, 200)}`);
         }
 
         const uploadData = await uploadResponse.json();

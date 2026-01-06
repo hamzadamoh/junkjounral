@@ -3078,10 +3078,23 @@ const App: React.FC = () => {
           });
 
           if (!uploadResponse.ok) {
-            const error = await uploadResponse.json().catch(() => ({ error: 'Unknown error' }));
-            console.error(`Failed to upload grid ${i + 1}:`, error);
+            let errorMessage = `HTTP ${uploadResponse.status}`;
+            try {
+              const error = await uploadResponse.json();
+              errorMessage = error.error || errorMessage;
+            } catch (e) {
+              try {
+                const errorText = await uploadResponse.text();
+                errorMessage = errorText || errorMessage;
+              } catch (textError) {
+                // Use default error message
+              }
+            }
+            console.error(`Failed to upload grid ${i + 1}:`, errorMessage);
             failed++;
           } else {
+            const result = await uploadResponse.json();
+            console.log(`Successfully uploaded grid ${i + 1}`);
             uploaded++;
           }
 
@@ -3091,6 +3104,7 @@ const App: React.FC = () => {
           }
         } catch (error: any) {
           console.error(`Error uploading grid ${i + 1}:`, error);
+          alert(`Error uploading grid ${i + 1}: ${error.message || error}`);
           failed++;
         }
       }
@@ -3101,7 +3115,11 @@ const App: React.FC = () => {
         failed,
       });
 
-      alert(`Successfully uploaded ${uploaded} grid(s) to Google Drive!${failed > 0 ? ` (${failed} failed)` : ''}\n\nFolder: ${folderName}`);
+      if (uploaded > 0) {
+        alert(`Successfully uploaded ${uploaded} grid(s) to Google Drive!${failed > 0 ? ` (${failed} failed)` : ''}\n\nFolder: ${folderName}`);
+      } else {
+        alert(`Failed to upload grids. All ${failed} upload(s) failed.\n\nPlease check the browser console for details.\n\nFolder: ${folderName}`);
+      }
     } catch (error: any) {
       console.error('Error uploading grids:', error);
       alert(`Failed to upload grids: ${error.message}`);
