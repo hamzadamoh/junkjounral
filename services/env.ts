@@ -234,3 +234,39 @@ export const getEtsyApiKey = (): string => {
   }
 };
 
+export const getDropboxAccessToken = (): string => {
+  // Check process.env first
+  if (typeof process !== 'undefined' && process.env) {
+    return (
+      process.env.DROPBOX_ACCESS_TOKEN ||
+      process.env.VITE_DROPBOX_ACCESS_TOKEN ||
+      process.env.NEXT_PUBLIC_DROPBOX_ACCESS_TOKEN ||
+      ''
+    );
+  }
+
+  // Check globalThis mock
+  if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env) {
+    const env = (globalThis as any).import.meta.env;
+    return (
+      env.VITE_DROPBOX_ACCESS_TOKEN ||
+      env.NEXT_PUBLIC_DROPBOX_ACCESS_TOKEN ||
+      ''
+    );
+  }
+
+  // Fallback to import.meta.env
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  try {
+    const env = import.meta.env;
+    return (
+      (env?.VITE_DROPBOX_ACCESS_TOKEN as string) ||
+      (env?.NEXT_PUBLIC_DROPBOX_ACCESS_TOKEN as string) ||
+      ''
+    );
+  } catch {
+    return '';
+  }
+};
+

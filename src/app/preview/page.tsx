@@ -28,6 +28,9 @@ function PreviewPageContent() {
   const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1);
   const [uploadingGridsToDrive, setUploadingGridsToDrive] = useState(false);
   const [gridUploadResult, setGridUploadResult] = useState<{ folderUrl?: string; uploaded?: number; failed?: number } | null>(null);
+  const [dropboxFolderPath, setDropboxFolderPath] = useState<string>(`/grid-pages-${new Date().toISOString().split('T')[0]}`);
+  const [uploadingGridsToDropbox, setUploadingGridsToDropbox] = useState(false);
+  const [dropboxUploadResult, setDropboxUploadResult] = useState<{ uploaded: number; failed: number } | null>(null);
 
   useEffect(() => {
     if (!jobId) {
@@ -548,6 +551,126 @@ function PreviewPageContent() {
     }
   };
 
+  const uploadGridsToDropbox = async () => {
+    if (gridPages.length === 0) {
+      alert('No grids to upload');
+      return;
+    }
+
+    const folderPathInput = prompt('Enter a Dropbox folder path (will be created if missing):', dropboxFolderPath);
+    if (!folderPathInput || !folderPathInput.trim()) {
+      return;
+    }
+    const folderPath = folderPathInput.trim();
+    setDropboxFolderPath(folderPath);
+
+    setUploadingGridsToDropbox(true);
+    setDropboxUploadResult(null);
+
+    try {
+      let uploaded = 0;
+      let failed = 0;
+
+      for (let i = 0; i < gridPages.length; i++) {
+        try {
+          // Convert blob URL to base64 with compression (reuse same logic as Drive upload)
+          const response = await fetch(gridPages[i]);
+          const blob = await response.blob();
+
+          const base64Image = await new Promise<string>((resolve, reject) => {
+            const img = document.createElement('img');
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                reject(new Error('Could not get canvas context'));
+                return;
+              }
+
+              let width = img.width;
+              let height = img.height;
+              const maxDimension = 2000;
+
+              if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                  height = (height / width) * maxDimension;
+                  width = maxDimension;
+                } else {
+                  width = (width / height) * maxDimension;
+                  height = maxDimension;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              ctx.drawImage(img, 0, 0, width, height);
+
+              canvas.toBlob((compressed) => {
+                if (!compressed) {
+                  reject(new Error('Failed to compress image'));
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  resolve(reader.result as string);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(compressed);
+              }, 'image/jpeg', 0.85);
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(blob);
+          });
+
+          const uploadResponse = await fetch('/api/dropbox/upload-grid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folderPath,
+              fileName: `grid-page-${i + 1}.jpg`,
+              base64Image,
+            }),
+          });
+
+          if (!uploadResponse.ok) {
+            let errorMessage = `HTTP ${uploadResponse.status}`;
+            try {
+              const error = await uploadResponse.json();
+              errorMessage = error.error || errorMessage;
+            } catch (e) {
+              const txt = await uploadResponse.text().catch(() => '');
+              if (txt) errorMessage = txt;
+            }
+            console.error(`Failed to upload grid ${i + 1} to Dropbox:`, errorMessage);
+            failed++;
+          } else {
+            uploaded++;
+          }
+
+          if (i < gridPages.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        } catch (error: any) {
+          console.error(`Error uploading grid ${i + 1} to Dropbox:`, error);
+          failed++;
+        }
+      }
+
+      setDropboxUploadResult({ uploaded, failed });
+
+      if (uploaded > 0) {
+        alert(`Uploaded ${uploaded} grid(s) to Dropbox. ${failed > 0 ? `${failed} failed.` : ''}\n\nFolder: ${folderPath}`);
+      } else {
+        alert(`Failed to upload grids to Dropbox. All ${failed} upload(s) failed.\n\nFolder: ${folderPath}`);
+      }
+    } catch (error: any) {
+      console.error('Error uploading grids to Dropbox:', error);
+      alert(`Failed to upload grids to Dropbox: ${error.message}`);
+    } finally {
+      setUploadingGridsToDropbox(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -769,6 +892,23 @@ function PreviewPageContent() {
                       )}
                     </button>
                     <button
+                      onClick={uploadGridsToDropbox}
+                      disabled={uploadingGridsToDropbox || gridPages.length === 0}
+                      className="gothic-button bg-slate-700 border border-slate-600 text-slate-100 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {uploadingGridsToDropbox ? (
+                        <>
+                          <Loader2 className="inline-block mr-2 animate-spin" size={16} />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="inline-block mr-2" size={16} />
+                          Upload to Dropbox
+                        </>
+                      )}
+                    </button>
+                    <button
                       onClick={downloadAllGrids}
                       className="gothic-button gothic-button-primary"
                     >
@@ -793,6 +933,14 @@ function PreviewPageContent() {
                         Open Folder →
                       </a>
                     )}
+                  </div>
+                )}
+                {dropboxUploadResult && (
+                  <div className="mb-4 p-3 bg-slate-800/60 border border-slate-700/80 rounded">
+                    <p className="text-slate-100 text-sm">
+                      Dropbox: Uploaded {dropboxUploadResult.uploaded} grid(s)
+                      {dropboxUploadResult.failed > 0 && ` (${dropboxUploadResult.failed} failed)`}
+                    </p>
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

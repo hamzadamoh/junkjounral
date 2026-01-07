@@ -122,6 +122,9 @@ const App: React.FC = () => {
   const [selectedDriveFolderName, setSelectedDriveFolderName] = useState<string>(''); // Selected folder name
   const [loadingDriveFolders, setLoadingDriveFolders] = useState<boolean>(false); // Loading folders state
   const [loadingDriveImages, setLoadingDriveImages] = useState<boolean>(false); // Loading images state
+  const [dropboxFolderPath, setDropboxFolderPath] = useState<string>(`/grid-pages-${new Date().toISOString().split('T')[0]}`);
+  const [uploadingDriveGridsToDropbox, setUploadingDriveGridsToDropbox] = useState(false);
+  const [dropboxDriveUploadResult, setDropboxDriveUploadResult] = useState<{ uploaded: number; failed: number } | null>(null);
   const [driveImages, setDriveImages] = useState<Array<{ id: string; name: string; url: string; thumbnailUrl: string }>>([]); // Images from Google Drive
   const [uploadingGridsToDrive, setUploadingGridsToDrive] = useState<boolean>(false); // Uploading grids to Google Drive
   const [gridUploadResult, setGridUploadResult] = useState<{ folderUrl?: string; uploaded?: number; failed?: number } | null>(null); // Upload result
@@ -3178,6 +3181,124 @@ const App: React.FC = () => {
     }
   };
 
+  const uploadDriveGridsToDropbox = async () => {
+    if (gridPages.length === 0) {
+      alert('No grids to upload');
+      return;
+    }
+
+    const folderPathInput = prompt('Enter a Dropbox folder path (will be created if missing):', dropboxFolderPath);
+    if (!folderPathInput || !folderPathInput.trim()) {
+      return;
+    }
+    const folderPath = folderPathInput.trim();
+    setDropboxFolderPath(folderPath);
+
+    setUploadingDriveGridsToDropbox(true);
+    setDropboxDriveUploadResult(null);
+
+    try {
+      let uploaded = 0;
+      let failed = 0;
+
+      for (let i = 0; i < gridPages.length; i++) {
+        try {
+          // Convert blob URL to base64 with compression
+          const response = await fetch(gridPages[i]);
+          const blob = await response.blob();
+
+          const base64Image = await new Promise<string>((resolve, reject) => {
+            const img = document.createElement('img');
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                reject(new Error('Could not get canvas context'));
+                return;
+              }
+
+              let width = img.width;
+              let height = img.height;
+              const maxDimension = 2000;
+
+              if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                  height = (height / width) * maxDimension;
+                  width = maxDimension;
+                } else {
+                  width = (width / height) * maxDimension;
+                  height = maxDimension;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              ctx.drawImage(img, 0, 0, width, height);
+
+              canvas.toBlob((compressed) => {
+                if (!compressed) {
+                  reject(new Error('Failed to compress image'));
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(compressed);
+              }, 'image/jpeg', 0.85);
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(blob);
+          });
+
+          const uploadResponse = await fetch('/api/dropbox/upload-grid', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              folderPath,
+              fileName: `grid-page-${i + 1}.jpg`,
+              base64Image,
+            }),
+          });
+
+          if (!uploadResponse.ok) {
+            let errorMessage = `HTTP ${uploadResponse.status}`;
+            try {
+              const error = await uploadResponse.json();
+              errorMessage = error.error || errorMessage;
+            } catch (e) {
+              const txt = await uploadResponse.text().catch(() => '');
+              if (txt) errorMessage = txt;
+            }
+            console.error(`Failed to upload grid ${i + 1} to Dropbox:`, errorMessage);
+            failed++;
+          } else {
+            uploaded++;
+          }
+
+          if (i < gridPages.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        } catch (error: any) {
+          console.error(`Error uploading grid ${i + 1} to Dropbox:`, error);
+          failed++;
+        }
+      }
+
+      setDropboxDriveUploadResult({ uploaded, failed });
+
+      if (uploaded > 0) {
+        alert(`Uploaded ${uploaded} grid(s) to Dropbox. ${failed > 0 ? `${failed} failed.` : ''}\n\nFolder: ${folderPath}`);
+      } else {
+        alert(`Failed to upload grids to Dropbox. All ${failed} upload(s) failed.\n\nFolder: ${folderPath}`);
+      }
+    } catch (error: any) {
+      console.error('Error uploading grids to Dropbox:', error);
+      alert(`Failed to upload grids to Dropbox: ${error.message}`);
+    } finally {
+      setUploadingDriveGridsToDropbox(false);
+    }
+  };
+
   // --- Render Steps ---
 
   const renderThemeSelection = () => {
@@ -3404,6 +3525,23 @@ const App: React.FC = () => {
                             </>
                           )}
                         </button>
+                      <button
+                        onClick={uploadDriveGridsToDropbox}
+                        disabled={uploadingDriveGridsToDropbox || gridPages.length === 0}
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {uploadingDriveGridsToDropbox ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={16} />
+                            Upload to Dropbox
+                          </>
+                        )}
+                      </button>
                         <button
                           onClick={downloadAllGrids}
                           className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
@@ -3429,6 +3567,14 @@ const App: React.FC = () => {
                             Open Folder →
                           </a>
                         )}
+                      </div>
+                    )}
+                    {dropboxDriveUploadResult && (
+                      <div className="mb-4 p-3 bg-slate-800/60 border border-slate-700/80 rounded">
+                        <p className="text-slate-100 text-sm">
+                          Dropbox Uploaded: {dropboxDriveUploadResult.uploaded} grid(s)
+                          {dropboxDriveUploadResult.failed > 0 && ` (${dropboxDriveUploadResult.failed} failed)`}
+                        </p>
                       </div>
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
