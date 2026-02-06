@@ -15,6 +15,12 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/etsy"
+  to = "/.netlify/functions/etsy"
+  status = 200
+  force = true
+
 # Add more redirects for other API routes as you convert them:
 # [[redirects]]
 #   from = "/api/ttapi"
