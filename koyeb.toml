@@ -1,0 +1,17 @@
+# Koyeb deployment configuration
+# This file tells Koyeb how to build and run your application
+
+[build]
+  # Build command - builds the Vite frontend
+  command = "npm run build"
+
+[run]
+  # Start command - runs the production server
+  command = "npm start"
+  
+  # Port that Koyeb will use (Koyeb sets PORT env var automatically)
+  port = 3000
+
+[env]
+  # Node.js version
+  NODE_VERSION = "18"
