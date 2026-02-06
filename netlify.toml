@@ -9,10 +9,16 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/api/google-drive"
+  to = "/.netlify/functions/google-drive"
+  status = 200
+  force = true
+
 # Add more redirects for other API routes as you convert them:
 # [[redirects]]
-#   from = "/api/google-drive"
-#   to = "/.netlify/functions/google-drive"
+#   from = "/api/ttapi"
+#   to = "/.netlify/functions/ttapi"
 #   status = 200
 #   force = true
 
