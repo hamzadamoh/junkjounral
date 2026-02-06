@@ -21,12 +21,29 @@
   status = 200
   force = true
 
-# Add more redirects for other API routes as you convert them:
-# [[redirects]]
-#   from = "/api/ttapi"
-#   to = "/.netlify/functions/ttapi"
-#   status = 200
-#   force = true
+[[redirects]]
+  from = "/api/openai/chat"
+  to = "/.netlify/functions/openai-chat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/wordpress/upload"
+  to = "/.netlify/functions/wordpress-upload"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/dropbox/upload-grid"
+  to = "/.netlify/functions/dropbox-upload-grid"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ttapi"
+  to = "/.netlify/functions/ttapi"
+  status = 200
+  force = true
 
 # Catch-all for SPA routing (must be last)
 [[redirects]]
