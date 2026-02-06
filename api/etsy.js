@@ -324,8 +324,8 @@ export default async function handler(req, res) {
 
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      
-      return res.status(200).send(Buffer.from(imageBuffer));
+      res.status(200);
+      return res.end(Buffer.from(imageBuffer));
 
     } else {
       return res.status(400).json({ 

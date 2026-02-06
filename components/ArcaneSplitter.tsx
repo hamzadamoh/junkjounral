@@ -224,12 +224,19 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
         .map((img: any) => img.url_fullxfull || img.url_570xN || img.url_170x135)
         .filter(Boolean);
 
-      // Fetch ALL images in parallel for speed
+      // Fetch ALL images in parallel for speed (use Etsy proxy for Etsy URLs – correct Referer)
       let completedCount = 0;
       const fetchPromises = imageUrls.map(async (imageUrl: string, i: number) => {
         try {
-          // Fetch image via proxy to avoid CORS
-          const imgResponse = await fetch(`/api/ttapi?operation=image&url=${encodeURIComponent(imageUrl)}`);
+          const proxyUrl = `/api/etsy?operation=proxy-image&url=${encodeURIComponent(imageUrl)}`;
+          const imgResponse = await fetch(proxyUrl);
+          if (!imgResponse.ok) {
+            const errText = await imgResponse.text();
+            console.error(`[ArcaneSplitter] Etsy image ${i + 1} proxy returned ${imgResponse.status}:`, errText.slice(0, 200));
+            completedCount++;
+            setEtsyFetchProgress({ current: completedCount, total: images.length });
+            return { index: i, base64: null, success: false };
+          }
           const blob = await imgResponse.blob();
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();

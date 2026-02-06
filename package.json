@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "node server/local-api.js",
+    "dev:all": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "build": "vite build",
     "preview": "vite preview",
     "test": "jest",

@@ -1,0 +1,34 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Redirect API routes to Netlify Functions
+[[redirects]]
+  from = "/api/pollinations/generate"
+  to = "/.netlify/functions/pollinations-generate"
+  status = 200
+  force = true
+
+# Add more redirects for other API routes as you convert them:
+# [[redirects]]
+#   from = "/api/google-drive"
+#   to = "/.netlify/functions/google-drive"
+#   status = 200
+#   force = true
+
+# Catch-all for SPA routing (must be last)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Netlify Functions configuration
+[functions]
+  # Functions directory
+  directory = "netlify/functions"
+  # Node.js version for functions
+  node_bundler = "esbuild"

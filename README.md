@@ -16,16 +16,40 @@ View your app in AI Studio: https://ai.studio/apps/drive/1HntWJdqPDsoWOcmUcp1p56
 1. Install dependencies:
    `npm install`
 
-2. Create a `.env.local` file in the root directory and set your API keys:
+2. Copy the example env file and add your values:
+   ```bash
+   cp .env.example .env.local
    ```
-   VITE_GOAPI_API_KEY=your_goapi_api_key_here (for Midjourney)
-   VITE_OPENAI_API_KEY=your_openai_api_key_here (for ChatGPT prompts)
-   VITE_REPLICATE_API_KEY=your_replicate_api_key_here (for Replicate models)
-   ```
-   Note: Pollinations is free and doesn't require an API key!
+   Then edit `.env.local` and set your API keys and secrets. The file `.env.example` lists all supported variables (Google Drive, Dropbox, OpenAI, TTAPI/Midjourney, WordPress, Etsy, etc.). You can copy values from your Vercel project’s Environment Variables into `.env.local` for local development.
+   Note: Pollinations is free and doesn’t require an API key.
 
-3. Run the app:
-   `npm run dev`
+3. **Run the API server** (required for Google Drive, OpenAI, WordPress, etc. to work locally):
+   In one terminal:
+   ```bash
+   npm run dev:api
+   ```
+   Leave it running. It serves `/api/*` on port 3001 and loads `.env.local`.
+
+4. **Run the app** in a second terminal:
+   ```bash
+   npm run dev
+   ```
+
+5. Open **http://localhost:3000** in your browser. Vite proxies `/api` requests to the API server.
+
+**If you get "Server error: 404" when loading folders or using APIs:**  
+You need the API server running. Run `npm run dev:api` in a separate terminal, then try again.
+
+**If Etsy / Arcane Splitter images return 500 or "res.status(...).send is not a function":**  
+Restart the API server: stop it (Ctrl+C in the terminal where `npm run dev:api` is running), then run `npm run dev:api` again. After restart you should see a log line: `res.status().send() / .json() supported for Etsy proxy-image.`
+
+**If you see "WebSocket connection failed" or "[vite] failed to connect to websocket":**  
+HMR is disabled; this message is harmless. You can ignore it or do a hard refresh (Ctrl+Shift+R). The app works without the WebSocket.
+
+**If you see a blank page:**
+- Open DevTools (F12) → **Console** and check for red error messages.
+- If an error is shown on the page ("Something went wrong"), read the message and check the console for details.
+- Make sure you are using `npm run dev` (Vite), not Next.js. This project’s main app runs with Vite.
 
 ## Deployment on Vercel
 

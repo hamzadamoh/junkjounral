@@ -1,0 +1,6 @@
+# Arcane Splitter - Colab dependencies
+# In Colab: !pip install -r requirements.txt
+Pillow>=9.0.0
+numpy>=1.20.0
+requests>=2.25.0
+openai>=1.0.0
