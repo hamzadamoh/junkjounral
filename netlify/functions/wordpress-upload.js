@@ -118,7 +118,7 @@ exports.handler = async (event, context) => {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      console.error('[WordPress API] Upload error:', response.status, errorText);
+      console.error('[WordPress API] Upload error:', response.status, errorText.substring(0, 500));
       
       // Check if it's a database connection error
       if (errorText.includes('database connection') || errorText.includes('Database Error')) {
@@ -135,19 +135,53 @@ exports.handler = async (event, context) => {
         };
       }
       
+      // Check for rate limiting (403 or 429)
+      const isRateLimit = response.status === 403 || response.status === 429;
+      if (isRateLimit) {
+        return {
+          statusCode: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+          body: JSON.stringify({ 
+            error: `WordPress upload failed: ${response.status} (Rate limit or permission denied)`,
+            retryable: true
+          }),
+        };
+      }
+      
       // Try to extract meaningful error from HTML if it's an HTML response
       let errorMessage = errorText;
-      if (errorText.includes('<!DOCTYPE html>')) {
-        const titleMatch = errorText.match(/<title>(.*?)<\/title>/i);
-        const h1Match = errorText.match(/<h1[^>]*>(.*?)<\/h1>/i);
-        if (h1Match) {
-          errorMessage = h1Match[1];
-        } else if (titleMatch) {
-          errorMessage = titleMatch[1];
-        } else {
-          errorMessage = 'WordPress server error';
+      if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
+        // Try multiple patterns to extract error message
+        const patterns = [
+          /<h1[^>]*>(.*?)<\/h1>/i,
+          /<title>(.*?)<\/title>/i,
+          /<p[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/p>/i,
+          /<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/div>/i,
+          /error[^<]*:?\s*([^<\n]+)/i
+        ];
+        
+        for (const pattern of patterns) {
+          const match = errorText.match(pattern);
+          if (match && match[1]) {
+            errorMessage = match[1].trim();
+            break;
+          }
+        }
+        
+        if (errorMessage === errorText) {
+          errorMessage = `WordPress server error (${response.status})`;
         }
       }
+      
+      // Determine if error is retryable
+      const retryable = response.status === 503 || 
+                       response.status === 429 || 
+                       response.status === 500 ||
+                       errorText.includes('timeout') ||
+                       errorText.includes('temporarily');
       
       return {
         statusCode: response.status,
@@ -156,19 +190,52 @@ exports.handler = async (event, context) => {
           'Access-Control-Allow-Origin': '*',
         },
         body: JSON.stringify({ 
-          error: `WordPress upload failed: ${response.status} ${errorMessage.substring(0, 200)}` 
+          error: `WordPress upload failed: ${response.status} ${errorMessage.substring(0, 200)}`,
+          retryable
         }),
       };
     }
 
     // Check if response is JSON before parsing
-    const contentType = response.headers.get('content-type');
+    const contentType = response.headers.get('content-type') || '';
     let data;
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
+    
+    if (contentType.includes('application/json')) {
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        const text = await response.text().catch(() => 'Unable to read response');
+        console.error('[WordPress API] JSON parse error:', parseError);
+        console.error('[WordPress API] Response text:', text.substring(0, 500));
+        return {
+          statusCode: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+          body: JSON.stringify({ 
+            error: 'WordPress returned invalid JSON response',
+            retryable: true
+          }),
+        };
+      }
     } else {
-      const text = await response.text();
-      console.error('[WordPress API] Non-JSON response:', text.substring(0, 200));
+      const text = await response.text().catch(() => 'Unable to read response');
+      console.error('[WordPress API] Non-JSON response. Content-Type:', contentType);
+      console.error('[WordPress API] Response text:', text.substring(0, 500));
+      
+      // Try to extract error from HTML response
+      let errorMessage = 'WordPress returned an unexpected response format';
+      if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+        const h1Match = text.match(/<h1[^>]*>(.*?)<\/h1>/i);
+        const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+        if (h1Match) {
+          errorMessage = h1Match[1].trim();
+        } else if (titleMatch) {
+          errorMessage = titleMatch[1].trim();
+        }
+      }
+      
       return {
         statusCode: 500,
         headers: {
@@ -176,7 +243,8 @@ exports.handler = async (event, context) => {
           'Access-Control-Allow-Origin': '*',
         },
         body: JSON.stringify({ 
-          error: 'WordPress returned an unexpected response format' 
+          error: errorMessage,
+          retryable: true
         }),
       };
     }

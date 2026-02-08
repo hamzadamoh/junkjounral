@@ -421,19 +421,32 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     setError(null);
     
     try {
-      const updatedSlices = await Promise.all(
-        slices.map(async (slice, index) => {
-          try {
-            const wordPressUrl = await uploadImageToWordPress(slice.base64);
-            setWordPressUploadProgress({ completed: index + 1, total: slices.length });
-            console.log(`[ArcaneSplitter] ✅ Uploaded slice ${slice.id} to WordPress: ${wordPressUrl}`);
-            return { ...slice, wordPressUrl };
-          } catch (error: any) {
-            console.error(`[ArcaneSplitter] Failed to upload slice ${slice.id}:`, error);
-            return slice; // Keep original slice if upload fails
+      // Upload sequentially with delays to avoid rate limiting
+      const updatedSlices: Array<AnalyzedSlice & { wordPressUrl?: string }> = [];
+      
+      for (let i = 0; i < slices.length; i++) {
+        const slice = slices[i];
+        try {
+          const wordPressUrl = await uploadImageToWordPress(slice.base64, 3); // 3 retries
+          updatedSlices.push({ ...slice, wordPressUrl });
+          setWordPressUploadProgress({ completed: i + 1, total: slices.length });
+          console.log(`[ArcaneSplitter] ✅ Uploaded slice ${slice.id} to WordPress: ${wordPressUrl}`);
+          
+          // Add delay between uploads to avoid rate limiting (except for last item)
+          if (i < slices.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between uploads
           }
-        })
-      );
+        } catch (error: any) {
+          console.error(`[ArcaneSplitter] Failed to upload slice ${slice.id}:`, error);
+          updatedSlices.push(slice); // Keep original slice if upload fails
+          setWordPressUploadProgress({ completed: i + 1, total: slices.length });
+          
+          // If we get a 403 error, wait longer before next upload
+          if (error.message && error.message.includes('403')) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay after 403
+          }
+        }
+      }
       
       setSlices(updatedSlices);
       const uploadedCount = updatedSlices.filter(s => (s as any).wordPressUrl).length;

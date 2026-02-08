@@ -35,7 +35,7 @@ interface WordPressMediaResponse {
  * @param retries Number of retry attempts (default: 2)
  * @returns The public URL of the uploaded image
  */
-export const uploadImageToWordPress = async (base64Image: string, retries: number = 2): Promise<string> => {
+export const uploadImageToWordPress = async (base64Image: string, retries: number = 3): Promise<string> => {
   const maxRetries = retries;
   let attempt = 0;
   
@@ -49,18 +49,29 @@ export const uploadImageToWordPress = async (base64Image: string, retries: numbe
         },
         body: JSON.stringify({
           base64Image,
-          filename: `style-ref-${Date.now()}.jpg`
+          filename: `style-ref-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         
-        // Check if it's a retryable error (database connection issues)
-        if (errorData.retryable && attempt < maxRetries) {
+        // Check if it's a retryable error (database connection issues, rate limiting, or 403)
+        const isRetryable = errorData.retryable || 
+                           response.status === 403 || 
+                           response.status === 429 || 
+                           response.status === 503 ||
+                           (errorData.error && (
+                             errorData.error.includes('database') || 
+                             errorData.error.includes('rate limit') ||
+                             errorData.error.includes('403')
+                           ));
+        
+        if (isRetryable && attempt < maxRetries) {
           attempt++;
-          const delay = Math.min(1000 * attempt, 3000); // Exponential backoff, max 3 seconds
-          console.log(`[WordPress] Retryable error, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+          // Exponential backoff: 1s, 2s, 4s, max 8s
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+          console.log(`[WordPress] Retryable error (${response.status}), retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
@@ -85,10 +96,20 @@ export const uploadImageToWordPress = async (base64Image: string, retries: numbe
       }
       
       // Check if error message suggests retryable issue
-      if (error.message && (error.message.includes('database') || error.message.includes('503'))) {
+      const isRetryableError = error.message && (
+        error.message.includes('database') || 
+        error.message.includes('503') ||
+        error.message.includes('403') ||
+        error.message.includes('429') ||
+        error.message.includes('rate limit') ||
+        error.message.includes('timeout')
+      );
+      
+      if (isRetryableError) {
         attempt++;
-        const delay = Math.min(1000 * attempt, 3000);
-        console.log(`[WordPress] Database error detected, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+        // Exponential backoff: 1s, 2s, 4s, max 8s
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+        console.log(`[WordPress] Retryable error detected, retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
