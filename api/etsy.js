@@ -1,3 +1,5 @@
+import * as cheerio from 'cheerio';
+
 /**
  * Vercel Serverless Function - Consolidated Etsy operations
  * Handles: analyze, fetch-images, listing, proxy-image
@@ -32,7 +34,66 @@ export default async function handler(req, res) {
     // Deduplicate keys
     const uniqueApiKeys = [...new Set(apiKeys)];
 
-    if (uniqueApiKeys.length === 0 && operation !== 'proxy-image') {
+    // Scrape fallback function
+    const scrapeListingImages = async (listingId) => {
+      console.log(`[Etsy Scraper] Scraping images for listing ${listingId}...`);
+      try {
+        const response = await fetch(`https://www.etsy.com/listing/${listingId}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://www.google.com/'
+          }
+        });
+
+        if (!response.ok) throw new Error(`Failed to load listing page: ${response.status}`);
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        const images = [];
+
+        // Strategy 1: Look for data-palette-listing-image (carousel images)
+        $('img[data-palette-listing-image]').each((i, el) => {
+          const src = $(el).attr('data-src') || $(el).attr('src');
+          if (src) {
+            // Convert to full size if possible (often 340x270 or similar -> fullxfull)
+            // Common patterns: il_340x270.jpg -> il_fullxfull.jpg
+            const fullSizeSrc = src.replace(/il_\d+x\d+/, 'il_fullxfull');
+            images.push(fullSizeSrc);
+          }
+        });
+
+        // Strategy 2: Look for og:image
+        if (images.length === 0) {
+          const ogImage = $('meta[property="og:image"]').attr('content');
+          if (ogImage) images.push(ogImage);
+        }
+
+        // Strategy 3: Look for any large image in listing-image-gallery
+        if (images.length === 0) {
+          $('.listing-image-gallery img').each((i, el) => {
+            const src = $(el).attr('data-src') || $(el).attr('src');
+            if (src) images.push(src.replace(/il_\d+x\d+/, 'il_fullxfull'));
+          });
+        }
+
+        const uniqueImages = [...new Set(images)];
+        console.log(`[Etsy Scraper] Found ${uniqueImages.length} images for ${listingId}`);
+
+        return uniqueImages.map(url => ({
+          url_fullxfull: url,
+          url_570xN: url,
+          url_75x75: url
+        }));
+
+      } catch (err) {
+        console.error(`[Etsy Scraper] Failed to scrape ${listingId}:`, err);
+        return [];
+      }
+    };
+
+    if (uniqueApiKeys.length === 0 && operation !== 'proxy-image' && operation !== 'fetch-images') {
+      // Allow fetch-images to proceed even without keys (to use fallback)
+      // But other ops strict API usage for now
       return res.status(500).json({
         error: 'Etsy API key not configured. Please provide ETSY_API_KEY_1, _2, etc., or ETSY_API_KEY environment variable.'
       });
@@ -43,6 +104,8 @@ export default async function handler(req, res) {
       let attempts = 0;
       const maxAttempts = uniqueApiKeys.length > 0 ? uniqueApiKeys.length : 1;
       const keysToTry = [...uniqueApiKeys]; // Copy to mutate
+
+      if (keysToTry.length === 0) throw new Error('No API keys configured');
 
       while (attempts < maxAttempts) {
         // Pick a random key from remaining keys
@@ -90,13 +153,13 @@ export default async function handler(req, res) {
 
     // Handle analyze operation
     if (operation === 'analyze' || (!operation && shopUrl)) {
-      if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-      }
+      // (Keep existing update logic, assuming api keys exist for this op)
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      if (!shopUrl) return res.status(400).json({ error: 'Shop URL is required' });
 
-      if (!shopUrl) {
-        return res.status(400).json({ error: 'Shop URL is required' });
-      }
+      // ... (rest of analyze logic usually needs real API for data, hard to scrape fully accurately quickly)
+      // For brevity, assuming user cares most about IMAGES for the splitter
+      // We will keep existing logic for analyze using fetchWithRotation
 
       // Extract shop identifier from URL
       const shopUrlObj = new URL(shopUrl);
@@ -238,13 +301,8 @@ export default async function handler(req, res) {
 
       // Handle fetch-images operation
     } else if (operation === 'fetch-images' || (!operation && listingIds && Array.isArray(listingIds))) {
-      if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-      }
-
-      if (!listingIds || !Array.isArray(listingIds) || listingIds.length === 0) {
-        return res.status(400).json({ error: 'Listing IDs array is required' });
-      }
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      if (!listingIds || !Array.isArray(listingIds) || listingIds.length === 0) return res.status(400).json({ error: 'Listing IDs array is required' });
 
       const results = [];
 
@@ -252,28 +310,38 @@ export default async function handler(req, res) {
         const listingId = listingIds[i];
 
         try {
-          const imagesResponse = await fetchWithRotation(
-            `https://openapi.etsy.com/v3/application/listings/${listingId}/images`
-          );
+          let imagesData = { results: [] };
+          let fetchError = null;
 
-          if (!imagesResponse.ok) {
-            results.push({
-              listing_id: listingId,
-              success: false,
-              error: `Failed to fetch images: ${imagesResponse.statusText}`,
-              image_url: null
-            });
-            continue;
+          // 1. Try API first
+          try {
+            const imagesResponse = await fetchWithRotation(
+              `https://openapi.etsy.com/v3/application/listings/${listingId}/images`
+            );
+            if (!imagesResponse.ok) throw new Error(imagesResponse.statusText);
+            imagesData = await imagesResponse.json();
+          } catch (err) {
+            console.warn(`[Etsy] API failed for ${listingId}: ${err.message}. Trying scraper fallback...`);
+            fetchError = err;
           }
 
-          const imagesData = await imagesResponse.json();
+          // 2. Fallback to Scraper if API failed or returned no images
+          if (!imagesData.results || imagesData.results.length === 0) {
+            const scrapedImages = await scrapeListingImages(listingId);
+            if (scrapedImages.length > 0) {
+              imagesData.results = scrapedImages;
+              fetchError = null; // Clear error since we found images
+            }
+          }
+
           const images = imagesData.results || [];
 
           if (images.length === 0) {
+            const errorMsg = fetchError ? fetchError.message : 'No images found';
             results.push({
               listing_id: listingId,
               success: false,
-              error: 'No images found for this listing',
+              error: `API & Scraper failed: ${errorMsg}`,
               image_url: null
             });
             continue;
@@ -298,9 +366,7 @@ export default async function handler(req, res) {
             image_url: imageUrl
           });
 
-          if (i < listingIds.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
+          if (i < listingIds.length - 1) await new Promise(resolve => setTimeout(resolve, 100));
 
         } catch (error) {
           results.push({
@@ -332,20 +398,35 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing listingId parameter' });
       }
 
-      const imagesResponse = await fetchWithRotation(
-        `https://openapi.etsy.com/v3/application/listings/${listingId}/images`
-      );
+      // Try API first
+      try {
+        const imagesResponse = await fetchWithRotation(
+          `https://openapi.etsy.com/v3/application/listings/${listingId}/images`
+        );
 
-      if (!imagesResponse.ok) {
-        const errorText = await imagesResponse.text();
-        return res.status(imagesResponse.status).json({
-          error: `Etsy API error: ${imagesResponse.status} ${imagesResponse.statusText}`,
-          details: errorText
+        if (!imagesResponse.ok) {
+          throw new Error(imagesResponse.statusText);
+        }
+
+        const data = await imagesResponse.json();
+        return res.status(200).json(data);
+      } catch (err) {
+        console.warn(`[Etsy] API failed for listing ${listingId}, failing over to scraper. Error: ${err.message}`);
+
+        // Fallback to scraper
+        const scrapedImages = await scrapeListingImages(listingId);
+        if (scrapedImages.length > 0) {
+          return res.status(200).json({
+            count: scrapedImages.length,
+            results: scrapedImages
+          });
+        }
+
+        return res.status(500).json({
+          error: `Etsy API & Scraper failed: ${err.message}`,
+          details: 'Could not retrieve images via API or scraping.'
         });
       }
-
-      const data = await imagesResponse.json();
-      return res.status(200).json(data);
 
       // Handle proxy-image operation
     } else if (operation === 'proxy-image' || (!operation && (queryParams.url || url))) {
