@@ -257,36 +257,26 @@ export default function Home() {
       return;
     }
 
+    // Ask user for folder name
+    const defaultName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
+    const folderName = prompt('Enter a name for the Google Drive folder:', defaultName);
+    if (!folderName || !folderName.trim()) {
+      return; // User cancelled or entered empty name
+    }
+
     setUploadingGridsToDrive(true);
     setGridUploadResult(null);
 
     try {
       const config = getGoogleDriveConfig(googleDriveAccount);
-      const folderName = `Grid Pages ${new Date().toISOString().split('T')[0]}`;
 
-      // Convert blob URLs to base64
-      const gridPagesBase64 = await Promise.all(
-        gridPages.map(async (gridUrl) => {
-          const response = await fetch(gridUrl);
-          const blob = await response.blob();
-          return new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              resolve(reader.result as string);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        })
-      );
-
-      const response = await fetch('/api/google-drive', {
+      // Step 1: Create folder
+      const folderResponse = await fetch('/api/google-drive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          operation: 'upload-grids',
-          folderName,
-          gridPages: gridPagesBase64,
+          operation: 'create-grid-folder',
+          folderName: folderName.trim(),
           clientId: config.clientId,
           clientSecret: config.clientSecret,
           refreshToken: config.refreshToken,
@@ -294,19 +284,134 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload grids');
+      if (!folderResponse.ok) {
+        let errorMessage = `Failed to create folder: ${folderResponse.status}`;
+        try {
+          const error = await folderResponse.json();
+          errorMessage = error.error || errorMessage;
+        } catch (e) {
+          try {
+            const errorText = await folderResponse.text();
+            errorMessage = errorText || errorMessage;
+          } catch (textError) {
+            // Use default error message
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      const folderData = await folderResponse.json();
+      const folderId = folderData.folderId;
+      const folderUrl = folderData.folderUrl;
+
+      // Step 2: Upload images one at a time
+      let uploaded = 0;
+      let failed = 0;
+
+      for (let i = 0; i < gridPages.length; i++) {
+        try {
+          // Convert blob URL to base64 with compression
+          const response = await fetch(gridPages[i]);
+          const blob = await response.blob();
+          
+          // Compress image to reduce size (max 2000x2000 to stay under 4MB limit)
+          const base64Image = await new Promise<string>((resolve, reject) => {
+            const img = document.createElement('img');
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                reject(new Error('Could not get canvas context'));
+                return;
+              }
+
+              // Calculate new dimensions (max 2000px on longest side)
+              let width = img.width;
+              let height = img.height;
+              const maxDimension = 2000;
+              
+              if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                  height = (height / width) * maxDimension;
+                  width = maxDimension;
+                } else {
+                  width = (width / height) * maxDimension;
+                  height = maxDimension;
+                }
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              
+              // Draw and compress
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convert to JPEG with compression
+              canvas.toBlob((blob) => {
+                if (!blob) {
+                  reject(new Error('Failed to compress image'));
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  resolve(reader.result as string);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              }, 'image/jpeg', 0.85);
+            };
+            img.onerror = reject;
+            img.src = URL.createObjectURL(blob);
+          });
+
+          // Upload single image
+          const uploadResponse = await fetch('/api/google-drive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              operation: 'upload-single-grid',
+              folderId,
+              base64Image,
+              fileName: `grid-page-${i + 1}.jpg`,
+              clientId: config.clientId,
+              clientSecret: config.clientSecret,
+              refreshToken: config.refreshToken,
+              accountNumber: googleDriveAccount,
+            }),
+          });
+
+          if (!uploadResponse.ok) {
+            let errorMessage = `HTTP ${uploadResponse.status}`;
+            try {
+              const error = await uploadResponse.json();
+              errorMessage = error.error || errorMessage;
+            } catch (e) {
+              const txt = await uploadResponse.text().catch(() => '');
+              if (txt) errorMessage = txt;
+            }
+            console.error(`Failed to upload grid ${i + 1}:`, errorMessage);
+            failed++;
+          } else {
+            uploaded++;
+          }
+
+          // Small delay between uploads
+          if (i < gridPages.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error: any) {
+          console.error(`Error uploading grid ${i + 1}:`, error);
+          failed++;
+        }
+      }
+
       setGridUploadResult({
-        folderUrl: data.folderUrl,
-        uploaded: data.uploaded,
-        failed: data.failed,
+        folderUrl,
+        uploaded,
+        failed,
       });
 
-      alert(`Successfully uploaded ${data.uploaded} grid(s) to Google Drive!${data.failed > 0 ? ` (${data.failed} failed)` : ''}`);
+      alert(`Successfully uploaded ${uploaded} grid(s) to Google Drive!${failed > 0 ? ` (${failed} failed)` : ''}\n\nFolder: ${folderName}`);
     } catch (error: any) {
       console.error('Error uploading grids:', error);
       alert(`Failed to upload grids: ${error.message}`);
