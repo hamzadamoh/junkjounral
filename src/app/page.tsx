@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Sparkles, BookOpen, Download, Grid3x3, Loader2, Folder, FileDown } from 'lucide-react';
+import { Sparkles, BookOpen, Download, Grid3x3, Loader2, Folder, FileDown, Upload } from 'lucide-react';
 import { BiomorphicShape } from '@/components/BiomorphicShape';
 import { SynestheticButton } from '@/components/SynestheticButton';
 import { OrganicNav } from '@/components/OrganicNav';
-import { getGoogleDriveConfig } from '../../../services/env';
+import { getGoogleDriveConfig } from '../../services/env';
 
 export default function Home() {
   const [googleDriveAccount, setGoogleDriveAccount] = useState<1 | 2>(1);
@@ -23,6 +23,11 @@ export default function Home() {
   const [isGeneratingGrids, setIsGeneratingGrids] = useState(false);
   const [uploadingGridsToDrive, setUploadingGridsToDrive] = useState(false);
   const [gridUploadResult, setGridUploadResult] = useState<{ folderUrl?: string; uploaded?: number; failed?: number } | null>(null);
+
+  // Filter folders based on search query
+  const filteredFolders = folders.filter(folder =>
+    folder.name.toLowerCase().includes(folderSearchQuery.toLowerCase())
+  );
 
   // Helper function to shuffle array (Fisher-Yates algorithm)
   const shuffleArray = <T,>(array: T[]): T[] => {
@@ -137,7 +142,7 @@ export default function Home() {
       for (let gridIndex = 0; gridIndex < numGridPages; gridIndex++) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
+
         if (!ctx) {
           throw new Error('Could not get canvas context');
         }
@@ -162,7 +167,7 @@ export default function Home() {
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
             const imageIndex = gridIndex * imagesPerGrid + row * cols + col;
-            
+
             if (imageIndex >= availableImages) {
               break;
             }
@@ -174,17 +179,17 @@ export default function Home() {
             await new Promise<void>((resolve) => {
               const img = new window.Image();
               img.crossOrigin = 'anonymous';
-              
+
               img.onload = () => {
                 try {
                   const imgAspect = img.width / img.height;
                   const cellAspect = cellWidth / cellHeight;
-                  
+
                   let drawWidth = cellWidth;
                   let drawHeight = cellHeight;
                   let drawX = x;
                   let drawY = y;
-                  
+
                   if (imgAspect > cellAspect) {
                     drawWidth = cellHeight * imgAspect;
                     drawX = x - (drawWidth - cellWidth) / 2;
@@ -192,7 +197,7 @@ export default function Home() {
                     drawHeight = cellWidth / imgAspect;
                     drawY = y - (drawHeight - cellHeight) / 2;
                   }
-                  
+
                   ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
                   resolve();
                 } catch (err) {
@@ -200,12 +205,12 @@ export default function Home() {
                   resolve();
                 }
               };
-              
+
               img.onerror = () => {
                 console.error('Failed to load image:', imageUrl);
                 resolve();
               };
-              
+
               img.src = imageUrl;
             });
           }
@@ -281,6 +286,7 @@ export default function Home() {
           clientSecret: config.clientSecret,
           refreshToken: config.refreshToken,
           accountNumber: googleDriveAccount,
+          parentFolderId: '1zbBaYsbwn4LizT-uj4AQosUyA4Hs4Qaa',
         }),
       });
 
@@ -313,7 +319,7 @@ export default function Home() {
           // Convert blob URL to base64 with compression
           const response = await fetch(gridPages[i]);
           const blob = await response.blob();
-          
+
           // Compress image to reduce size (max 2000x2000 to stay under 4MB limit)
           const base64Image = await new Promise<string>((resolve, reject) => {
             const img = document.createElement('img');
@@ -329,7 +335,7 @@ export default function Home() {
               let width = img.width;
               let height = img.height;
               const maxDimension = 2000;
-              
+
               if (width > maxDimension || height > maxDimension) {
                 if (width > height) {
                   height = (height / width) * maxDimension;
@@ -342,10 +348,10 @@ export default function Home() {
 
               canvas.width = width;
               canvas.height = height;
-              
+
               // Draw and compress
               ctx.drawImage(img, 0, 0, width, height);
-              
+
               // Convert to JPEG with compression
               canvas.toBlob((blob) => {
                 if (!blob) {

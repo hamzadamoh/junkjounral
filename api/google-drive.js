@@ -12,14 +12,14 @@ export default async function handler(req, res) {
   try {
     const { operation, folderName, folderId, filename, base64Data, mimeType, clientId, clientSecret, refreshToken, parentFolderId, gridPages } = req.body || {};
     const queryParams = req.query || {};
-    
+
     // For proxy-image (GET request), credentials come from query params
     const isProxyImage = operation === 'proxy-image' || (!operation && req.method === 'GET' && queryParams.fileId);
-    
+
     // Only validate credentials from body for non-proxy operations
     if (!isProxyImage && (!clientId || !clientSecret || !refreshToken)) {
-      return res.status(400).json({ 
-        error: 'Missing required parameters: clientId, clientSecret, refreshToken' 
+      return res.status(400).json({
+        error: 'Missing required parameters: clientId, clientSecret, refreshToken'
       });
     }
 
@@ -54,9 +54,9 @@ export default async function handler(req, res) {
         } catch {
           errorData = { error: 'unknown_error', error_description: errorText };
         }
-        
+
         console.error('[Google Drive] Token refresh error:', errorData);
-        
+
         let errorMessage = 'Failed to refresh access token';
         if (errorData.error === 'unauthorized_client') {
           errorMessage = 'OAuth credentials are invalid. Please check:\n' +
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
         } else if (errorData.error_description) {
           errorMessage = errorData.error_description;
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -80,8 +80,8 @@ export default async function handler(req, res) {
     // Handle create-folder operation
     if (operation === 'create-folder' || (!operation && folderName && !filename)) {
       if (!folderName) {
-        return res.status(400).json({ 
-          error: 'Missing required parameter: folderName' 
+        return res.status(400).json({
+          error: 'Missing required parameter: folderName'
         });
       }
 
@@ -90,12 +90,12 @@ export default async function handler(req, res) {
         accessToken = await refreshAccessToken();
       } catch (tokenError) {
         console.error('[Google Drive] Token refresh failed:', tokenError);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: tokenError.message || 'Failed to refresh access token',
           details: 'OAuth credentials are invalid. Please check:\n1. Client ID and Client Secret are correct\n2. Refresh token is valid (generate a new one if needed)\n3. OAuth consent screen is properly configured\n4. The refresh token was generated with the same Client ID'
         });
       }
-      
+
       const targetParentFolderId = parentFolderId || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU';
 
       const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
@@ -114,9 +114,9 @@ export default async function handler(req, res) {
       if (!folderResponse.ok) {
         const errorText = await folderResponse.text();
         console.error('[Google Drive] Folder creation error:', errorText);
-        return res.status(folderResponse.status).json({ 
+        return res.status(folderResponse.status).json({
           error: 'Failed to create folder',
-          details: errorText 
+          details: errorText
         });
       }
 
@@ -126,11 +126,11 @@ export default async function handler(req, res) {
         folderName: folderData.name,
       });
 
-    // Handle upload-file operation
+      // Handle upload-file operation
     } else if (operation === 'upload-file' || (!operation && filename && base64Data)) {
       if (!folderId || !filename || !base64Data) {
-        return res.status(400).json({ 
-          error: 'Missing required parameters: folderId, filename, base64Data' 
+        return res.status(400).json({
+          error: 'Missing required parameters: folderId, filename, base64Data'
         });
       }
 
@@ -139,22 +139,22 @@ export default async function handler(req, res) {
         accessToken = await refreshAccessToken();
       } catch (tokenError) {
         console.error('[Google Drive] Token refresh failed:', tokenError);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: tokenError.message || 'Failed to refresh access token',
           details: 'OAuth credentials are invalid. Please check:\n1. Client ID and Client Secret are correct\n2. Refresh token is valid (generate a new one if needed)\n3. OAuth consent screen is properly configured\n4. The refresh token was generated with the same Client ID'
         });
       }
       const fileBuffer = Buffer.from(base64Data, 'base64');
-      
+
       const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
+
       const metadata = {
         name: filename,
         parents: [folderId],
       };
-      
+
       const metadataJson = JSON.stringify(metadata);
-      
+
       const parts = [
         `--${boundary}\r\n`,
         `Content-Type: application/json; charset=UTF-8\r\n`,
@@ -164,7 +164,7 @@ export default async function handler(req, res) {
         `Content-Type: ${mimeType || 'image/jpeg'}\r\n`,
         `\r\n`,
       ];
-      
+
       const multipartBody = Buffer.concat([
         Buffer.from(parts.join(''), 'utf8'),
         fileBuffer,
@@ -183,9 +183,9 @@ export default async function handler(req, res) {
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text();
         console.error('[Google Drive] Upload error:', errorText);
-        return res.status(uploadResponse.status).json({ 
+        return res.status(uploadResponse.status).json({
           error: 'Failed to upload file',
-          details: errorText 
+          details: errorText
         });
       }
 
@@ -213,12 +213,12 @@ export default async function handler(req, res) {
         webContentLink: fileData.webContentLink,
       });
 
-    // Handle list-folders operation
+      // Handle list-folders operation
     } else if (operation === 'list-folders' || (!operation && !folderName && !filename && !gridPages && parentFolderId !== undefined)) {
       const accessToken = await refreshAccessToken();
 
       // List folders in the parent folder (or root if not specified)
-      const query = parentFolderId 
+      const query = parentFolderId
         ? `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
         : `mimeType='application/vnd.google-apps.folder' and trashed=false`;
 
@@ -243,15 +243,15 @@ export default async function handler(req, res) {
 
         if (!response.ok) {
           const errorText = await response.text();
-          return res.status(response.status).json({ 
-            error: `Failed to list folders: ${response.status} - ${errorText}` 
+          return res.status(response.status).json({
+            error: `Failed to list folders: ${response.status} - ${errorText}`
           });
         }
 
         const data = await response.json();
         const folders = data.files || [];
         allFolders = allFolders.concat(folders);
-        
+
         pageToken = data.nextPageToken;
         hasMore = !!pageToken && allFolders.length < maxFolders;
       }
@@ -265,11 +265,11 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ folders: allFolders });
 
-    // Handle list-images operation
+      // Handle list-images operation
     } else if (operation === 'list-images' || (!operation && folderId && !folderName && !filename && !gridPages)) {
       if (!folderId) {
-        return res.status(400).json({ 
-          error: 'Missing required parameter: folderId' 
+        return res.status(400).json({
+          error: 'Missing required parameter: folderId'
         });
       }
 
@@ -309,23 +309,23 @@ export default async function handler(req, res) {
 
         if (!response.ok) {
           const errorText = await response.text();
-          return res.status(response.status).json({ 
-            error: `Failed to list images: ${response.status} - ${errorText}` 
+          return res.status(response.status).json({
+            error: `Failed to list images: ${response.status} - ${errorText}`
           });
         }
 
         const data = await response.json();
         const files = data.files || [];
-        
+
         // Add files up to the max limit
         const remaining = maxImages - allFiles.length;
         allFiles = allFiles.concat(files.slice(0, remaining));
-        
+
         // Check if there are more pages
         pageToken = data.nextPageToken;
         hasMore = !!pageToken && allFiles.length < maxImages;
       }
-      
+
       // Return proxy URLs instead of direct Google Drive URLs to avoid CORS issues
       const images = allFiles.map((file) => {
         return {
@@ -338,7 +338,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ images });
 
-    // Handle proxy-image operation (must be checked early since it uses GET)
+      // Handle proxy-image operation (must be checked early since it uses GET)
     } else if (isProxyImage) {
       if (req.method !== 'GET') {
         return res.status(405).json({ message: 'Method not allowed' });
@@ -351,8 +351,8 @@ export default async function handler(req, res) {
       }
 
       if (!queryParams.clientId || !queryParams.clientSecret || !queryParams.refreshToken) {
-        return res.status(400).json({ 
-          error: 'Missing required parameters: clientId, clientSecret, refreshToken' 
+        return res.status(400).json({
+          error: 'Missing required parameters: clientId, clientSecret, refreshToken'
         });
       }
 
@@ -369,8 +369,8 @@ export default async function handler(req, res) {
       );
 
       if (!imageResponse.ok) {
-        return res.status(imageResponse.status).json({ 
-          error: `Failed to fetch image: ${imageResponse.statusText}` 
+        return res.status(imageResponse.status).json({
+          error: `Failed to fetch image: ${imageResponse.statusText}`
         });
       }
 
@@ -382,31 +382,36 @@ export default async function handler(req, res) {
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.setHeader('Access-Control-Allow-Origin', '*');
-      
+
       return res.status(200).send(Buffer.from(imageBuffer));
 
-    // Handle create-grid-folder operation (creates folder and returns folderId)
+      // Handle create-grid-folder operation (creates folder and returns folderId)
     } else if (operation === 'create-grid-folder') {
       if (!folderName) {
-        return res.status(400).json({ 
-          error: 'Missing required parameter: folderName' 
+        return res.status(400).json({
+          error: 'Missing required parameter: folderName'
         });
       }
 
       const accessToken = await refreshAccessToken();
 
-      // Create folder in root (not in parent folder)
+      // Create folder
+      const folderMetadata = {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+
+      if (parentFolderId) {
+        folderMetadata.parents = [parentFolderId];
+      }
+
       const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: folderName,
-          mimeType: 'application/vnd.google-apps.folder',
-          // No parents = root folder
-        }),
+        body: JSON.stringify(folderMetadata),
       });
 
       if (!folderResponse.ok) {
@@ -423,14 +428,14 @@ export default async function handler(req, res) {
         folderUrl,
       });
 
-    // Handle upload-single-grid operation (uploads one grid image at a time)
+      // Handle upload-single-grid operation (uploads one grid image at a time)
     } else if (operation === 'upload-single-grid') {
       const { folderId, base64Image, fileName } = req.body;
 
       if (!folderId || !base64Image || !fileName) {
         console.error('[Google Drive] Missing parameters:', { folderId: !!folderId, base64Image: !!base64Image, fileName: !!fileName });
-        return res.status(400).json({ 
-          error: 'Missing required parameters: folderId, base64Image, fileName' 
+        return res.status(400).json({
+          error: 'Missing required parameters: folderId, base64Image, fileName'
         });
       }
 
@@ -451,14 +456,14 @@ export default async function handler(req, res) {
         const fileBuffer = Buffer.from(base64Content, 'base64');
 
         const boundary = '-------' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        
+
         const metadata = {
           name: fileName,
           parents: [folderId],
         };
-        
+
         const metadataJson = JSON.stringify(metadata);
-        
+
         const parts = [
           `--${boundary}\r\n`,
           `Content-Type: application/json; charset=UTF-8\r\n`,
@@ -468,7 +473,7 @@ export default async function handler(req, res) {
           `Content-Type: image/jpeg\r\n`,
           `\r\n`,
         ];
-        
+
         const multipartBody = Buffer.concat([
           Buffer.from(parts.join(''), 'utf8'),
           fileBuffer,
@@ -499,7 +504,7 @@ export default async function handler(req, res) {
         });
 
         const fileData = fileResponse.ok ? await fileResponse.json() : uploadData;
-        
+
         return res.status(200).json({
           success: true,
           fileId: uploadData.id,
@@ -515,14 +520,14 @@ export default async function handler(req, res) {
       }
 
     } else {
-      return res.status(400).json({ 
-        error: 'Invalid operation. Use ?operation=create-folder, upload-file, list-folders, list-images, or upload-grids, or provide appropriate parameters.' 
+      return res.status(400).json({
+        error: 'Invalid operation. Use ?operation=create-folder, upload-file, list-folders, list-images, or upload-grids, or provide appropriate parameters.'
       });
     }
 
   } catch (error) {
     console.error('[Google Drive] Error:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: error.message || 'Internal server error',
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });

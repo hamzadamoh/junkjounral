@@ -14,19 +14,75 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { operation, shopUrl, listingIds, listingId, url, apiKey } = req.body || {};
-    const queryParams = req.query || {};
+    // Collect all available API keys
+    const apiKeys = [
+      apiKey || queryParams.apiKey,
+      process.env.ETSY_API_KEY_1,
+      process.env.ETSY_API_KEY_2,
+      process.env.ETSY_API_KEY_3,
+      process.env.ETSY_API_KEY_4,
+      process.env.ETSY_API_KEY_5,
+      process.env.ETSY_API_KEY || process.env.VITE_ETSY_API_KEY,
+    ].filter(Boolean); // Remove undefined/null/empty strings
 
-    // Use provided API key or fall back to environment variable
-    const etsyApiKey = apiKey || queryParams.apiKey || process.env.ETSY_API_KEY || process.env.VITE_ETSY_API_KEY;
-    
-    if (!etsyApiKey && operation !== 'proxy-image') {
-      return res.status(500).json({ 
-        error: 'Etsy API key not configured. Please provide an API key or set ETSY_API_KEY environment variable.' 
+    // Deduplicate keys
+    const uniqueApiKeys = [...new Set(apiKeys)];
+
+    if (uniqueApiKeys.length === 0 && operation !== 'proxy-image') {
+      return res.status(500).json({
+        error: 'Etsy API key not configured. Please provide ETSY_API_KEY_1, _2, etc., or ETSY_API_KEY environment variable.'
       });
     }
 
-    const headers = etsyApiKey ? { 'x-api-key': etsyApiKey } : {};
+    // Helper function to fetch with key rotation and retries
+    const fetchWithRotation = async (url, options = {}) => {
+      let attempts = 0;
+      const maxAttempts = uniqueApiKeys.length > 0 ? uniqueApiKeys.length : 1;
+      const keysToTry = [...uniqueApiKeys]; // Copy to mutate
+
+      while (attempts < maxAttempts) {
+        // Pick a random key from remaining keys
+        const keyIndex = Math.floor(Math.random() * keysToTry.length);
+        const currentKey = keysToTry[keyIndex];
+
+        // Remove used key from pool for this request cycle
+        keysToTry.splice(keyIndex, 1);
+
+        const headers = {
+          ...options.headers,
+          'x-api-key': currentKey,
+        };
+
+        try {
+          const response = await fetch(url, { ...options, headers });
+
+          // If successful or not a transferable error, return response
+          if (response.ok) {
+            return response;
+          }
+
+          // If 429 (Rate Limit) or 403 (Forbidden - likely invalid key), try next key
+          if ((response.status === 429 || response.status === 403) && keysToTry.length > 0) {
+            console.warn(`[Etsy API] Key ${currentKey.substring(0, 4)}... failed with ${response.status}. Retrying with next key...`);
+            attempts++;
+            continue;
+          }
+
+          // Return the failed response if we can't or shouldn't retry
+          return response;
+
+        } catch (error) {
+          // Network errors might be worth retrying with another key if we strictly assume it might be key-related (unlikely but possible)
+          // For now, let's treat network errors as fatal unless we want to be very aggressive
+          console.error(`[Etsy API] Request failed: ${error.message}`);
+          attempts++;
+          if (keysToTry.length > 0) continue;
+          throw error;
+        }
+      }
+
+      throw new Error('All API keys failed or were exhausted.');
+    };
 
     // Handle analyze operation
     if (operation === 'analyze' || (!operation && shopUrl)) {
@@ -47,15 +103,14 @@ export default async function handler(req, res) {
 
       const shopIdentifier = pathMatch[1];
       const isNumeric = /^\d+$/.test(shopIdentifier);
-      
+
       // Get shop ID
       let shopId;
       if (isNumeric) {
         shopId = shopIdentifier;
       } else {
-        const shopResponse = await fetch(
-          `https://openapi.etsy.com/v3/application/shops?shop_name=${shopIdentifier}`,
-          { headers }
+        const shopResponse = await fetchWithRotation(
+          `https://openapi.etsy.com/v3/application/shops?shop_name=${shopIdentifier}`
         );
         if (!shopResponse.ok) {
           throw new Error(`Failed to get shop ID: ${shopResponse.statusText}`);
@@ -68,9 +123,8 @@ export default async function handler(req, res) {
       }
 
       // Get shop details
-      const shopDetailsResponse = await fetch(
-        `https://openapi.etsy.com/v3/application/shops/${shopId}`,
-        { headers }
+      const shopDetailsResponse = await fetchWithRotation(
+        `https://openapi.etsy.com/v3/application/shops/${shopId}`
       );
       if (!shopDetailsResponse.ok) {
         throw new Error(`Failed to get shop details: ${shopDetailsResponse.statusText}`);
@@ -85,17 +139,16 @@ export default async function handler(req, res) {
 
       while (true) {
         const offset = page * perPage;
-        const listingsResponse = await fetch(
-          `https://openapi.etsy.com/v3/application/shops/${shopId}/listings/active?limit=${perPage}&offset=${offset}`,
-          { headers }
+        const listingsResponse = await fetchWithRotation(
+          `https://openapi.etsy.com/v3/application/shops/${shopId}/listings/active?limit=${perPage}&offset=${offset}`
         );
-        
+
         if (!listingsResponse.ok) {
           throw new Error(`Failed to get listings: ${listingsResponse.statusText}`);
         }
 
         const listingsData = await listingsResponse.json();
-        
+
         if (totalListings === null) {
           totalListings = listingsData.count || 0;
         }
@@ -115,10 +168,10 @@ export default async function handler(req, res) {
       const processedListings = listings.map(listing => {
         const creationTs = listing.creation_timestamp || listing.created_timestamp;
         const modifiedTs = listing.last_modified_timestamp || listing.updated_timestamp;
-        
+
         const creationDate = creationTs ? new Date(creationTs * 1000) : null;
         const modifiedDate = modifiedTs ? new Date(modifiedTs * 1000) : null;
-        const ageDays = creationDate 
+        const ageDays = creationDate
           ? Math.floor((Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
           : null;
 
@@ -147,7 +200,7 @@ export default async function handler(req, res) {
 
       const shopCreationTs = shopDetails.create_date || shopDetails.created_timestamp;
       const shopCreationDate = shopCreationTs ? new Date(shopCreationTs * 1000) : null;
-      const shopAgeDays = shopCreationDate 
+      const shopAgeDays = shopCreationDate
         ? Math.floor((Date.now() - shopCreationDate.getTime()) / (1000 * 60 * 60 * 24))
         : null;
 
@@ -179,7 +232,7 @@ export default async function handler(req, res) {
         listings: processedListings,
       });
 
-    // Handle fetch-images operation
+      // Handle fetch-images operation
     } else if (operation === 'fetch-images' || (!operation && listingIds && Array.isArray(listingIds))) {
       if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -193,11 +246,10 @@ export default async function handler(req, res) {
 
       for (let i = 0; i < listingIds.length; i++) {
         const listingId = listingIds[i];
-        
+
         try {
-          const imagesResponse = await fetch(
-            `https://openapi.etsy.com/v3/application/listings/${listingId}/images`,
-            { headers }
+          const imagesResponse = await fetchWithRotation(
+            `https://openapi.etsy.com/v3/application/listings/${listingId}/images`
           );
 
           if (!imagesResponse.ok) {
@@ -264,7 +316,7 @@ export default async function handler(req, res) {
         results: results
       });
 
-    // Handle listing operation (GET listing images)
+      // Handle listing operation (GET listing images)
     } else if (operation === 'listing' || (!operation && queryParams.listingId)) {
       if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -276,14 +328,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing listingId parameter' });
       }
 
-      const imagesResponse = await fetch(
-        `https://openapi.etsy.com/v3/application/listings/${listingId}/images`,
-        { headers }
+      const imagesResponse = await fetchWithRotation(
+        `https://openapi.etsy.com/v3/application/listings/${listingId}/images`
       );
 
       if (!imagesResponse.ok) {
         const errorText = await imagesResponse.text();
-        return res.status(imagesResponse.status).json({ 
+        return res.status(imagesResponse.status).json({
           error: `Etsy API error: ${imagesResponse.status} ${imagesResponse.statusText}`,
           details: errorText
         });
@@ -292,8 +343,11 @@ export default async function handler(req, res) {
       const data = await imagesResponse.json();
       return res.status(200).json(data);
 
-    // Handle proxy-image operation
+      // Handle proxy-image operation
     } else if (operation === 'proxy-image' || (!operation && (queryParams.url || url))) {
+      // ... (proxy-image implementation remains similar but no API key needed usually for public image URLs, 
+      // though if it does, it would use fetchWithRotation if we changed it. 
+      // Standard proxy-image doesn't use API key for pulling images from Etsy CDN)
       if (req.method !== 'GET') {
         return res.status(405).json({ message: 'Method not allowed' });
       }
@@ -314,8 +368,8 @@ export default async function handler(req, res) {
       });
 
       if (!imageResponse.ok) {
-        return res.status(imageResponse.status).json({ 
-          error: `Failed to fetch image: ${imageResponse.statusText}` 
+        return res.status(imageResponse.status).json({
+          error: `Failed to fetch image: ${imageResponse.statusText}`
         });
       }
 
@@ -328,15 +382,15 @@ export default async function handler(req, res) {
       return res.end(Buffer.from(imageBuffer));
 
     } else {
-      return res.status(400).json({ 
-        error: 'Invalid operation. Use ?operation=analyze, fetch-images, listing, or proxy-image, or provide appropriate parameters.' 
+      return res.status(400).json({
+        error: 'Invalid operation. Use ?operation=analyze, fetch-images, listing, or proxy-image, or provide appropriate parameters.'
       });
     }
 
   } catch (error) {
     console.error('[Etsy API] Error:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Internal server error' 
+    return res.status(500).json({
+      error: error.message || 'Internal server error'
     });
   }
 }
