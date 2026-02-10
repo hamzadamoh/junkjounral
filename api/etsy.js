@@ -67,15 +67,23 @@ export default async function handler(req, res) {
         const uniqueImages = [...new Set(images)];
         console.log(`[Etsy Scraper] Found ${uniqueImages.length} images for ${listingId}`);
 
-        return uniqueImages.map(url => ({
-          url_fullxfull: url,
-          url_570xN: url,
-          url_75x75: url
-        }));
+        return {
+          images: uniqueImages.map(url => ({
+            url_fullxfull: url,
+            url_570xN: url,
+            url_75x75: url
+          })),
+          pageTitle: uniqueImages.length === 0 ? $('title').text() : null,
+          snippet: uniqueImages.length === 0 ? html.substring(0, 500) : null
+        };
 
       } catch (err) {
         console.error(`[Etsy Scraper] Failed to scrape ${listingId}:`, err);
-        return [];
+        return {
+          error: err.message,
+          pageTitle: 'Error occurred',
+          snippet: null
+        };
       }
     };
 
@@ -97,13 +105,15 @@ export default async function handler(req, res) {
 
         try {
           // Use Scraper exclusively
-          const scrapedImages = await scrapeListingImages(listingId);
+          const scrapeResult = await scrapeListingImages(listingId);
+          const scrapedImages = scrapeResult.images || [];
 
           if (scrapedImages.length === 0) {
+            const errorDetails = scrapeResult.pageTitle ? ` (Title: ${scrapeResult.pageTitle})` : '';
             results.push({
               listing_id: listingId,
               success: false,
-              error: 'Scraper failed to find images. Etsy may be blocking requests.',
+              error: `Scraper failed to find images${errorDetails}. Etsy may be blocking requests.`,
               image_url: null
             });
             continue;
@@ -153,7 +163,8 @@ export default async function handler(req, res) {
 
       try {
         // Use Scraper exclusively
-        const scrapedImages = await scrapeListingImages(listingId);
+        const scrapeResult = await scrapeListingImages(listingId);
+        const scrapedImages = scrapeResult.images || [];
 
         if (scrapedImages.length > 0) {
           return res.status(200).json({
@@ -164,7 +175,9 @@ export default async function handler(req, res) {
 
         return res.status(404).json({
           error: 'No images found',
-          details: 'Scraper failed to find images. The listing might be private or Etsy is blocking requests.'
+          details: `Scraper failed to find images. Page title: "${scrapeResult.pageTitle || 'Unknown'}". The listing might be private or Etsy is blocking requests.`,
+          pageTitle: scrapeResult.pageTitle,
+          snippet: scrapeResult.snippet
         });
       } catch (err) {
         return res.status(500).json({
