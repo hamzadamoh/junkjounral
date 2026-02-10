@@ -14,6 +14,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Extract parameters from request
+    const { operation, shopUrl, listingIds, listingId, url, apiKey } = req.body || {};
+    const queryParams = req.query || {};
+
     // Collect all available API keys
     const apiKeys = [
       apiKey || queryParams.apiKey,
