@@ -33,7 +33,18 @@ export default async function handler(req, res) {
           }
         });
 
-        if (!response.ok) throw new Error(`Failed to load listing page: ${response.status}`);
+        if (!response.ok) {
+          console.warn(`[Etsy Scraper] HTTP ${response.status}`);
+          const html = await response.text();
+          const $ = cheerio.load(html);
+          const title = $('title').text().trim() || 'No Title';
+          return {
+            error: `HTTP ${response.status}`,
+            pageTitle: title,
+            snippet: html.substring(0, 500),
+            images: []
+          };
+        }
 
         const html = await response.text();
         const $ = cheerio.load(html);
