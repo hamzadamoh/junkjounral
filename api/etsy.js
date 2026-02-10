@@ -16,38 +16,54 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Extract parameters from request
-    const { operation, shopUrl, listingIds, listingId, url, apiKey } = req.body || {};
+    // Extract parameters: GET uses query, POST uses body
     const queryParams = req.query || {};
+    const bodyParams = req.body || {};
+    const operation = queryParams.operation || bodyParams.operation;
+    const shopUrl = bodyParams.shopUrl;
+    const listingIds = bodyParams.listingIds;
+    const listingIdParam = queryParams.listingId || bodyParams.listingId;
+    const url = queryParams.url || bodyParams.url;
+    const apiKey = bodyParams.apiKey;
 
     // Scrape fallback function
     const scrapeListingImages = async (listingId) => {
       console.log(`[Etsy Scraper] Scraping images for listing ${listingId}...`);
+      let html = '';
       try {
         const response = await fetch(`https://www.etsy.com/listing/${listingId}`, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Referer': 'https://www.google.com/',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5'
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'no-cache',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate'
           }
         });
 
-        if (!response.ok) {
-          console.warn(`[Etsy Scraper] HTTP ${response.status}`);
-          const html = await response.text();
-          const $ = cheerio.load(html);
-          const title = $('title').text().trim() || 'No Title';
-          return {
-            error: `HTTP ${response.status}`,
-            pageTitle: title,
-            snippet: html.substring(0, 500),
-            images: []
-          };
+        try {
+          html = await response.text();
+        } catch (e) {
+          console.error(`[Etsy Scraper] response.text() failed:`, e.message);
+          return { error: e.message, pageTitle: 'Error occurred', snippet: null, images: [] };
         }
 
-        const html = await response.text();
-        const $ = cheerio.load(html);
+        let $;
+        try {
+          $ = cheerio.load(html);
+        } catch (e) {
+          console.error(`[Etsy Scraper] cheerio.load failed:`, e.message);
+          return { error: e.message, pageTitle: 'Error occurred', snippet: html.substring(0, 300), images: [] };
+        }
+
+        if (!response.ok) {
+          console.warn(`[Etsy Scraper] HTTP ${response.status}`);
+          const title = ($('title').text() || '').trim() || 'No Title';
+          return { error: `HTTP ${response.status}`, pageTitle: title, snippet: html.substring(0, 500), images: [] };
+        }
+
         const images = [];
 
         // Strategy 1: Look for data-palette-listing-image (carousel images)
@@ -75,25 +91,39 @@ export default async function handler(req, res) {
           });
         }
 
+        // Strategy 4: any img with etsystatic in src
+        if (images.length === 0) {
+          $('img[src*="etsystatic"], img[data-src*="etsystatic"]').each((i, el) => {
+            const src = $(el).attr('data-src') || $(el).attr('src');
+            if (src && /il_(\d+x\d+|fullxfull)/.test(src)) images.push(src.replace(/il_\d+x\d+/, 'il_fullxfull'));
+          });
+        }
+
+        // Strategy 5: regex in raw HTML for Etsy CDN image URLs
+        if (images.length === 0 && html) {
+          const cdnRegex = /https?:\/\/i\.etsystatic\.com\/[^"'\s]+il_(?:fullxfull|\d+x\d+)[^"'\s]*/g;
+          const matches = html.match(cdnRegex) || [];
+          matches.forEach((u) => {
+            const full = u.replace(/il_\d+x\d+/, 'il_fullxfull').split(/["'\s]/)[0];
+            if (full) images.push(full);
+          });
+        }
+
         const uniqueImages = [...new Set(images)];
         console.log(`[Etsy Scraper] Found ${uniqueImages.length} images for ${listingId}`);
 
         return {
-          images: uniqueImages.map(url => ({
-            url_fullxfull: url,
-            url_570xN: url,
-            url_75x75: url
-          })),
-          pageTitle: uniqueImages.length === 0 ? $('title').text() : null,
+          images: uniqueImages.map(url => ({ url_fullxfull: url, url_570xN: url, url_75x75: url })),
+          pageTitle: uniqueImages.length === 0 ? ($('title').text() || '').trim() : null,
           snippet: uniqueImages.length === 0 ? html.substring(0, 500) : null
         };
-
       } catch (err) {
-        console.error(`[Etsy Scraper] Failed to scrape ${listingId}:`, err);
+        console.error(`[Etsy Scraper] Failed to scrape ${listingId}:`, err.message);
         return {
           error: err.message,
           pageTitle: 'Error occurred',
-          snippet: null
+          snippet: html ? html.substring(0, 300) : null,
+          images: []
         };
       }
     };
@@ -161,12 +191,12 @@ export default async function handler(req, res) {
       });
 
       // Handle listing operation (GET listing images)
-    } else if (operation === 'listing' || (!operation && queryParams.listingId)) {
+    } else if (operation === 'listing' || (!operation && listingIdParam)) {
       if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
       }
 
-      const listingId = queryParams.listingId || listingId;
+      const listingId = listingIdParam;
 
       if (!listingId) {
         return res.status(400).json({ error: 'Missing listingId parameter' });
@@ -184,9 +214,10 @@ export default async function handler(req, res) {
           });
         }
 
+        const errMsg = scrapeResult.error ? ` ${scrapeResult.error}.` : '';
         return res.status(404).json({
           error: 'No images found',
-          details: `Scraper failed to find images. Page title: "${scrapeResult.pageTitle || 'Unknown'}". The listing might be private or Etsy is blocking requests.`,
+          details: `Scraper failed to find images. Page title: "${scrapeResult.pageTitle || 'Unknown'}".${errMsg} The listing might be private or Etsy may be blocking requests.`,
           pageTitle: scrapeResult.pageTitle,
           snippet: scrapeResult.snippet
         });
