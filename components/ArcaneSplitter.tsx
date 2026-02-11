@@ -70,7 +70,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [isUploadingToWordPress, setIsUploadingToWordPress] = useState<boolean>(false); // Upload progress
   const [wordPressUploadProgress, setWordPressUploadProgress] = useState({ completed: 0, total: 0 }); // WordPress upload progress
   const autoCrop = true; // Always auto-crop
-  
+
   // Keyword Analysis & Listing Generation State
   const [seedKeywords, setSeedKeywords] = useState<string[]>([]);
   const [isGeneratingKeywords, setIsGeneratingKeywords] = useState(false);
@@ -82,42 +82,42 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const [isGeneratingListings, setIsGeneratingListings] = useState(false);
   const [copiedSeedKeywords, setCopiedSeedKeywords] = useState(false);
   const [copiedTagsIndex, setCopiedTagsIndex] = useState<number | null>(null);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
-  
+
   // Check if OpenAI API is configured (uses existing key)
   const hasApiKey = hasOpenAIKey();
-  
-  // Handle file selection - auto-slice immediately and append to existing slices
+
+  // Handle single file selection - auto-slice immediately and append to existing slices
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null);
-    
+
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file');
       return;
     }
-    
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
-      
+
       // Generate unique ID for this grid
       const gridId = `grid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Add to source images list with ID
       setSourceImages(prev => [...prev, { id: gridId, base64 }]);
-      
+
       // Fixed grid: 3 rows × 4 cols = 12 images
       const config: GridConfig = { rows: 3, cols: 4 };
       console.log('[ArcaneSplitter] Processing new grid: 3 rows × 4 cols = 12 images');
-      
+
       // Auto-slice immediately and APPEND to existing slices
       setIsSlicing(true);
       try {
         const slicedImages = await sliceGridImage(base64, config, autoCrop);
         const newSlices = slicedImages.map(s => ({ ...s, isAnalyzing: false, gridId }));
-        
+
         // Append new slices to existing ones
         setSlices(prev => [...prev, ...newSlices]);
         console.log(`[ArcaneSplitter] Added ${slicedImages.length} new slices (total: ${slices.length + slicedImages.length})`);
@@ -130,44 +130,60 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     };
     reader.readAsDataURL(file);
   }, [autoCrop, slices.length]);
-  
+
+  // Handle multiple files - process each sequentially
+  const handleMultipleFiles = useCallback(async (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      setError('No image files selected');
+      return;
+    }
+    console.log(`[ArcaneSplitter] Processing ${imageFiles.length} image(s)...`);
+    for (const file of imageFiles) {
+      await handleFileSelect(file);
+    }
+  }, [handleFileSelect]);
+
   // Handle drag and drop
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
   }, []);
-  
+
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
   }, []);
-  
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFileSelect(files[0]);
+      handleMultipleFiles(files);
     }
-  }, [handleFileSelect]);
-  
+  }, [handleMultipleFiles]);
+
   // Handle paste from clipboard
   const handlePaste = useCallback(async (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    
+
+    const imageFiles: File[] = [];
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) {
-          handleFileSelect(file);
-          break;
+          imageFiles.push(file);
         }
       }
     }
-  }, [handleFileSelect]);
-  
+    if (imageFiles.length > 0) {
+      handleMultipleFiles(imageFiles);
+    }
+  }, [handleMultipleFiles]);
+
   // Set up paste listener
   React.useEffect(() => {
     document.addEventListener('paste', handlePaste);
@@ -244,10 +260,10 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
             reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(blob);
           });
-          
+
           completedCount++;
           setEtsyFetchProgress({ current: completedCount, total: images.length });
-          
+
           return { index: i, base64, success: true };
         } catch (imgErr) {
           console.error(`[ArcaneSplitter] Failed to load Etsy image ${i + 1}:`, imgErr);
@@ -269,19 +285,19 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       // If slicing is enabled, treat each image as a grid and slice it
       if (etsySliceGrids) {
         console.log(`[ArcaneSplitter] Slicing ${successfulResults.length} Etsy images as 4×3 grids...`);
-        
+
         for (const result of successfulResults) {
           const etsyGridId = `etsy-${listingId}-grid-${result.index}-${Date.now()}`;
-          
+
           // Add to source images for tracking
           setSourceImages(prev => [...prev, { id: etsyGridId, base64: result.base64! }]);
-          
+
           // Slice the image as a 4×3 grid
           try {
             const config: GridConfig = { rows: 3, cols: 4 };
             const slicedImages = await sliceGridImage(result.base64!, config, autoCrop);
             const newSlices = slicedImages.map(s => ({ ...s, isAnalyzing: false, gridId: etsyGridId }));
-            
+
             setSlices(prev => [...prev, ...newSlices]);
             console.log(`[ArcaneSplitter] Sliced Etsy image ${result.index + 1} into ${slicedImages.length} pieces`);
           } catch (sliceErr) {
@@ -300,7 +316,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           isAnalyzing: false,
           gridId: etsyGroupId,
         }));
-        
+
         setSlices(prev => [...prev, ...newSlices]);
       }
 
@@ -315,24 +331,24 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       setEtsyFetchProgress({ current: 0, total: 0 });
     }
   }, [etsyUrl, etsySliceGrids, autoCrop]);
-  
+
   // Analyze all slices with GPT-4 Vision
   // NOTE: Does NOT auto-navigate to generation - user can sort first, then click "Use in Bulk Mode"
   const handleAnalyzeAll = useCallback(async () => {
     if (slices.length === 0 || !hasApiKey) return;
-    
+
     setIsAnalyzing(true);
     setAnalysisProgress({ completed: 0, total: slices.length });
     setError(null);
-    
+
     const topic = mainTopic.trim();
     if (topic) {
       console.log(`[ArcaneSplitter] Analyzing with main topic context: "${topic}"`);
     }
-    
+
     // Mark all as analyzing
     setSlices(prev => prev.map(s => ({ ...s, isAnalyzing: true })));
-    
+
     try {
       const analyzed = await analyzeAllImages(slices, (completed, total) => {
         setAnalysisProgress({ completed, total });
@@ -349,7 +365,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           };
         });
       });
-      
+
       // Don't auto-navigate to generation - let user sort first if they want
       // User can click "Use in Bulk Mode" when ready
       console.log(`[ArcaneSplitter] Analysis complete! ${analyzed.filter(s => s.prompt).length} prompts generated. You can now sort by similarity or use prompts.`);
@@ -359,39 +375,39 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       setIsAnalyzing(false);
     }
   }, [slices, hasApiKey, mainTopic, detailLevel]);
-  
+
   // Analyze single slice
   const handleAnalyzeSingle = useCallback(async (sliceId: string) => {
     if (!hasApiKey) return;
-    
+
     const slice = slices.find(s => s.id === sliceId);
     if (!slice) return;
-    
-    setSlices(prev => prev.map(s => 
+
+    setSlices(prev => prev.map(s =>
       s.id === sliceId ? { ...s, isAnalyzing: true } : s
     ));
-    
+
     const topic = mainTopic.trim();
     if (topic) {
       console.log(`[ArcaneSplitter] Analyzing single image with topic context: "${topic}"`);
     }
-    
+
     const analyzed = await analyzeSingleSlice(slice, topic || undefined, detailLevel);
-    setSlices(prev => prev.map(s => 
-      s.id === sliceId ? { 
-        ...analyzed, 
+    setSlices(prev => prev.map(s =>
+      s.id === sliceId ? {
+        ...analyzed,
         gridId: s.gridId,
         wordPressUrl: (s as any).wordPressUrl // Preserve WordPress URL
       } : s
     ));
   }, [slices, hasApiKey, mainTopic, detailLevel]);
-  
+
   // Download all slices as ZIP
   const handleDownloadZip = useCallback(async () => {
     if (slices.length === 0) return;
     await downloadSlicesAsZip(slices, 'arcane-slices');
   }, [slices]);
-  
+
   // Copy all prompts
   const handleCopyPrompts = useCallback(async () => {
     // Include WordPress URLs in prompts if they exist (regardless of toggle state)
@@ -403,28 +419,28 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       }
       return s.prompt!;
     });
-    
+
     // Copy to clipboard
     await navigator.clipboard.writeText(promptsWithUrls.join('\n\n'));
     setCopiedPrompts(true);
     setTimeout(() => setCopiedPrompts(false), 2000);
-    
+
     // Also notify parent
     onPromptsGenerated?.(promptsWithUrls);
   }, [slices, onPromptsGenerated]);
-  
+
   // Upload slices to WordPress
   const handleUploadToWordPress = useCallback(async () => {
     if (slices.length === 0) return;
-    
+
     setIsUploadingToWordPress(true);
     setWordPressUploadProgress({ completed: 0, total: slices.length });
     setError(null);
-    
+
     try {
       // Upload sequentially with delays to avoid rate limiting
       const updatedSlices: Array<AnalyzedSlice & { wordPressUrl?: string }> = [];
-      
+
       for (let i = 0; i < slices.length; i++) {
         const slice = slices[i];
         try {
@@ -432,7 +448,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           updatedSlices.push({ ...slice, wordPressUrl });
           setWordPressUploadProgress({ completed: i + 1, total: slices.length });
           console.log(`[ArcaneSplitter] ✅ Uploaded slice ${slice.id} to WordPress: ${wordPressUrl}`);
-          
+
           // Add delay between uploads to avoid rate limiting (except for last item)
           if (i < slices.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between uploads
@@ -441,14 +457,14 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
           console.error(`[ArcaneSplitter] Failed to upload slice ${slice.id}:`, error);
           updatedSlices.push(slice); // Keep original slice if upload fails
           setWordPressUploadProgress({ completed: i + 1, total: slices.length });
-          
+
           // If we get a 403 error, wait longer before next upload
           if (error.message && error.message.includes('403')) {
             await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay after 403
           }
         }
       }
-      
+
       setSlices(updatedSlices);
       const uploadedCount = updatedSlices.filter(s => (s as any).wordPressUrl).length;
       console.log(`[ArcaneSplitter] ✅ Uploaded ${uploadedCount}/${slices.length} images to WordPress`);
@@ -461,14 +477,14 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       setWordPressUploadProgress({ completed: 0, total: 0 });
     }
   }, [slices]);
-  
+
   // Use prompts in bulk mode
   const handleUsePrompts = useCallback(() => {
     // Include WordPress URLs in prompts if they exist (regardless of toggle state)
     const slicesWithPrompts = slices.filter(s => s.prompt);
     const slicesWithUrls = slicesWithPrompts.filter(s => (s as any).wordPressUrl);
     console.log(`[ArcaneSplitter] Preparing ${slicesWithPrompts.length} prompts (${slicesWithUrls.length} have WordPress URLs)`);
-    
+
     const prompts = slicesWithPrompts.map(s => {
       const wordPressUrl = (s as any).wordPressUrl;
       if (wordPressUrl) {
@@ -486,7 +502,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     onPromptsGenerated?.(prompts, imagesPerPrompt);
     onClose?.();
   }, [slices, onPromptsGenerated, onClose, imagesPerPrompt]);
-  
+
   // Download single slice
   const handleDownloadSlice = useCallback((slice: AnalyzedSlice) => {
     const link = document.createElement('a');
@@ -494,7 +510,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
     link.href = slice.base64;
     link.click();
   }, []);
-  
+
   // Delete a single slice
   const handleDeleteSlice = useCallback((sliceId: string) => {
     setSlices(prev => prev.filter(s => s.id !== sliceId));
@@ -564,7 +580,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const handleSliceDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (draggedIndex === null || draggedIndex === index) return;
-    
+
     setSlices(prev => {
       const newSlices = [...prev];
       const draggedSlice = newSlices[draggedIndex];
@@ -578,7 +594,7 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   const handleSliceDragEnd = useCallback(() => {
     setDraggedIndex(null);
   }, []);
-  
+
   // Delete a grid and all its slices
   const handleDeleteGrid = useCallback((gridId: string) => {
     setSourceImages(prev => prev.filter(g => g.id !== gridId));
@@ -592,18 +608,18 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
   // Sort slices by visual similarity using the generated prompts
   const handleSortBySimilarity = useCallback(async () => {
     if (slices.length < 2 || !hasApiKey) return;
-    
+
     // Check if all images have been analyzed
     const unanalyzedCount = slices.filter(s => !s.prompt).length;
     if (unanalyzedCount > 0) {
       setError(`Please analyze all images first! ${unanalyzedCount} image(s) not analyzed yet. Click "Analyze All" first.`);
       return;
     }
-    
+
     setIsSortingBySimilarity(true);
     setSortProgress({ completed: 0, total: slices.length, phase: 'Sorting' });
     setError(null);
-    
+
     try {
       // Use the detailed prompts for accurate sorting
       // Extract key visual elements from each prompt (first 80 chars for better context)
@@ -613,21 +629,21 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
         const prompt = slice.prompt || `image-${idx}`;
         descriptions.set(slice.id, prompt.substring(0, 80));
       });
-      
+
       console.log(`[ArcaneSplitter] Sorting ${slices.length} images using their prompts`);
-      
+
       setSortProgress({ completed: slices.length, total: slices.length, phase: 'Grouping' });
-      
+
       // Step 2: For large sets, first categorize into groups, then sort within groups
       const descList = slices.map((s, i) => `${i}:${descriptions.get(s.id) || 'unknown'}`).join('; ');
-      
+
       // Calculate max_tokens needed: roughly 4 chars per number + comma + space
       // For 84 images: need ~420 chars for array, add generous buffer
       // Token ~= 4 chars, so 84 indices * 4 chars / 4 = 84 tokens minimum, but add 3x buffer
       const maxTokensNeeded = Math.max(1000, slices.length * 12);
-      
+
       console.log(`[ArcaneSplitter] Sorting ${slices.length} images, requesting ${maxTokensNeeded} max_tokens`);
-      
+
       // Use server-side API route to protect API key
       const sortResponse = await fetch('/api/openai/chat', {
         method: 'POST',
@@ -655,18 +671,18 @@ NO text, NO explanation - ONLY the JSON array.`
           temperature: 0.05,
         }),
       });
-      
+
       if (!sortResponse.ok) {
         const errText = await sortResponse.text();
         console.error('[ArcaneSplitter] Sort API error:', errText);
         throw new Error('Failed to get sorting order from AI');
       }
-      
+
       const sortData = await sortResponse.json();
       const sortText = sortData.choices?.[0]?.message?.content || '';
-      
+
       console.log('[ArcaneSplitter] AI response:', sortText.substring(0, 200));
-      
+
       // Parse the JSON array from the response - handle multiline
       const cleanedText = sortText.replace(/\s+/g, '');
       const jsonMatch = cleanedText.match(/\[[\d,]+\]/);
@@ -674,7 +690,7 @@ NO text, NO explanation - ONLY the JSON array.`
         console.error('[ArcaneSplitter] Could not find JSON array in:', sortText);
         throw new Error('Could not parse sorting order - AI response invalid');
       }
-      
+
       let sortOrder: number[];
       try {
         sortOrder = JSON.parse(jsonMatch[0]);
@@ -682,13 +698,13 @@ NO text, NO explanation - ONLY the JSON array.`
         console.error('[ArcaneSplitter] JSON parse error:', parseErr);
         throw new Error('Could not parse sorting order - invalid JSON');
       }
-      
+
       console.log(`[ArcaneSplitter] Parsed ${sortOrder.length} indices (expected ${slices.length})`);
-      
+
       // Filter out invalid indices first
       sortOrder = sortOrder.filter(n => typeof n === 'number' && n >= 0 && n < slices.length);
       console.log(`[ArcaneSplitter] After filtering invalid: ${sortOrder.length} valid indices`);
-      
+
       // Remove duplicates
       const seen = new Set<number>();
       const deduped: number[] = [];
@@ -699,7 +715,7 @@ NO text, NO explanation - ONLY the JSON array.`
         }
       }
       sortOrder = deduped;
-      
+
       // Add any missing indices at the end
       const missing: number[] = [];
       for (let i = 0; i < slices.length; i++) {
@@ -708,23 +724,23 @@ NO text, NO explanation - ONLY the JSON array.`
           seen.add(i);
         }
       }
-      
+
       if (missing.length > 0) {
         console.log(`[ArcaneSplitter] Adding ${missing.length} missing indices: ${missing.slice(0, 10).join(',')}${missing.length > 10 ? '...' : ''}`);
         sortOrder = [...sortOrder, ...missing];
       }
-      
+
       // Final validation
       if (sortOrder.length !== slices.length) {
         throw new Error(`Failed to construct valid sort order: got ${sortOrder.length}, expected ${slices.length}`);
       }
-      
+
       console.log(`[ArcaneSplitter] Final sort order: ${sortOrder.length} indices`);
-      
+
       // Apply the sort order
       const sortedSlices = sortOrder.map(i => slices[i]);
       setSlices(sortedSlices);
-      
+
       console.log('[ArcaneSplitter] Successfully sorted by similarity');
     } catch (err: any) {
       console.error('[ArcaneSplitter] Similarity sort error:', err);
@@ -733,30 +749,30 @@ NO text, NO explanation - ONLY the JSON array.`
       setIsSortingBySimilarity(false);
     }
   }, [slices, hasApiKey]);
-  
+
   // Generate seed keywords from analyzed listings
   const handleGenerateSeedKeywords = useCallback(async () => {
     if (slices.length === 0 || !hasApiKey) {
       setError('Please analyze some images first');
       return;
     }
-    
+
     const analyzedSlices = slices.filter(s => s.prompt || s.description);
     if (analyzedSlices.length === 0) {
       setError('No analyzed images found. Please click "Analyze All" first.');
       return;
     }
-    
+
     setIsGeneratingKeywords(true);
     setError(null);
-    
+
     try {
       // Collect all prompts/descriptions
       const allText = analyzedSlices
         .map(s => s.prompt || s.description || '')
         .filter(Boolean)
         .join('\n\n');
-      
+
       // Use OpenAI with the Etsy SEO expert prompt
       const response = await fetch('/api/openai/chat', {
         method: 'POST',
@@ -854,14 +870,14 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
           temperature: 0.3,
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to generate keywords');
       }
-      
+
       const data = await response.json();
       const keywordsText = data.choices?.[0]?.message?.content || '';
-      
+
       // Parse keywords (one per line, clean up)
       const keywords = keywordsText
         .split('\n')
@@ -871,16 +887,16 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
           const cleaned = k.replace(/^\d+[\.\)]\s*/, '').replace(/^[-•*]\s*/, '').trim();
           // Must be 1-2 words, no punctuation (except hyphens in compound words)
           const words = cleaned.split(/\s+/);
-          return cleaned && 
-                 words.length <= 2 && 
-                 words.length > 0 &&
-                 !cleaned.match(/^[A-Z][a-z]+:/) && // Remove labels like "Group 1:"
-                 cleaned.length > 0;
+          return cleaned &&
+            words.length <= 2 &&
+            words.length > 0 &&
+            !cleaned.match(/^[A-Z][a-z]+:/) && // Remove labels like "Group 1:"
+            cleaned.length > 0;
         })
         .map(k => k.replace(/^\d+[\.\)]\s*/, '').replace(/^[-•*]\s*/, '').trim())
         .filter(k => k.length > 0)
         .slice(0, 30); // Limit to 30 keywords
-      
+
       setSeedKeywords(keywords);
       console.log(`[ArcaneSplitter] Generated ${keywords.length} seed keywords`);
     } catch (err: any) {
@@ -890,34 +906,34 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
       setIsGeneratingKeywords(false);
     }
   }, [slices, hasApiKey]);
-  
+
   // Handle CSV file upload
   const handleCsvUpload = useCallback(async (file: File) => {
     setIsProcessingCsv(true);
     setError(null);
-    
+
     try {
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim());
-      
+
       // Parse CSV - only use first two columns: keyword,vol
       const keywords: Array<{ keyword: string; volume: number }> = [];
-      
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        
+
         // Skip header row if it exists (check for keyword and vol/volume)
         if (i === 0 && (line.toLowerCase().includes('keyword') && (line.toLowerCase().includes('vol') || line.toLowerCase().includes('volume')))) {
           continue;
         }
-        
+
         // Parse CSV line - only use first two columns
         // Handle quoted values and commas within quotes
         const parts: string[] = [];
         let currentPart = '';
         let insideQuotes = false;
-        
+
         for (let j = 0; j < line.length; j++) {
           const char = line[j];
           if (char === '"') {
@@ -931,12 +947,12 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
             currentPart += char;
           }
         }
-        
+
         // Add the last part if we haven't reached 2 columns yet
         if (parts.length < 2 && currentPart) {
           parts.push(currentPart.trim().replace(/^"|"$/g, ''));
         }
-        
+
         // Only process if we have at least 2 columns
         if (parts.length >= 2) {
           const keyword = parts[0];
@@ -946,7 +962,7 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
           }
         }
       }
-      
+
       setCsvKeywords(keywords);
       setCsvFile(file);
       console.log(`[ArcaneSplitter] Loaded ${keywords.length} keywords from CSV (using only keyword and vol columns)`);
@@ -957,43 +973,43 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
       setIsProcessingCsv(false);
     }
   }, []);
-  
+
   // Generate listings from CSV keywords
   const handleGenerateListings = useCallback(async () => {
     if (csvKeywords.length === 0) {
       setError('Please upload a CSV file with keywords first');
       return;
     }
-    
+
     if (slices.length === 0) {
       setError('Please analyze some images first');
       return;
     }
-    
+
     const analyzedSlices = slices.filter(s => s.prompt || s.description);
     if (analyzedSlices.length === 0) {
       setError('No analyzed images found. Please click "Analyze All" first.');
       return;
     }
-    
+
     setIsGeneratingListings(true);
     setError(null);
     setGeneratedListings([]);
-    
+
     try {
       // Combine all analyzed slices into one product description
       const allPrompts = analyzedSlices
         .map(s => s.prompt || s.description || '')
         .filter(Boolean)
         .join('\n\n');
-      
+
       // Extract key themes from image descriptions (lowercase for matching)
       const imageText = allPrompts.toLowerCase();
-      
+
       // Extract key words from image descriptions for better matching
       const imageWords = new Set<string>();
       const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'it', 'its', 'they', 'them', 'their']);
-      
+
       // Extract meaningful words from image descriptions (2+ characters, not common words)
       allPrompts.toLowerCase().split(/\s+/).forEach(word => {
         const cleaned = word.replace(/[^\w]/g, '');
@@ -1001,24 +1017,24 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
           imageWords.add(cleaned);
         }
       });
-      
+
       // Match keywords to image content
       // Score keywords based on how well they match the image descriptions
       const scoredKeywords = csvKeywords.map(keyword => {
         const keywordLower = keyword.keyword.toLowerCase();
         const keywordWords = keywordLower.split(/\s+/).map(w => w.replace(/[^\w]/g, ''));
-        
+
         // Calculate match score
         let score = 0;
         let exactMatch = false;
         let wordMatches = 0;
-        
+
         // Exact phrase match gets highest score
         if (imageText.includes(keywordLower)) {
           score += 200;
           exactMatch = true;
         }
-        
+
         // Word-by-word matching (check if keyword words appear in image)
         keywordWords.forEach(word => {
           if (word.length >= 2 && imageWords.has(word)) {
@@ -1029,14 +1045,14 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
             wordMatches++;
           }
         });
-        
+
         // Special handling for generic terms that shouldn't match unless exact
         const genericTerms = ['color', 'palette', 'template', 'bundle', 'print', 'brand', 'seasons', 'fabric', 'procreate', 'benjamin', 'moore'];
         const isGenericTerm = keywordWords.some(w => genericTerms.includes(w.toLowerCase()));
-        
+
         // If it's a generic term and not an exact match, require ALL words to match
         if (isGenericTerm && !exactMatch) {
-          const allWordsMatch = keywordWords.every(w => 
+          const allWordsMatch = keywordWords.every(w =>
             w.length >= 2 && (imageWords.has(w) || imageText.includes(w))
           );
           if (!allWordsMatch) {
@@ -1044,29 +1060,29 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
             wordMatches = 0;
           }
         }
-        
+
         // If no matches at all, heavily penalize
         if (!exactMatch && wordMatches === 0) {
           score = -1000; // Heavy penalty for irrelevant keywords
         }
-        
+
         // Small bonus for higher volume (only if there's strong relevance)
         if (score > 50) { // Only add volume bonus if there's meaningful relevance
           score += Math.min(keyword.volume / 30, 20); // Reduced volume bonus
         }
-        
+
         return { ...keyword, score, exactMatch, wordMatches };
       });
-      
+
       // Filter out keywords with negative scores or low relevance (minimum 50 points)
       const relevantKeywords = scoredKeywords.filter(k => k.score >= 50);
-      
+
       // Sort by relevance score first, then by volume
       relevantKeywords.sort((a, b) => {
         // Prioritize exact matches
         if (a.exactMatch && !b.exactMatch) return -1;
         if (!a.exactMatch && b.exactMatch) return 1;
-        
+
         // Then by score
         if (Math.abs(a.score - b.score) > 20) {
           return b.score - a.score;
@@ -1074,32 +1090,32 @@ Output ONLY seed keywords (simple 1-2 word terms), one per line, nothing else:`
         // If scores are close, prefer higher volume
         return b.volume - a.volume;
       });
-      
+
       // If no relevant keywords found, fall back to all keywords sorted by volume
       const sortedKeywords = relevantKeywords.length > 0 ? relevantKeywords : scoredKeywords.sort((a, b) => b.volume - a.volume);
-      
+
       // Select primary and secondary keywords (top relevant ones)
       const primaryKeyword = sortedKeywords[0];
       const secondaryKeywords = sortedKeywords.slice(1, 4); // 2-3 secondary keywords
-      
+
       // Get top 20 relevant keywords for the prompt
       const topRelevantKeywords = sortedKeywords.slice(0, 20);
-      
+
       // Format keyword data for the prompt
       const keywordData = [
         `Primary: ${primaryKeyword.keyword} (vol: ${primaryKeyword.volume}, relevance score: ${Math.round(primaryKeyword.score)})`,
         ...secondaryKeywords.map(k => `Secondary: ${k.keyword} (vol: ${k.volume}, relevance score: ${Math.round(k.score)})`),
         ...topRelevantKeywords.slice(4).map(k => `${k.keyword} (vol: ${k.volume}, relevance score: ${Math.round(k.score)})`)
       ].join('\n');
-      
+
       // Prepare all CSV keywords for tag selection (sorted by volume, filtered to 1-20 chars)
       const allValidKeywords = csvKeywords
         .filter(k => k.keyword.length >= 1 && k.keyword.length <= 20)
         .sort((a, b) => b.volume - a.volume)
         .slice(0, 100); // Top 100 by volume for ChatGPT to choose from
-      
+
       const keywordsForTagSelection = allValidKeywords.map(k => `${k.keyword} (vol: ${k.volume})`).join('\n');
-      
+
       // Generate ONE listing using the Etsy SEO expert prompt
       const response = await fetch('/api/openai/chat', {
         method: 'POST',
@@ -1195,9 +1211,9 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
 * Beautiful artwork
 * Stunning illustrations`
             },
-              {
-                role: 'user',
-                content: `Generate ONE Etsy listing for this product collection (${analyzedSlices.length} items):
+            {
+              role: 'user',
+              content: `Generate ONE Etsy listing for this product collection (${analyzedSlices.length} items):
 
 Product Descriptions:
 ${allPrompts}
@@ -1289,44 +1305,44 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           temperature: 0.7,
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to generate listing');
       }
-      
+
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || '';
-      
+
       // Parse title, description and tags
       const titleMatch = content.match(/TITLE:\s*(.+?)(?=DESCRIPTION:|$)/is);
       const descriptionMatch = content.match(/DESCRIPTION:\s*(.+?)(?=TAGS:|$)/is);
       const tagsMatch = content.match(/TAGS:\s*(.+?)$/is);
-      
+
       const title = titleMatch?.[1]?.trim() || '';
       const description = descriptionMatch?.[1]?.trim() || allPrompts;
       const tagsText = tagsMatch?.[1]?.trim() || '';
-      
+
       // Create a set of all valid keywords from CSV (for validation)
       const validKeywordsSet = new Set(csvKeywords.map(k => k.keyword.toLowerCase()));
-      
+
       // Parse tags - ChatGPT should have selected them from the CSV keywords list
       const parsedTags = tagsText.split(',').map(t => t.trim()).filter(t => t && t.length <= 20);
-      
+
       // Validate tags are from CSV (exact matches or single words from keywords)
       const validatedTags = parsedTags.filter(tag => {
         const tagLower = tag.toLowerCase().trim();
         const tagWords = tagLower.split(/\s+/).filter(w => w.length > 0);
-        
+
         // Check if tag matches any CSV keyword
         for (const keyword of validKeywordsSet) {
           const keywordLower = keyword.toLowerCase().trim();
-          
+
           // Exact match
           if (keywordLower === tagLower) {
             console.log(`[ArcaneSplitter] Validated tag: "${tag}" (exact match)`);
             return true;
           }
-          
+
           // Single word that appears in keyword
           if (tagWords.length === 1 && tagLower.length >= 3) {
             const wordBoundaryRegex = new RegExp(`\\b${tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
@@ -1336,15 +1352,15 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
             }
           }
         }
-        
+
         console.warn(`[ArcaneSplitter] Rejected invalid tag: "${tag}" - not found in CSV keywords`);
         return false;
       });
-      
+
       // Fill remaining slots with valid keywords from CSV if ChatGPT didn't select enough
       let tags = [...validatedTags];
       const usedKeywords = new Set(validatedTags.map(t => t.toLowerCase()));
-      
+
       // Add from top relevant keywords (prioritize relevance)
       for (const keyword of topRelevantKeywords) {
         if (tags.length >= 13) break;
@@ -1354,7 +1370,7 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           usedKeywords.add(keywordLower);
         }
       }
-      
+
       // If still not 13 tags, add from all CSV keywords sorted by volume
       if (tags.length < 13) {
         for (const keyword of allValidKeywords) {
@@ -1366,18 +1382,18 @@ tag1, tag2, tag3, tag4, tag5, tag6, tag7, tag8, tag9, tag10, tag11, tag12, tag13
           }
         }
       }
-      
+
       // Ensure we have exactly 13 tags (or as many as available)
       tags = tags.slice(0, 13);
-      
+
       // Get all keywords with volume >= 100 for filtering
       const allLongTailKeywords = csvKeywords
         .filter(k => k.volume >= 100)
         .sort((a, b) => b.volume - a.volume);
-      
+
       // Ask ChatGPT to filter long tail keywords to only junk journal related ones
       let filteredLongTailKeywords: Array<{ keyword: string; volume: number }> = [];
-      
+
       if (allLongTailKeywords.length > 0) {
         try {
           const filterResponse = await fetch('/api/openai/chat', {
@@ -1436,18 +1452,18 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
               temperature: 0.3,
             }),
           });
-          
+
           if (filterResponse.ok) {
             const filterData = await filterResponse.json();
             const filterContent = filterData.choices?.[0]?.message?.content || '';
-            
+
             // Try to parse JSON array
             try {
               const jsonMatch = filterContent.match(/\[.*?\]/s);
               if (jsonMatch) {
                 const relevantKeywords = JSON.parse(jsonMatch[0]) as string[];
                 // Map back to full keyword objects with volumes
-                filteredLongTailKeywords = allLongTailKeywords.filter(k => 
+                filteredLongTailKeywords = allLongTailKeywords.filter(k =>
                   relevantKeywords.includes(k.keyword)
                 );
               }
@@ -1464,7 +1480,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
           filteredLongTailKeywords = allLongTailKeywords;
         }
       }
-      
+
       // Generate just ONE listing with title, description, tags, and filtered long tail keywords
       setGeneratedListings([{ title, description, tags, filteredLongTailKeywords }]);
       console.log(`[ArcaneSplitter] Generated 1 listing for ${analyzedSlices.length} images with ${filteredLongTailKeywords.length} filtered long tail keywords`);
@@ -1475,7 +1491,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
       setIsGeneratingListings(false);
     }
   }, [csvKeywords, slices]);
-  
+
   // Copy seed keywords (one per line)
   const handleCopySeedKeywords = useCallback(async () => {
     if (seedKeywords.length === 0) return;
@@ -1484,7 +1500,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
     setCopiedSeedKeywords(true);
     setTimeout(() => setCopiedSeedKeywords(false), 2000);
   }, [seedKeywords]);
-  
+
   // Copy tags (comma-separated)
   const handleCopyTags = useCallback(async (tags: string[], index: number) => {
     const text = tags.join(', ');
@@ -1492,9 +1508,9 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
     setCopiedTagsIndex(index);
     setTimeout(() => setCopiedTagsIndex(null), 2000);
   }, []);
-  
+
   const analyzedCount = slices.filter(s => s.prompt).length;
-  
+
   return (
     <div className="bg-slate-900 rounded-xl border border-purple-500/30 overflow-hidden">
       {/* Header */}
@@ -1519,7 +1535,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
           )}
         </div>
       </div>
-      
+
       <div className="p-6 space-y-6">
         {/* Error Display */}
         {error && (
@@ -1528,7 +1544,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
             <span>{error}</span>
           </div>
         )}
-        
+
         {/* Drop Zone - Always visible, compact when slices exist */}
         <div
           ref={dropZoneRef}
@@ -1539,11 +1555,11 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
           className={`
             relative border-2 border-dashed rounded-xl text-center cursor-pointer
             transition-all duration-300
-            ${slices.length > 0 
-              ? 'p-4' 
+            ${slices.length > 0
+              ? 'p-4'
               : 'p-12'}
-            ${isDragging 
-              ? 'border-purple-500 bg-purple-500/10' 
+            ${isDragging
+              ? 'border-purple-500 bg-purple-500/10'
               : 'border-slate-700 hover:border-purple-500/50 hover:bg-slate-800/50'}
           `}
         >
@@ -1551,10 +1567,16 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+            multiple
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                handleMultipleFiles(e.target.files);
+                e.target.value = ''; // Reset so the same files can be re-selected
+              }
+            }}
             className="hidden"
           />
-          
+
           {isSlicing ? (
             <div className="flex flex-col items-center gap-2 py-4">
               <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
@@ -1570,11 +1592,11 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
               </div>
               <div>
                 <p className={`${slices.length > 0 ? 'text-sm' : 'text-lg'} font-medium text-white`}>
-                  {isDragging ? 'Drop your image here' : slices.length > 0 ? 'Add another 4×3 grid' : 'Drop your 4×3 grid image'}
+                  {isDragging ? 'Drop your image(s) here' : slices.length > 0 ? 'Add more 4×3 grids' : 'Drop your 4×3 grid image(s)'}
                 </p>
                 {slices.length === 0 && (
                   <p className="text-sm text-slate-500 mt-1">
-                    Will auto-slice into 12 images • Paste with Ctrl+V
+                    Select or drop multiple images • Paste with Ctrl+V
                   </p>
                 )}
               </div>
@@ -1607,8 +1629,8 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
               {isFetchingEtsy ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {etsyFetchProgress.total > 0 
-                    ? `${etsyFetchProgress.current}/${etsyFetchProgress.total}` 
+                  {etsyFetchProgress.total > 0
+                    ? `${etsyFetchProgress.current}/${etsyFetchProgress.total}`
                     : 'Loading...'}
                 </>
               ) : (
@@ -1619,7 +1641,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
               )}
             </button>
           </div>
-          
+
           {/* Slice as grids toggle */}
           <div className="flex items-center gap-3 text-sm">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -1632,13 +1654,13 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
               <span className="text-slate-300">Slice as 4×3 grids</span>
             </label>
             <span className="text-slate-500 text-xs">
-              {etsySliceGrids 
-                ? '(Each image → 12 slices)' 
+              {etsySliceGrids
+                ? '(Each image → 12 slices)'
                 : '(Import as individual images)'}
             </span>
           </div>
         </div>
-        
+
         {/* Keyword Analysis & Listing Generation Tool */}
         {analyzedCount > 0 && (
           <div className="bg-slate-800/50 rounded-lg border border-purple-500/30 p-4 space-y-4">
@@ -1646,7 +1668,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
               <Tag className="w-5 h-5 text-purple-400" />
               <h3 className="text-lg font-bold text-white">Keyword Analysis & Listing Generator</h3>
             </div>
-            
+
             {/* Step 1: Generate Seed Keywords */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1669,7 +1691,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   )}
                 </button>
               </div>
-              
+
               {seedKeywords.length > 0 && (
                 <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
                   <div className="flex items-center justify-between mb-2">
@@ -1697,7 +1719,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 </div>
               )}
             </div>
-            
+
             {/* Step 2: Upload CSV */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300">Step 2: Upload CSV with Keywords & Volume</label>
@@ -1720,14 +1742,14 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   {csvFile ? csvFile.name : 'Upload CSV (keyword,vol)'}
                 </label>
               </div>
-              
+
               {csvKeywords.length > 0 && (
                 <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
                   <span className="text-xs text-slate-400">Loaded {csvKeywords.length} keywords from CSV</span>
                 </div>
               )}
             </div>
-            
+
             {/* Product Theme Input */}
             {csvKeywords.length > 0 && (
               <div className="space-y-2">
@@ -1742,7 +1764,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 <p className="text-xs text-slate-400">Enter the main theme to help filter relevant keywords (e.g., "gnomes", "garden", "butterflies")</p>
               </div>
             )}
-            
+
             {/* Step 3: Generate Listings */}
             {csvKeywords.length > 0 && (
               <div className="space-y-2">
@@ -1768,7 +1790,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 </div>
               </div>
             )}
-            
+
             {/* Generated Listings */}
             {generatedListings.length > 0 && (
               <div className="space-y-3">
@@ -1777,7 +1799,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   {generatedListings.map((listing, index) => {
                     // Use ChatGPT-filtered long tail keywords
                     const longTailKeywords = listing.filteredLongTailKeywords || [];
-                    
+
                     return (
                       <div key={index} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
                         {listing.title && (
@@ -1836,7 +1858,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                           </div>
                           <span className="text-xs text-slate-300">{listing.tags.join(', ')}</span>
                         </div>
-                        
+
                         {/* Long Tail Keywords Section */}
                         {longTailKeywords.length > 0 && (
                           <div className="mt-4 pt-3 border-t border-slate-700">
@@ -1876,7 +1898,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
             )}
           </div>
         )}
-        
+
         {/* Sliced Images Grid */}
         {slices.length > 0 && (
           <div className="space-y-4">
@@ -1903,7 +1925,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   </>
                 )}
               </div>
-              
+
               <div className="flex flex-wrap gap-2">
                 {/* Selection Controls */}
                 <button
@@ -1913,7 +1935,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 >
                   {selectedSlices.size === slices.length ? 'Deselect All' : 'Select All'}
                 </button>
-                
+
                 {selectedSlices.size > 0 && (
                   <button
                     onClick={handleDeleteSelected}
@@ -1944,12 +1966,11 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                         placeholder="e.g., kitchen items, vintage tools, pastel decor..."
                         className={`px-3 py-2 bg-slate-800 border rounded-lg text-sm text-white
                           placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
-                          min-w-[200px] flex-1 transition-colors ${
-                            mainTopic 
-                              ? 'border-purple-500/50' 
-                              : 'border-slate-600'
+                          min-w-[200px] flex-1 transition-colors ${mainTopic
+                            ? 'border-purple-500/50'
+                            : 'border-slate-600'
                           }`}
-                        title={mainTopic 
+                        title={mainTopic
                           ? `Analysis will assume images are related to: "${mainTopic}"`
                           : "Enter the main theme/topic to help AI analyze images in the correct context (optional)"}
                       />
@@ -1969,22 +1990,20 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                       <div className="flex gap-1">
                         <button
                           onClick={() => setDetailLevel('normal')}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            detailLevel === 'normal'
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${detailLevel === 'normal'
                               ? 'bg-purple-600 text-white'
                               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          }`}
+                            }`}
                           title="Normal detail level - standard prompts (100-200 words)"
                         >
                           Normal
                         </button>
                         <button
                           onClick={() => setDetailLevel('detailed')}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            detailLevel === 'detailed'
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${detailLevel === 'detailed'
                               ? 'bg-purple-600 text-white'
                               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          }`}
+                            }`}
                           title="Too detailed - extremely detailed prompts (200-400 words)"
                         >
                           Too Detailed
@@ -2009,7 +2028,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                         </>
                       )}
                     </button>
-                    
+
                     {slices.length >= 2 && analyzedCount === slices.length && (
                       <button
                         onClick={handleSortBySimilarity}
@@ -2021,8 +2040,8 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                         {isSortingBySimilarity ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            {sortProgress.phase === 'Grouping' 
-                              ? 'Grouping by prompts...' 
+                            {sortProgress.phase === 'Grouping'
+                              ? 'Grouping by prompts...'
                               : `${sortProgress.phase}...`}
                           </>
                         ) : (
@@ -2039,7 +2058,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                     Set VITE_OPENAI_API_KEY to enable AI analysis
                   </div>
                 )}
-                
+
                 <button
                   onClick={handleDownloadZip}
                   className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-white
@@ -2048,7 +2067,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   <Archive className="w-4 h-4" />
                   Download ZIP
                 </button>
-                
+
                 {/* WordPress Upload Toggle - Available as soon as there are slices (can upload while analyzing) */}
                 {slices.length > 0 && (
                   <>
@@ -2064,7 +2083,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                         Upload to WordPress
                       </label>
                     </div>
-                    
+
                     {/* WordPress Upload Button (shown when toggle is on) */}
                     {uploadToWordPress && (
                       <button
@@ -2089,7 +2108,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                     )}
                   </>
                 )}
-                
+
                 {analyzedCount > 0 && (
                   <>
                     <button
@@ -2100,7 +2119,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                       {copiedPrompts ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
                       {copiedPrompts ? 'Copied!' : 'Copy Prompts'}
                     </button>
-                    
+
                     {onPromptsGenerated && (
                       <>
                         {/* Images Per Prompt Selector */}
@@ -2111,18 +2130,17 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                               <button
                                 key={num}
                                 onClick={() => setImagesPerPrompt(num)}
-                                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                                  imagesPerPrompt === num
+                                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${imagesPerPrompt === num
                                     ? 'bg-amber-600 text-white'
                                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                }`}
+                                  }`}
                               >
                                 {num}/4
                               </button>
                             ))}
                           </div>
                         </div>
-                        
+
                         <button
                           onClick={handleUsePrompts}
                           className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium text-white
@@ -2137,7 +2155,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 )}
               </div>
             </div>
-            
+
             {/* Grids List - Show uploaded grids with delete option */}
             {sourceImages.length > 0 && (
               <div className="space-y-2">
@@ -2179,7 +2197,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 </div>
               </div>
             )}
-            
+
             {/* Slices Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {slices.map((slice, index) => (
@@ -2190,8 +2208,8 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   onDragOver={(e) => handleSliceDragOver(e, index)}
                   onDragEnd={handleSliceDragEnd}
                   className={`group relative bg-slate-800 rounded-lg overflow-hidden border transition-colors
-                    ${selectedSlices.has(slice.id) 
-                      ? 'border-blue-500 ring-2 ring-blue-500/50' 
+                    ${selectedSlices.has(slice.id)
+                      ? 'border-blue-500 ring-2 ring-blue-500/50'
                       : 'border-slate-700 hover:border-purple-500/50'}
                     ${draggedIndex === index ? 'opacity-50' : ''}
                   `}
@@ -2245,7 +2263,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                       alt={slice.name || `Slice ${slice.row + 1}-${slice.col + 1}`}
                       className="w-full h-full object-contain bg-slate-900"
                     />
-                    
+
                     {/* Loading Overlay */}
                     {slice.isAnalyzing && (
                       <div className="absolute inset-0 bg-slate-900/80 flex flex-col items-center justify-center">
@@ -2253,7 +2271,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                         <span className="text-sm text-purple-400 mt-2">Consulting Oracle...</span>
                       </div>
                     )}
-                    
+
                     {/* Hover Actions */}
                     <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                       <button
@@ -2293,7 +2311,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Info */}
                   <div className="p-3">
                     {slice.name ? (
@@ -2301,15 +2319,15 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                     ) : (
                       <h4 className="text-slate-500 text-sm">Row {slice.row + 1}, Col {slice.col + 1}</h4>
                     )}
-                    
+
                     {slice.description && (
                       <p className="text-xs text-slate-400 mt-1 line-clamp-2">{slice.description}</p>
                     )}
-                    
+
                     {slice.analysisError && (
                       <p className="text-xs text-red-400 mt-1">{slice.analysisError}</p>
                     )}
-                    
+
                     {slice.prompt && (
                       <div className="mt-2">
                         <div className="text-xs font-mono bg-slate-900 p-2 rounded text-slate-300 line-clamp-3">
@@ -2321,7 +2339,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 </div>
               ))}
             </div>
-            
+
             {/* Clear All Button */}
             <button
               onClick={() => {
@@ -2338,7 +2356,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
           </div>
         )}
       </div>
-      
+
       {/* Preview Modal */}
       {previewSlice && (
         <div
@@ -2358,21 +2376,21 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                 <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
-            
+
             <div className="p-4 space-y-4">
               <img
                 src={previewSlice.base64}
                 alt={previewSlice.name || 'Preview'}
                 className="w-full max-h-96 object-contain bg-slate-800 rounded-lg"
               />
-              
+
               {previewSlice.description && (
                 <div>
                   <h4 className="text-sm font-medium text-slate-400 mb-1">Description</h4>
                   <p className="text-white">{previewSlice.description}</p>
                 </div>
               )}
-              
+
               {previewSlice.prompt && (
                 <div>
                   <h4 className="text-sm font-medium text-slate-400 mb-1">Generated Prompt</h4>
@@ -2381,7 +2399,7 @@ Output ONLY a JSON array of the selected keywords (just the keyword strings, no 
                   </div>
                 </div>
               )}
-              
+
               <div className="flex gap-2">
                 <button
                   onClick={() => handleDownloadSlice(previewSlice)}
