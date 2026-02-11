@@ -1,9 +1,8 @@
 import * as cheerio from 'cheerio';
 
 /**
- * Vercel Serverless Function - Consolidated Etsy operations
- * Handles: analyze, fetch-images, listing, proxy-image
- * This reduces 4 functions to 1 to stay within Vercel Hobby plan limit
+ * Koyeb/Vercel serverless - Etsy operations (scraper + proxy only; no Etsy API)
+ * Handles: analyze (501), fetch-images, listing, proxy-image
  */
 export default async function handler(req, res) {
   // Enable CORS for all operations
@@ -24,9 +23,8 @@ export default async function handler(req, res) {
     const listingIds = bodyParams.listingIds;
     const listingIdParam = queryParams.listingId || bodyParams.listingId;
     const url = queryParams.url || bodyParams.url;
-    const apiKey = bodyParams.apiKey;
 
-    // Scrape fallback function
+    // Scraper (no Etsy API)
     const scrapeListingImages = async (listingId) => {
       console.log(`[Etsy Scraper] Scraping images for listing ${listingId}...`);
       let html = '';
@@ -203,7 +201,6 @@ export default async function handler(req, res) {
       }
 
       try {
-        // Use Scraper exclusively
         const scrapeResult = await scrapeListingImages(listingId);
         const scrapedImages = scrapeResult.images || [];
 
@@ -214,10 +211,15 @@ export default async function handler(req, res) {
           });
         }
 
+        const pageTitle = (scrapeResult.pageTitle || '').trim().toLowerCase();
+        const isBlockPage = pageTitle === 'etsy.com' || pageTitle === 'etsy' || (scrapeResult.snippet && /captcha|enable javascript|blocked|access denied/i.test(scrapeResult.snippet));
         const errMsg = scrapeResult.error ? ` ${scrapeResult.error}.` : '';
+        const suggestion = isBlockPage
+          ? ' Etsy may be blocking automated requests. Try again later or paste image URLs manually.'
+          : ' The listing might be private or Etsy may be blocking requests.';
         return res.status(404).json({
           error: 'No images found',
-          details: `Scraper failed to find images. Page title: "${scrapeResult.pageTitle || 'Unknown'}".${errMsg} The listing might be private or Etsy may be blocking requests.`,
+          details: `Scraper failed to find images. Page title: "${scrapeResult.pageTitle || 'Unknown'}".${errMsg}${suggestion}`,
           pageTitle: scrapeResult.pageTitle,
           snippet: scrapeResult.snippet
         });

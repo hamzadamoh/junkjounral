@@ -1,6 +1,6 @@
 # Koyeb Deployment Guide
 
-This guide will help you deploy your application to Koyeb.
+This guide will help you deploy your application to Koyeb. **This project is built to run on Koyeb:** the production server (`server.js`) serves the Vite build and all API routes (Etsy, WordPress, OpenAI, etc.) in one service.
 
 ## Overview
 
@@ -41,8 +41,8 @@ Koyeb is a serverless platform that can run Node.js applications. This project h
    
    **Required (based on features you use):**
    - `OPENAI_API_KEY` - For OpenAI chat completions
-   - `ETSY_API_KEY` - For Etsy API operations
    - `TTAPI_API_KEY` - For Midjourney/TTAPI operations
+   - Etsy listing images use the built-in scraper only; no Etsy API keys are required.
    - `TTAPI_DOMAIN` - Optional, defaults to `https://api.ttapi.io`
 
    **Google Drive (if used):**
@@ -99,10 +99,9 @@ Koyeb is a serverless platform that can run Node.js applications. This project h
 
 4. **Set Environment Variables**
    ```bash
-   koyeb service update gothic-journal-artificer \
-     --env OPENAI_API_KEY=your_key \
-     --env ETSY_API_KEY=your_key
-   # Add more env vars as needed
+   koyeb service update your-service-name \
+     --env OPENAI_API_KEY=your_key
+   # Add more env vars as needed (WordPress, TTAPI, etc.). Etsy uses scraper only; no API keys.
    ```
 
 ## How It Works

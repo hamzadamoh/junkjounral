@@ -206,7 +206,8 @@ const ArcaneSplitter: React.FC<ArcaneSplitterProps> = ({ onPromptsGenerated, onC
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[ArcaneSplitter] Etsy API error:', errorData);
-        throw new Error(errorData.error || `Etsy API error: ${response.status} ${response.statusText}`);
+        const message = errorData.details || errorData.error || `Etsy API error: ${response.status} ${response.statusText}`;
+        throw new Error(message);
       }
 
       const data = await response.json();
