@@ -96,7 +96,8 @@ export default async function handler(req, res) {
         });
       }
 
-      const targetParentFolderId = parentFolderId || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU';
+      const targetParentFolderId = parentFolderId || '1zbBaYsbwn4LizT-uj4AQosUyA4Hs4Qaa';
+      console.log(`[Google Drive] Creating folder '${folderName}' in parent '${targetParentFolderId}'`);
 
       const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
         method: 'POST',
@@ -401,8 +402,11 @@ export default async function handler(req, res) {
         mimeType: 'application/vnd.google-apps.folder',
       };
 
-      if (parentFolderId) {
-        folderMetadata.parents = [parentFolderId];
+      const targetParentFolderId = parentFolderId || '1zbBaYsbwn4LizT-uj4AQosUyA4Hs4Qaa';
+      console.log(`[Google Drive] Creating grid folder '${folderName}' in parent '${targetParentFolderId}'`);
+
+      if (targetParentFolderId) {
+        folderMetadata.parents = [targetParentFolderId];
       }
 
       const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
