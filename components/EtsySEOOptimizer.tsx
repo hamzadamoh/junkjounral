@@ -177,7 +177,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '{',
             '  "title": "optimized title 125-140 chars",',
             '  "description": "first line\\n\\nsecond section\\n- bullet 1\\n- bullet 2",',
-            '  "tags": ["13 tags max 20 chars each"]',
+            '  "tags": ["13 tags each MUST be 1-20 characters, no exceptions"]',
             '}',
         ].join('\n');
 
@@ -258,6 +258,17 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     truncated = truncated.substring(0, cutPoint).replace(/,\s*$/, '').trim();
                 }
                 aiResponse.title = truncated;
+            }
+
+            // Enforce 20 char tag limit — truncate at last complete word
+            if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
+                aiResponse.tags = aiResponse.tags.map((tag: string) => {
+                    if (tag.length <= 20) return tag;
+                    let truncated = tag.substring(0, 20);
+                    const lastSpace = truncated.lastIndexOf(' ');
+                    if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
+                    return truncated.trim();
+                });
             }
 
             setOptimizedData(aiResponse);
