@@ -26,7 +26,8 @@ import {
   CheckSquare,
   ShoppingBag,
   Grid3x3,
-  Loader2
+  Loader2,
+  BarChart3
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
@@ -42,6 +43,7 @@ import { getGoogleDriveConfig } from './services/env';
 import ArcaneSplitter from './components/ArcaneSplitter';
 import EtsyShopAnalyzer from './components/EtsyShopAnalyzer';
 import EtsySEOOptimizer from './components/EtsySEOOptimizer';
+import EtsyClusterAnalyzer from './components/EtsyClusterAnalyzer';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
 // Note: import.meta.env is replaced at build time by Vite, so this is safe
@@ -78,6 +80,7 @@ const App: React.FC = () => {
   const [showArcaneSplitter, setShowArcaneSplitter] = useState<boolean>(false); // Show Arcane Splitter for grid image processing
   const [showEtsyAnalyzer, setShowEtsyAnalyzer] = useState<boolean>(false); // Show Etsy Shop Analyzer
   const [showEtsySEOOptimizer, setShowEtsySEOOptimizer] = useState<boolean>(false); // Show Etsy SEO Optimizer
+  const [showClusterAnalyzer, setShowClusterAnalyzer] = useState<boolean>(false); // Show Cluster Intelligence Engine
   const [showGoogleDriveGridGenerator, setShowGoogleDriveGridGenerator] = useState<boolean>(false); // Show Google Drive Grid Generator
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
@@ -3336,6 +3339,17 @@ const App: React.FC = () => {
       );
     }
 
+    // If Cluster Intelligence Engine is open, show it
+    if (showClusterAnalyzer) {
+      return (
+        <div className="animate-fade-in max-w-6xl mx-auto px-4">
+          <EtsyClusterAnalyzer
+            onClose={() => setShowClusterAnalyzer(false)}
+          />
+        </div>
+      );
+    }
+
     // If Arcane Splitter is open, show it
     if (showArcaneSplitter) {
       return (
@@ -4465,6 +4479,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Etsy SEO Optimizer</h3>
               <p className="text-sm text-slate-400">
                 Optimize Etsy listings using AI and 2026 SEO guidelines
+              </p>
+            </div>
+          </button>
+
+          {/* Cluster Intelligence Engine Option */}
+          <button
+            onClick={() => setShowClusterAnalyzer(true)}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <BarChart3 className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Cluster Intelligence</h3>
+              <p className="text-sm text-slate-400">
+                Analyze shop authority, detect cannibalization, and get strategic cluster roadmaps
               </p>
             </div>
           </button>
