@@ -64,51 +64,84 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         setError(null);
 
         const prompt = `
-Act as an Etsy SEO Expert specializing in the "2026 Etsy Model".
-Optimize this Etsy listing following these STRICT rules:
+You are an Etsy SEO Expert specializing in the "2026 Etsy Model".
+Optimize this listing following EXACTLY these rules:
 
-═══ TITLE RULES (MUST be 135-140 characters) ═══
-- Etsy allows exactly 140 characters. You MUST use 135-140 characters.
-- DO NOT just add random words to fill space. Every word must be intentional and relevant.
-- Follow this EXACT structure flowing naturally like a sentence:
-  [Primary Keyword Phrase], [Secondary Buyer-Intent Phrase] [Style/Aesthetic Theme] [Format/Type Clarifier]
-- First 50-70 characters = your strongest buyer-intent phrase that someone would actually search for.
-- Then add 2-3 supporting phrases that describe the STYLE, the AUDIENCE, and the FORMAT.
-- Use natural readable language. It should read like a product title, NOT a list of keywords.
-- Use commas sparingly (1-2 max). No parentheses. Keep it flowing.
-- BAD: "Japan Junk Journal Kit Printable Pages Zen Garden Sakura Flower Digital Paper Art Craft Vintage" (random keyword stacking)
-- GOOD: "Trip to Japan Junk Journal Kit Printable, Zen Garden Sakura Ephemera Pages Vintage Japanese Digital Download Scrapbook Paper" (natural flow)
-- The title must make sense when read aloud as a product name.
+═══ 1. TITLE (MUST be 135-140 characters) ═══
 
-═══ TAG RULES (exactly 13 tags) ═══
-- CRITICAL: Each tag must be MAX 20 characters (Etsy hard limit). Count carefully!
-- Use full phrases (2-3 words), never single words.
-- Cover DIFFERENT search angles — do NOT repeat similar phrases.
-- Do NOT duplicate phrases already in the title.
-- Example good tags: "rustic journal kit", "vintage ephemera", "garden scrapbook", "cottagecore paper", "botanical journal", "floral junk pages", "shabby chic art", "paper kit print", "garden craft kit", "digital ephemera", "antique garden art", "junk journal pages", "greenhouse print"
+A. First 50-70 characters matter most (mobile search dominates). Your strongest buyer-intent phrase MUST come first.
+   ✔ "Rustic Greenhouse Junk Journal Kit Printable"
+   ✘ "Vintage Garden Digital Papers Junk Journal Kit Rustic Greenhouse"
 
-═══ DESCRIPTION RULES (MODIFY, do NOT replace) ═══
-- Take the EXISTING description below and IMPROVE it, keeping its structure, sections, emojis, and formatting.
-- Rewrite the first 2 sentences to be SEO-critical (Google pulls from here). Make them natural, clear, and buyer-focused.
-- Include: What it is, who it's for, style it fits, how it's used, format clarity.
-- Keep all existing sections (What You'll Receive, Perfect For, download info, copyright, etc.)
-- Improve wording for SEO without keyword stuffing.
-- Do NOT repeat the exact title in the description.
-- The description should be LONG and detailed (at least 800 characters), preserving the seller's original content structure.
+B. Natural language > keyword stacking. Etsy AI detects stacking and penalizes it.
+   BAD (stacking): "Vintage Garden Rustic Greenhouse Junk Journal Kit Printable Papers"
+   GOOD (natural): "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera"
+
+C. One dominant phrase + 2-3 supporting phrases. Do NOT try to rank for 8 equal phrases.
+   Structure: [Primary Keyword Phrase], [Secondary Buyer Phrase] [Format Clarifier]
+   Example: "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"
+
+D. Avoid excessive punctuation. Max 1-2 commas. No parentheses. Keep it smooth and flowing.
+
+E. MUST be 135-140 characters. Use every character wisely with relevant descriptors — do NOT pad with random words.
+
+═══ 2. TAGS (exactly 13 tags) ═══
+
+Etsy now mixes title + tags together, doesn't require exact repetition, prefers phrase diversity, rewards long-tail matching.
+
+A. Each tag MUST be MAX 20 characters (Etsy hard limit). Count carefully!
+
+B. Cover DIFFERENT search angles. Do NOT repeat variations of the same phrase.
+   BAD: "junk journal kit", "junk journal pages", "junk journal printable" (too similar)
+   GOOD: "botanical journal kit", "garden scrapbook", "cottagecore ephemera", "floral printable pages" (different angles)
+
+C. Use full phrases (2-3 words), NEVER single words.
+   BAD: "garden", "printable", "ephemera"
+   GOOD: "garden journal kit", "botanical ephemera", "vintage paper pack"
+
+D. Do NOT duplicate phrases already in the title. Tags should EXPAND reach, not repeat it.
+
+═══ 3. DESCRIPTION (MODIFY the existing one, do NOT delete it) ═══
+
+Descriptions affect: Google ranking, conversion rate, quality score, AI product understanding.
+
+A. Take the EXISTING description and IMPROVE it. Keep its structure, sections, emojis, bullet points, and formatting intact.
+
+B. First 2 sentences are CRITICAL (Google pulls from here). Rewrite them to be natural, clear, buyer-focused.
+   BAD: "Rustic Greenhouse Junk Journal Kit Vintage Garden Digital Papers Scrapbook Papers"
+   GOOD: "Create a charming botanical journal with this Rustic Greenhouse Junk Journal Kit Printable, featuring vintage garden ephemera and cottagecore-inspired digital papers."
+
+C. Description MUST include: What it is, Who it's for, What style it fits, How it's used, Format clarity.
+
+D. Keep ALL existing sections (What You'll Receive, Perfect For, download info, copyright, etc.)
+
+E. The description should be LONG and detailed (at least 800 characters).
+
+F. Do NOT repeat the exact title in the description.
+
+═══ WHAT TO AVOID ═══
+- Keyword stuffing
+- Repeating exact title in description
+- Very broad tags (printable, paper, art)
+- Overloading parentheses
+- Trying to rank for 10 themes at once
+
+The 2026 Formula: Clarity + buyer intent + structured keyword layering + conversion focus > keyword quantity.
 
 ═══ INPUT DATA ═══
 Title: ${scrapedData.title}
-Description (PRESERVE AND MODIFY THIS):
-${scrapedData.description.substring(0, 2000)}
+Description (PRESERVE AND MODIFY THIS — keep structure, sections, emojis):
+${scrapedData.description.substring(0, 2500)}
 Current Tags: ${scrapedData.tags.join(', ')}
 
 ═══ OUTPUT (JSON ONLY) ═══
 {
-  "title": "optimized title 100-140 chars",
-  "description": "full modified description preserving original structure",
-  "tags": ["tag1 max20", "tag2 max20", ... exactly 13 tags]
+  "title": "optimized title 135-140 chars following structure above",
+  "description": "full modified description preserving original structure and sections",
+  "tags": ["max 20 chars each", ... exactly 13 tags covering different search angles]
 }
 `;
+
 
         try {
             const response = await fetch('/api/openai/chat', {
