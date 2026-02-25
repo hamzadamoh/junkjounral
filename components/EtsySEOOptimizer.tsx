@@ -67,16 +67,18 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 Act as an Etsy SEO Expert specializing in the "2026 Etsy Model".
 Optimize this Etsy listing following these STRICT rules:
 
-═══ TITLE RULES (MUST be 135-140 characters — USE THE FULL 140 CHAR ETSY LIMIT!) ═══
-- Etsy allows exactly 140 characters. You MUST use 135-140 characters. Every unused character is wasted SEO. A short title is a FAILURE.
-- First 50-70 characters: strongest buyer-intent phrase.
-- Structure: [Primary Keyword Phrase], [Secondary Buyer Phrase] [Style/Theme Words] [Format Clarifier] [Additional Keywords]
-- Use natural language, NOT keyword stacking. But DO fill the space with useful descriptors.
-- One dominant phrase + 2-3 supporting phrases + style/theme words to reach 140 chars.
-- Avoid excessive punctuation. Keep it smooth and readable.
-- EXAMPLE (104 chars): "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"
-- BETTER (133 chars): "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download Botanical Scrapbook Paper"
-- Count your characters! If under 135, add more relevant descriptors until you hit 140.
+═══ TITLE RULES (MUST be 135-140 characters) ═══
+- Etsy allows exactly 140 characters. You MUST use 135-140 characters.
+- DO NOT just add random words to fill space. Every word must be intentional and relevant.
+- Follow this EXACT structure flowing naturally like a sentence:
+  [Primary Keyword Phrase], [Secondary Buyer-Intent Phrase] [Style/Aesthetic Theme] [Format/Type Clarifier]
+- First 50-70 characters = your strongest buyer-intent phrase that someone would actually search for.
+- Then add 2-3 supporting phrases that describe the STYLE, the AUDIENCE, and the FORMAT.
+- Use natural readable language. It should read like a product title, NOT a list of keywords.
+- Use commas sparingly (1-2 max). No parentheses. Keep it flowing.
+- BAD: "Japan Junk Journal Kit Printable Pages Zen Garden Sakura Flower Digital Paper Art Craft Vintage" (random keyword stacking)
+- GOOD: "Trip to Japan Junk Journal Kit Printable, Zen Garden Sakura Ephemera Pages Vintage Japanese Digital Download Scrapbook Paper" (natural flow)
+- The title must make sense when read aloud as a product name.
 
 ═══ TAG RULES (exactly 13 tags) ═══
 - CRITICAL: Each tag must be MAX 20 characters (Etsy hard limit). Count carefully!
