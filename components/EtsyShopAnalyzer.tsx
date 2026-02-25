@@ -46,7 +46,6 @@ interface AnalysisResult {
 const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
   const [shopUrl, setShopUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [sharedSecret, setSharedSecret] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +75,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
         body: JSON.stringify({
           operation: 'analyze',
           shopUrl: shopUrl.trim(),
-          apiKey: apiKey.trim() || undefined,
-          sharedSecret: sharedSecret.trim() || undefined,
+          apiKey: apiKey.trim() || undefined
         }),
       });
 
@@ -115,8 +113,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
         body: JSON.stringify({
           operation: 'fetch-images',
           listingIds,
-          apiKey: apiKey.trim() || undefined,
-          sharedSecret: sharedSecret.trim() || undefined,
+          apiKey: apiKey.trim() || undefined
         }),
       });
 
@@ -299,8 +296,7 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
         body: JSON.stringify({
           operation: 'fetch-images',
           listingIds,
-          apiKey: apiKey.trim() || undefined,
-          sharedSecret: sharedSecret.trim() || undefined,
+          apiKey: apiKey.trim() || undefined
         }),
       });
 
@@ -434,20 +430,6 @@ const EtsyShopAnalyzer: React.FC<EtsyShopAnalyzerProps> = ({ onClose }) => {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="Leave empty to use server API key"
-              className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-              disabled={isAnalyzing}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Etsy Shared Secret (Optional)
-            </label>
-            <input
-              type="password"
-              value={sharedSecret}
-              onChange={(e) => setSharedSecret(e.target.value)}
-              placeholder="Leave empty to use server shared secret"
               className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
               disabled={isAnalyzing}
             />
