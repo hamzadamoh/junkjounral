@@ -64,37 +64,44 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         setError(null);
 
         const prompt = `
-Act as an Etsy SEO Expert specializing in the "2026 Etsy Model". 
-Your goal is to optimize an Etsy listing based on the following guidelines:
+Act as an Etsy SEO Expert specializing in the "2026 Etsy Model".
+Optimize this Etsy listing following these STRICT rules:
 
-TITLE STRUCTURE:
-- First 50-70 characters are most important. Use the strongest buyer-intent phrase first.
-- Use natural language over keyword stacking.
-- Structure: [Primary Keyword Phrase] + [Secondary Buyer Phrase] + [Format Clarifier].
-- Avoid excessive punctuation.
+═══ TITLE RULES (100-140 characters total) ═══
+- First 50-70 characters: strongest buyer-intent phrase.
+- Structure: [Primary Keyword Phrase] + [Secondary Buyer Phrase] + [Format Clarifier]
+- Use natural language, NOT keyword stacking.
+- One dominant phrase + 2-3 supporting phrases.
+- Avoid excessive punctuation. Keep it smooth and readable.
+- Example: "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"
 
-TAG STRUCTURE:
-- Provide exactly 13 tags.
-- Use full phrases, not single words.
-- Mix title and tags for phrase diversity.
-- Cover different search angles.
+═══ TAG RULES (exactly 13 tags) ═══
+- CRITICAL: Each tag must be MAX 20 characters (Etsy hard limit). Count carefully!
+- Use full phrases (2-3 words), never single words.
+- Cover DIFFERENT search angles — do NOT repeat similar phrases.
+- Do NOT duplicate phrases already in the title.
+- Example good tags: "rustic journal kit", "vintage ephemera", "garden scrapbook", "cottagecore paper", "botanical journal", "floral junk pages", "shabby chic art", "paper kit print", "garden craft kit", "digital ephemera", "antique garden art", "junk journal pages", "greenhouse print"
 
-DESCRIPTION STRUCTURE:
-- First 2 sentences are critical for Google SEO.
-- Include: What it is, who it's for, style, usage, and format clarity.
-- Natural, buyer-focused language.
-- Avoid keyword stuffing and repeating exact title in description.
+═══ DESCRIPTION RULES (MODIFY, do NOT replace) ═══
+- Take the EXISTING description below and IMPROVE it, keeping its structure, sections, emojis, and formatting.
+- Rewrite the first 2 sentences to be SEO-critical (Google pulls from here). Make them natural, clear, and buyer-focused.
+- Include: What it is, who it's for, style it fits, how it's used, format clarity.
+- Keep all existing sections (What You'll Receive, Perfect For, download info, copyright, etc.)
+- Improve wording for SEO without keyword stuffing.
+- Do NOT repeat the exact title in the description.
+- The description should be LONG and detailed (at least 800 characters), preserving the seller's original content structure.
 
-INPUT DATA:
+═══ INPUT DATA ═══
 Title: ${scrapedData.title}
-Description: ${scrapedData.description.substring(0, 1000)}...
+Description (PRESERVE AND MODIFY THIS):
+${scrapedData.description.substring(0, 2000)}
 Current Tags: ${scrapedData.tags.join(', ')}
 
-OUTPUT FORMAT (JSON ONLY):
+═══ OUTPUT (JSON ONLY) ═══
 {
-  "title": "...",
-  "description": "...",
-  "tags": ["tag1", "tag2", ...]
+  "title": "optimized title 100-140 chars",
+  "description": "full modified description preserving original structure",
+  "tags": ["tag1 max20", "tag2 max20", ... exactly 13 tags]
 }
 `;
 
