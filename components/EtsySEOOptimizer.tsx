@@ -248,9 +248,16 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                 }
             }
 
-            // Enforce 140 char hard cap
+            // Enforce 140 char hard cap — cut at last complete word
             if (aiResponse.title && aiResponse.title.length > 140) {
-                aiResponse.title = aiResponse.title.substring(0, 140).trim();
+                let truncated = aiResponse.title.substring(0, 140);
+                const lastSpace = truncated.lastIndexOf(' ');
+                const lastComma = truncated.lastIndexOf(',');
+                const cutPoint = Math.max(lastSpace, lastComma);
+                if (cutPoint > 80) {
+                    truncated = truncated.substring(0, cutPoint).replace(/,\s*$/, '').trim();
+                }
+                aiResponse.title = truncated;
             }
 
             setOptimizedData(aiResponse);
@@ -383,21 +390,30 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                             </button>
                                         </div>
                                         <p className="text-sm p-3 bg-slate-900 border border-amber-500/20 rounded-lg text-amber-50 shadow-inner">{optimizedData.title}</p>
+                                        <span className={`text-xs mt-1 inline-block ${(optimizedData.title?.length || 0) > 140 ? 'text-red-400' : (optimizedData.title?.length || 0) >= 125 ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                                            {optimizedData.title?.length || 0}/140 characters
+                                        </span>
                                     </section>
 
                                     <section>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <Tag className="w-3 h-3" /> Optimized Tags (13)
+                                                <Tag className="w-3 h-3" /> Optimized Tags ({optimizedData.tags?.length || 0}/13)
                                             </label>
-                                            <button onClick={() => copyToClipboard(optimizedData.tags.join(', '), 'tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
-                                                {copiedField === 'tags' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                                {copiedField === 'tags' ? 'Copied' : 'Copy All'}
-                                            </button>
+                                            <span className="text-xs text-slate-500">Click a tag to copy it</span>
                                         </div>
                                         <div className="flex flex-wrap gap-2 p-3 bg-slate-900 border border-amber-500/20 rounded-lg">
                                             {optimizedData.tags.map((tag, i) => (
-                                                <span key={i} className="text-xs px-2 py-1 bg-amber-500/10 text-amber-200 rounded border border-amber-500/20">{tag}</span>
+                                                <button
+                                                    key={i}
+                                                    onClick={() => copyToClipboard(tag, `tag-${i}`)}
+                                                    className="text-xs px-2 py-1 bg-amber-500/10 text-amber-200 rounded border border-amber-500/20 hover:bg-amber-500/30 hover:border-amber-400/40 transition-all cursor-pointer flex items-center gap-1"
+                                                    title={`Copy: ${tag}`}
+                                                >
+                                                    {copiedField === `tag-${i}` ? <Check className="w-3 h-3 text-emerald-400" /> : null}
+                                                    {tag}
+                                                    {tag.length > 20 && <span className="text-red-400 ml-1">({tag.length})</span>}
+                                                </button>
                                             ))}
                                         </div>
                                     </section>
