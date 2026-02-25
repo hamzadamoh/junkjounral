@@ -20,8 +20,12 @@ export default async function handler(req, res) {
     const listingIdParam = queryParams.listingId || bodyParams.listingId;
     const listingIds = bodyParams.listingIds || [];
 
-    // Use single key: ETSY_API_KEY
-    const apiKey = bodyParams.apiKey || queryParams.apiKey || process.env.ETSY_API_KEY || process.env.VITE_ETSY_API_KEY;
+    // Use combined key format for V3: keystring:secret
+    const rawApiKey = bodyParams.apiKey || queryParams.apiKey || process.env.ETSY_API_KEY || process.env.VITE_ETSY_API_KEY;
+    const rawSharedSecret = bodyParams.sharedSecret || queryParams.sharedSecret || process.env.ETSY_SHARED_SECRET || process.env.VITE_ETSY_SHARED_SECRET;
+
+    // As of Jan 2026, Etsy V3 requires both combined with a colon if shared secret exists
+    const apiKey = (rawApiKey && rawSharedSecret) ? `${rawApiKey}:${rawSharedSecret}` : rawApiKey;
 
     // Helper to extract listing ID from URL
     const extractListingId = (input) => {
