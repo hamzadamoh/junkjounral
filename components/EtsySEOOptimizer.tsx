@@ -167,7 +167,50 @@ Current Tags: ${scrapedData.tags.join(', ')}
                 content = content.replace(/```json|```/g, '').trim();
             }
 
-            const aiResponse = JSON.parse(content);
+            let aiResponse = JSON.parse(content);
+
+            // Programmatic enforcement: if AI title is too short, retry with explicit char count
+            if (aiResponse.title && aiResponse.title.length < 130) {
+                const retryPrompt = `The title you generated is only ${aiResponse.title.length} characters: "${aiResponse.title}"
+
+Etsy allows 140 characters. You have ${140 - aiResponse.title.length} unused characters. That is wasted SEO opportunity.
+
+Extend this title to EXACTLY 135-140 characters by adding more relevant buyer-intent keywords, style descriptors, or format clarifiers that naturally flow with the existing title. Do NOT add random words — every word must be relevant to the product.
+
+Return JSON only: { "title": "extended title here 135-140 chars" }`;
+
+                const retryResponse = await fetch('/api/openai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON.' },
+                            { role: 'user', content: retryPrompt }
+                        ],
+                        response_format: { type: 'json_object' },
+                        temperature: 0.7
+                    }),
+                });
+
+                if (retryResponse.ok) {
+                    const retryResult = await retryResponse.json();
+                    let retryContent = retryResult.choices[0].message.content;
+                    if (retryContent.includes('```')) {
+                        retryContent = retryContent.replace(/```json|```/g, '').trim();
+                    }
+                    const retryData = JSON.parse(retryContent);
+                    if (retryData.title && retryData.title.length > aiResponse.title.length) {
+                        aiResponse.title = retryData.title.substring(0, 140);
+                    }
+                }
+            }
+
+            // Enforce 140 char hard cap
+            if (aiResponse.title && aiResponse.title.length > 140) {
+                aiResponse.title = aiResponse.title.substring(0, 140).trim();
+            }
+
             setOptimizedData(aiResponse);
         } catch (err: any) {
             setError('AI Optimization failed: ' + err.message);
