@@ -63,85 +63,116 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         setIsOptimizing(true);
         setError(null);
 
-        const prompt = `
-You are an Etsy SEO Expert specializing in the "2026 Etsy Model".
-Optimize this listing following EXACTLY these rules:
-
-═══ 1. TITLE (MUST be 135-140 characters) ═══
-
-A. First 50-70 characters matter most (mobile search dominates). Your strongest buyer-intent phrase MUST come first.
-   ✔ "Rustic Greenhouse Junk Journal Kit Printable"
-   ✘ "Vintage Garden Digital Papers Junk Journal Kit Rustic Greenhouse"
-
-B. Natural language > keyword stacking. Etsy AI detects stacking and penalizes it.
-   BAD (stacking): "Vintage Garden Rustic Greenhouse Junk Journal Kit Printable Papers"
-   GOOD (natural): "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera"
-
-C. One dominant phrase + 2-3 supporting phrases. Do NOT try to rank for 8 equal phrases.
-   Structure: [Primary Keyword Phrase], [Secondary Buyer Phrase] [Format Clarifier]
-   Example: "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"
-
-D. Avoid excessive punctuation. Max 1-2 commas. No parentheses. Keep it smooth and flowing.
-
-E. MUST be 135-140 characters. Use every character wisely with relevant descriptors — do NOT pad with random words.
-
-═══ 2. TAGS (exactly 13 tags) ═══
-
-Etsy now mixes title + tags together, doesn't require exact repetition, prefers phrase diversity, rewards long-tail matching.
-
-A. Each tag MUST be MAX 20 characters (Etsy hard limit). Count carefully!
-
-B. Cover DIFFERENT search angles. Do NOT repeat variations of the same phrase.
-   BAD: "junk journal kit", "junk journal pages", "junk journal printable" (too similar)
-   GOOD: "botanical journal kit", "garden scrapbook", "cottagecore ephemera", "floral printable pages" (different angles)
-
-C. Use full phrases (2-3 words), NEVER single words.
-   BAD: "garden", "printable", "ephemera"
-   GOOD: "garden journal kit", "botanical ephemera", "vintage paper pack"
-
-D. Do NOT duplicate phrases already in the title. Tags should EXPAND reach, not repeat it.
-
-═══ 3. DESCRIPTION (MODIFY the existing one, do NOT delete it) ═══
-
-Descriptions affect: Google ranking, conversion rate, quality score, AI product understanding.
-
-A. Take the EXISTING description and IMPROVE it. Keep its structure, sections, emojis, bullet points, and formatting intact.
-
-B. First 2 sentences are CRITICAL (Google pulls from here). Rewrite them to be natural, clear, buyer-focused.
-   BAD: "Rustic Greenhouse Junk Journal Kit Vintage Garden Digital Papers Scrapbook Papers"
-   GOOD: "Create a charming botanical journal with this Rustic Greenhouse Junk Journal Kit Printable, featuring vintage garden ephemera and cottagecore-inspired digital papers."
-
-C. Description MUST include: What it is, Who it's for, What style it fits, How it's used, Format clarity.
-
-D. Keep ALL existing sections (What You'll Receive, Perfect For, download info, copyright, etc.)
-
-E. The description should be LONG and detailed (at least 800 characters).
-
-F. Do NOT repeat the exact title in the description.
-
-═══ WHAT TO AVOID ═══
-- Keyword stuffing
-- Repeating exact title in description
-- Very broad tags (printable, paper, art)
-- Overloading parentheses
-- Trying to rank for 10 themes at once
-
-The 2026 Formula: Clarity + buyer intent + structured keyword layering + conversion focus > keyword quantity.
-
-═══ INPUT DATA ═══
-Title: ${scrapedData.title}
-Description (PRESERVE AND MODIFY THIS — keep structure, sections, emojis):
-${scrapedData.description.substring(0, 2500)}
-Current Tags: ${scrapedData.tags.join(', ')}
-
-═══ OUTPUT (JSON ONLY) ═══
-{
-  "title": "optimized title 135-140 chars following structure above",
-  "description": "full modified description preserving original structure and sections",
-  "tags": ["max 20 chars each", ... exactly 13 tags covering different search angles]
-}
-`;
-
+        const promptLines = [
+            'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
+            '',
+            'Your goal is to optimize for:',
+            '- Search match relevance',
+            '- Click-through rate (CTR)',
+            '- Conversion rate (CVR)',
+            '- Listing quality score',
+            '- Long-term shop authority',
+            '',
+            'Priority formula: Relevance x Click Appeal x Buyer Intent x Conversion Clarity',
+            'NOT keyword stuffing.',
+            '',
+            '=== 1. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
+            '',
+            'A. Length Target:',
+            '- Ideal range: 125-140 characters',
+            '- Never force padding to hit max',
+            '- Clarity > character count',
+            '',
+            'B. First 60 Characters Rule (Mobile Priority Zone):',
+            'The first 50-70 characters MUST contain the strongest buyer-intent phrase, clearly define what the product is, and be readable like a product name.',
+            'GOOD: "Rustic Greenhouse Junk Journal Kit Printable"',
+            'BAD: "Vintage Garden Digital Papers Rustic Greenhouse Junk Journal"',
+            '',
+            'C. Title Structure Formula (Pro Seller Model):',
+            '[Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier]',
+            'Example: "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"',
+            'Rules:',
+            '- 1 dominant phrase + 2-3 supporting angles max',
+            '- Avoid stacking 5-8 equal keywords',
+            '- Natural language flow',
+            '- 1-3 commas maximum (if needed)',
+            '- No keyword dumping',
+            '',
+            'D. CTR Psychology Layer:',
+            'The title must sound like a product someone WANTS. Be specific, not vague. Include aesthetic triggers when relevant (cottagecore, dark academia, fairycore, botanical, gothic, shabby chic, etc.). Etsy now rewards clicks and saves heavily.',
+            '',
+            '=== 2. TAG STRATEGY (EXPANSION MODEL) ===',
+            '',
+            'Output exactly 13 tags.',
+            '',
+            'A. Character Rule: Max 20 characters each. 2-3 words per tag. No single-word tags.',
+            '',
+            'B. Tag Strategy Framework - do NOT repeat the full title phrase. Expand horizontally into different buyer angles:',
+            '1. Alternate product phrasing',
+            '2. Aesthetic niche',
+            '3. Use-case intent',
+            '4. Style variation',
+            '5. Broader entry keywords',
+            '6. Adjacent audience types',
+            '',
+            'Example good angles: "botanical journal kit", "garden scrapbook", "cottagecore ephemera", "floral printable pages", "digital paper pack", "shabby chic art", "vintage craft kit"',
+            'Example BAD (too repetitive): "junk journal kit", "junk journal printable", "junk journal pages"',
+            '',
+            'C. Reinforcement Rule (Advanced):',
+            'You MAY lightly reinforce part of the main title phrase using a variation in ONE tag.',
+            'Example - Title: "Rustic Greenhouse Junk Journal Kit Printable" then Tag allowed: "greenhouse journal kit"',
+            'But NOT exact full duplication.',
+            '',
+            '=== 3. DESCRIPTION OPTIMIZATION (AI + CONVERSION MODEL) ===',
+            '',
+            'Descriptions influence: Google ranking, buyer confidence, AI product understanding, conversion rate, time on listing (engagement signal).',
+            '',
+            'A. First 2 Sentences = Google Snippet Zone. Must clearly state what it is, include primary buyer phrase naturally, be readable and persuasive, avoid keyword stacking.',
+            'GOOD: "Create a charming botanical journal with this Rustic Greenhouse Junk Journal Kit Printable, featuring vintage garden ephemera and cottagecore-inspired digital papers."',
+            'BAD: "Rustic Greenhouse Junk Journal Kit Vintage Garden Digital Papers Scrapbook Papers Printable Ephemera"',
+            '',
+            'B. Required Content Elements - the description MUST clearly communicate:',
+            '- What it is',
+            '- Who it is for',
+            '- What aesthetic/style it fits',
+            '- How it is used',
+            '- Format clarity (digital, instant download)',
+            '- Commercial/personal use info',
+            '',
+            'C. Structure Preservation Rule - when optimizing:',
+            '- Keep existing sections, formatting, emojis, and bullet lists',
+            '- Expand and improve, do NOT delete structure',
+            '- Minimum length: 800+ characters',
+            '',
+            'D. Conversion Layer - add where appropriate:',
+            '- Use-case scenarios',
+            '- Gift positioning',
+            '- Emotional triggers',
+            '- Clear digital explanation',
+            '- Reassurance statements',
+            '',
+            '=== 4. WHAT TO AVOID (2026 PENALTY ZONE) ===',
+            '- Keyword stuffing',
+            '- Robotic phrasing',
+            '- Repeating exact title in description',
+            '- Extremely broad tags (printable, art, paper)',
+            '- Ranking for too many unrelated themes',
+            '- Title reading like a keyword list',
+            'Etsy AI now detects manipulation patterns.',
+            '',
+            '=== INPUT DATA ===',
+            'Title: ' + scrapedData.title,
+            'Description (PRESERVE AND MODIFY - keep structure, sections, emojis):',
+            scrapedData.description.substring(0, 2500),
+            'Current Tags: ' + scrapedData.tags.join(', '),
+            '',
+            '=== OUTPUT (JSON ONLY) ===',
+            '{',
+            '  "title": "optimized title 125-140 chars",',
+            '  "description": "improved full description preserving structure",',
+            '  "tags": ["13 tags max 20 chars each"]',
+            '}',
+        ].join('\n');
 
         try {
             const response = await fetch('/api/openai/chat', {
@@ -150,8 +181,8 @@ Current Tags: ${scrapedData.tags.join(', ')}
                 body: JSON.stringify({
                     model: 'gpt-4o',
                     messages: [
-                        { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON. Use the keys: "title", "description", and "tags".' },
-                        { role: 'user', content: prompt }
+                        { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". Optimize for Relevance x Click Appeal x Buyer Intent x Conversion Clarity.' },
+                        { role: 'user', content: promptLines }
                     ],
                     response_format: { type: 'json_object' },
                     temperature: 0.7
@@ -169,15 +200,19 @@ Current Tags: ${scrapedData.tags.join(', ')}
 
             let aiResponse = JSON.parse(content);
 
-            // Programmatic enforcement: if AI title is too short, retry with explicit char count
-            if (aiResponse.title && aiResponse.title.length < 130) {
-                const retryPrompt = `The title you generated is only ${aiResponse.title.length} characters: "${aiResponse.title}"
-
-Etsy allows 140 characters. You have ${140 - aiResponse.title.length} unused characters. That is wasted SEO opportunity.
-
-Extend this title to EXACTLY 135-140 characters by adding more relevant buyer-intent keywords, style descriptors, or format clarifiers that naturally flow with the existing title. Do NOT add random words — every word must be relevant to the product.
-
-Return JSON only: { "title": "extended title here 135-140 chars" }`;
+            // Safety net: if title is very short (<110), retry with context
+            if (aiResponse.title && aiResponse.title.length < 110) {
+                const retryLines = [
+                    'Your title is only ' + aiResponse.title.length + ' characters: "' + aiResponse.title + '"',
+                    '',
+                    'The ideal Etsy title range is 125-140 characters. You have ' + (140 - aiResponse.title.length) + ' unused characters.',
+                    '',
+                    'Extend this title naturally to 125-140 characters by adding relevant buyer-intent keywords, aesthetic triggers, or format clarifiers that flow with the existing title.',
+                    'Follow the Pro Seller structure: [Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier].',
+                    'Do NOT add random words - every word must be relevant.',
+                    '',
+                    'Return JSON only: { "title": "extended title here" }',
+                ].join('\n');
 
                 const retryResponse = await fetch('/api/openai/chat', {
                     method: 'POST',
@@ -186,7 +221,7 @@ Return JSON only: { "title": "extended title here 135-140 chars" }`;
                         model: 'gpt-4o',
                         messages: [
                             { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON.' },
-                            { role: 'user', content: retryPrompt }
+                            { role: 'user', content: retryLines }
                         ],
                         response_format: { type: 'json_object' },
                         temperature: 0.7
@@ -333,7 +368,7 @@ Return JSON only: { "title": "extended title here 135-140 chars" }`;
                                     <section>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <Type className="w-3.0 h-3.0" /> Optimized Title
+                                                <Type className="w-3 h-3" /> Optimized Title
                                             </label>
                                             <button onClick={() => copyToClipboard(optimizedData.title, 'title')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
                                                 {copiedField === 'title' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -346,7 +381,7 @@ Return JSON only: { "title": "extended title here 135-140 chars" }`;
                                     <section>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <Tag className="w-3.0 h-3.0" /> Optimized Tags (13)
+                                                <Tag className="w-3 h-3" /> Optimized Tags (13)
                                             </label>
                                             <button onClick={() => copyToClipboard(optimizedData.tags.join(', '), 'tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
                                                 {copiedField === 'tags' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -363,7 +398,7 @@ Return JSON only: { "title": "extended title here 135-140 chars" }`;
                                     <section className="flex-1">
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <FileText className="w-3.0 h-3.0" /> Optimized Description
+                                                <FileText className="w-3 h-3" /> Optimized Description
                                             </label>
                                             <button onClick={() => copyToClipboard(optimizedData.description, 'description')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
                                                 {copiedField === 'description' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
