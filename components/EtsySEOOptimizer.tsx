@@ -105,18 +105,24 @@ OUTPUT FORMAT (JSON ONLY):
                 body: JSON.stringify({
                     model: 'gpt-4o',
                     messages: [
-                        { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON.' },
+                        { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON. Use the keys: "title", "description", and "tags".' },
                         { role: 'user', content: prompt }
                     ],
+                    response_format: { type: 'json_object' },
                     temperature: 0.7
                 }),
             });
 
             if (!response.ok) throw new Error('Failed to optimize with AI');
-
             const result = await response.json();
-            const aiResponse = JSON.parse(result.choices[0].message.content);
+            let content = result.choices[0].message.content;
 
+            // Clean markdown code blocks if present
+            if (content.includes('```')) {
+                content = content.replace(/```json|```/g, '').trim();
+            }
+
+            const aiResponse = JSON.parse(content);
             setOptimizedData(aiResponse);
         } catch (err: any) {
             setError('AI Optimization failed: ' + err.message);
