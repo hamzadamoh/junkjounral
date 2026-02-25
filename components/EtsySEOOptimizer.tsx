@@ -143,6 +143,10 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '- Keep existing sections, formatting, emojis, and bullet lists',
             '- Expand and improve, do NOT delete structure',
             '- Minimum length: 800+ characters',
+            '- CRITICAL: Use \\n (newline characters) in the JSON description value to preserve line breaks, section headers, spacing, and paragraph structure',
+            '- Each section header (like ### or emoji headers) MUST be on its own line',
+            '- Bullet points and numbered lists MUST each be on their own line',
+            '- Add blank lines (\\n\\n) between sections for readability',
             '',
             'D. Conversion Layer - add where appropriate:',
             '- Use-case scenarios',
@@ -167,9 +171,12 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             'Current Tags: ' + scrapedData.tags.join(', '),
             '',
             '=== OUTPUT (JSON ONLY) ===',
+            'IMPORTANT: In the description field, use \\n for line breaks to preserve formatting.',
+            'Do NOT return the description as one flat paragraph.',
+            'Keep sections, headers, bullet points, and emojis each on their own line using \\n.',
             '{',
             '  "title": "optimized title 125-140 chars",',
-            '  "description": "improved full description preserving structure",',
+            '  "description": "first line\\n\\nsecond section\\n- bullet 1\\n- bullet 2",',
             '  "tags": ["13 tags max 20 chars each"]',
             '}',
         ].join('\n');
@@ -181,7 +188,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                 body: JSON.stringify({
                     model: 'gpt-4o',
                     messages: [
-                        { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". Optimize for Relevance x Click Appeal x Buyer Intent x Conversion Clarity.' },
+                        { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". Optimize for Relevance x Click Appeal x Buyer Intent x Conversion Clarity. CRITICAL: In the description field, use \n (actual newline characters) to preserve line breaks, section headers, spacing, bullets, and paragraph structure. Do NOT return the description as one flat paragraph.' },
                         { role: 'user', content: promptLines }
                     ],
                     response_format: { type: 'json_object' },
