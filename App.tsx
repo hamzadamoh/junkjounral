@@ -1,11 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { 
-  ArrowRight, 
-  Sparkles, 
-  Settings, 
-  Image as ImageIcon, 
-  Download, 
-  RefreshCw, 
+import {
+  ArrowRight,
+  Sparkles,
+  Settings,
+  Image as ImageIcon,
+  Download,
+  RefreshCw,
   ChevronLeft,
   Printer,
   FileDown,
@@ -41,6 +41,7 @@ import { uploadImagesToGoogleDrive, GoogleDriveUploadResult } from './services/g
 import { getGoogleDriveConfig } from './services/env';
 import ArcaneSplitter from './components/ArcaneSplitter';
 import EtsyShopAnalyzer from './components/EtsyShopAnalyzer';
+import EtsySEOOptimizer from './components/EtsySEOOptimizer';
 
 // Get password from environment variable (constant, doesn't change) - defined outside component to avoid re-renders
 // Note: import.meta.env is replaced at build time by Vite, so this is safe
@@ -51,14 +52,14 @@ const App: React.FC = () => {
   // ALL HOOKS MUST BE DECLARED AT THE TOP LEVEL
   // BEFORE ANY CONDITIONAL RETURNS
   // ============================================
-  
+
   // --- Password Protection State ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [password, setPassword] = useState<string>('');
   const [passwordError, setPasswordError] = useState<string>('');
   const [isCheckingPassword, setIsCheckingPassword] = useState<boolean>(false);
-  
+
   // --- Main App State ---
   const [step, setStep] = useState<number>(1);
   const [selectedTheme, setSelectedTheme] = useState<Theme | null>(null);
@@ -76,6 +77,7 @@ const App: React.FC = () => {
   const [bulkImagesPerPrompt, setBulkImagesPerPrompt] = useState<1 | 2 | 4>(4); // Images per prompt for Midjourney
   const [showArcaneSplitter, setShowArcaneSplitter] = useState<boolean>(false); // Show Arcane Splitter for grid image processing
   const [showEtsyAnalyzer, setShowEtsyAnalyzer] = useState<boolean>(false); // Show Etsy Shop Analyzer
+  const [showEtsySEOOptimizer, setShowEtsySEOOptimizer] = useState<boolean>(false); // Show Etsy SEO Optimizer
   const [showGoogleDriveGridGenerator, setShowGoogleDriveGridGenerator] = useState<boolean>(false); // Show Google Drive Grid Generator
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
@@ -135,12 +137,12 @@ const App: React.FC = () => {
     urls?: string[];
     type: 'success' | 'error';
   } | null>(null);
-  
+
   // --- Refs ---
   const hasCheckedAuth = useRef<boolean>(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // --- Callbacks ---
   const addLog = useCallback((message: string, type: 'log' | 'error' | 'success' = 'log') => {
     const logEntry = {
@@ -158,7 +160,7 @@ const App: React.FC = () => {
       console.log(message);
     }
   }, []);
-  
+
   const processImage = useCallback(async (base64Image: string, imageId?: string) => {
     const id = imageId || crypto.randomUUID();
     setIsAnalyzingImage(true);
@@ -178,8 +180,8 @@ const App: React.FC = () => {
         style = analysis.value.style || '';
         colors = analysis.value.colors || '';
         vibe = analysis.value.vibe || '';
-        setUploadedImages(prev => prev.map(img => 
-          img.id === id 
+        setUploadedImages(prev => prev.map(img =>
+          img.id === id
             ? { ...img, theme, style, colors, vibe, styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined, fullAnalysis: analysis.value }
             : img
         ));
@@ -216,7 +218,7 @@ const App: React.FC = () => {
         addLog(`❌ Failed to analyze image ${uploadedImages.length + 1}: ${analysis.reason?.message || 'Unknown error'}`, 'error');
       }
       if (wordPressUrl.status === 'fulfilled') {
-        setUploadedImages(prev => prev.map(img => 
+        setUploadedImages(prev => prev.map(img =>
           img.id === id ? { ...img, styleRefUrl: wordPressUrl.value } : img
         ));
         if (uploadedImages.length === 0) {
@@ -235,12 +237,12 @@ const App: React.FC = () => {
       setIsUploadingStyleRef(false);
     }
   }, [addLog, uploadedImages.length]);
-  
+
   const handleRemoveImage = useCallback((imageId: string) => {
     setUploadedImages(prev => prev.filter(img => img.id !== imageId));
     addLog(`🗑️ Image removed.`, 'log');
   }, [addLog]);
-  
+
   // --- Effects ---
 
   // Check authentication on mount (only once)
@@ -266,7 +268,7 @@ const App: React.FC = () => {
       setIsCheckingAuth(false);
       return;
     }
-    
+
     // Check if user was previously authenticated (stored in sessionStorage)
     try {
       const wasAuthenticated = sessionStorage.getItem('app_authenticated') === 'true';
@@ -277,7 +279,7 @@ const App: React.FC = () => {
     }
     setIsCheckingAuth(false);
   }, []); // Empty dependency array - only run once on mount
-  
+
   // Auto-scroll to bottom when new logs are added
   useEffect(() => {
     if (logsEndRef.current) {
@@ -292,7 +294,7 @@ const App: React.FC = () => {
       setShowSidebar(true);
     }
   }, [status]);
-  
+
   // Handle paste event for images
   useEffect(() => {
     const handlePaste = async (event: ClipboardEvent) => {
@@ -316,7 +318,7 @@ const App: React.FC = () => {
 
       if (imageFiles.length > 0) {
         event.preventDefault();
-        
+
         // Process all pasted images
         for (const file of imageFiles) {
           // Validate file size (max 20MB)
@@ -459,9 +461,9 @@ const App: React.FC = () => {
     setSelectedTheme(theme);
     setIsCustomTheme(false);
     setCustomThemePrompt('');
-    
+
     // Theme changed - no action needed (image-specific subject lists are generated per image)
-    
+
     setStep(2);
   };
 
@@ -500,7 +502,7 @@ const App: React.FC = () => {
   const handleCustomThemeSubmit = () => {
     if (customThemePrompt.trim()) {
       const newTheme = customThemePrompt.trim();
-      
+
       // Create a custom theme object
       const customTheme: Theme = {
         id: 'custom',
@@ -511,9 +513,9 @@ const App: React.FC = () => {
         styleKeywords: ['custom', 'unique']
       };
       setSelectedTheme(customTheme);
-      
+
       // Theme changed - no action needed (image-specific subject lists are generated per image)
-      
+
       setStep(2);
     }
   };
@@ -528,7 +530,7 @@ const App: React.FC = () => {
 
     // Process all selected files
     const fileArray = Array.from(files);
-    
+
     // Validate all files first
     for (const file of fileArray) {
       if (!file.type.startsWith('image/')) {
@@ -571,7 +573,7 @@ const App: React.FC = () => {
   const startGeneration = async () => {
     // Allow generation if either a theme is selected OR a custom theme is being used
     if (!selectedTheme && !isCustomTheme) return;
-    
+
     const total = settings.pageCount;
     const newImages: GeneratedImage[] = [];
 
@@ -587,7 +589,7 @@ const App: React.FC = () => {
       };
       newImages.push(placeholderImage);
     }
-    
+
     // Set all state together to ensure gallery shows immediately
     setGeneratedImages(newImages);
     setStep(4); // Go directly to gallery to show placeholders
@@ -597,10 +599,10 @@ const App: React.FC = () => {
 
     // STEP 1: Generate prompts
     addLog('Generating prompts...');
-    
+
     // Check if we're in bulk prompt mode
     const isBulkPromptModeForTheme = selectedTheme?.id === 'bulk-prompt-import';
-    
+
     // Handle bulk prompt mode - parse prompts and use them directly
     if (isBulkPromptModeForTheme && selectedTheme?.basePrompt) {
       const parsePrompts = (text: string): string[] => {
@@ -609,35 +611,35 @@ const App: React.FC = () => {
           .map(p => p.trim())
           .filter(p => p.length > 0);
       };
-      
+
       const bulkPromptsList = parsePrompts(selectedTheme.basePrompt);
       const totalPrompts = bulkPromptsList.length;
-      
+
       if (totalPrompts === 0) {
         setErrorMsg('No prompts detected. Please paste at least one prompt.');
         setStatus(GenerationStatus.ERROR);
         return;
       }
-      
+
       addLog(`[Bulk Prompt Mode] Detected ${totalPrompts} prompt${totalPrompts !== 1 ? 's' : ''}. Generating images for each...`);
-      
+
       // For Ttapi: use the user-selected images per prompt (1, 2, or 4)
       // For other services: always 1 image per prompt
       const imagesPerPromptToUse = settings.imageService === 'ttapi' ? bulkImagesPerPrompt : 1;
       const totalImagesToGenerate = totalPrompts * imagesPerPromptToUse;
-      
+
       addLog(`[Bulk Prompt Mode] Using ${imagesPerPromptToUse} image(s) per prompt. Total: ${totalImagesToGenerate} images.`);
       const actualTotal = Math.min(totalImagesToGenerate, total);
-      
+
       // Update placeholder images to match actual count
       const updatedImages = newImages.slice(0, actualTotal);
       setGeneratedImages(updatedImages);
-      
+
       // Generate images for each prompt
       // For Ttapi: process sequentially with delays to avoid queue overflow
       // For other services: process in parallel
       const promptsToProcess = bulkPromptsList.slice(0, Math.ceil(actualTotal / imagesPerPromptToUse));
-      
+
       if (settings.imageService === 'ttapi') {
         // For Hold Account Mode, assume 2 accounts and send 6 parallel requests
         // TTAPI will handle load balancing automatically if account_id is not specified
@@ -645,156 +647,156 @@ const App: React.FC = () => {
         const { getTtapiBaseUrl } = await import('./services/ttapiService');
         const baseUrl = getTtapiBaseUrl();
         const isHoldAccount = baseUrl.includes('hold.ttapi.io');
-        
+
         // Assume 2 accounts for Hold Account Mode, 1 for PPU mode
         const assumedAccountCount = isHoldAccount ? 2 : 1;
         const maxConcurrent = assumedAccountCount * 3; // 2 accounts = 6, 1 account = 3
         const totalBatches = Math.ceil(promptsToProcess.length / maxConcurrent);
         addLog(`[Ttapi Bulk] Processing ${promptsToProcess.length} prompts in ${totalBatches} batch(es) with ${maxConcurrent} concurrent requests per batch (assuming ${assumedAccountCount} account(s) for ${settings.midjourneyMode} mode)...`);
-        
+
         // Track if we've detected relax mode issues and should switch to fast
         let shouldUseFastMode = false;
-        
+
         // Process prompts in batches
         for (let batchStart = 0; batchStart < promptsToProcess.length; batchStart += maxConcurrent) {
           const batchEnd = Math.min(batchStart + maxConcurrent, promptsToProcess.length);
           const batchNumber = Math.floor(batchStart / maxConcurrent) + 1;
-          
+
           addLog(`[Ttapi Bulk] 🚀 Starting batch ${batchNumber}/${totalBatches}: Processing ${batchEnd - batchStart} prompt(s) in parallel (prompts ${batchStart + 1}-${batchEnd} of ${promptsToProcess.length})...`, 'log');
-          
+
           // Process this batch in parallel - let TTAPI handle load balancing
           const batchPromises = promptsToProcess.slice(batchStart, batchEnd).map(async (prompt, batchIndex) => {
             const promptIndex = batchStart + batchIndex;
-            
+
             // Don't specify account_id - let TTAPI distribute requests automatically
             const accountId = undefined;
-          
-          try {
-            // Apply moodboard and SREF if provided
-            let finalPrompt = prompt.trim();
-            
-            // Add moodboard if provided
-            if (bulkMoodboard.trim()) {
-              let moodboardId = bulkMoodboard.trim();
-              moodboardId = moodboardId.replace(/^--p\s*/i, '').trim();
-              moodboardId = moodboardId.replace(/^m/, '').trim();
-              finalPrompt += ` --p m${moodboardId}`;
-            }
-            
-            // Add SREF if provided
-            if (bulkSrefCode.trim()) {
-              finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
-            }
-            
-            // Add aspect ratio
-            if (settings.aspectRatio) {
-              finalPrompt += ` --ar ${settings.aspectRatio}`;
-            }
-            
-            // Determine which mode to use (fallback to fast if relax failed before)
-            const processMode = shouldUseFastMode ? 'fast' : (settings.midjourneyMode || 'fast');
-            if (shouldUseFastMode && settings.midjourneyMode === 'relax') {
-              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ⚠️ Relax mode unavailable, using fast mode instead`, 'log');
-            }
-            
-            // Log the full prompt (including WordPress URL if present) for debugging
-            const promptPreview = prompt.length > 100 ? prompt.substring(0, 100) + '...' : prompt;
-            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] 🚀 Starting (keeping ${imagesPerPromptToUse} of 4): "${promptPreview}"`);
-            console.log(`[Bulk Prompt ${promptIndex + 1}] Full prompt:`, prompt);
-            console.log(`[Bulk Prompt ${promptIndex + 1}] Final prompt (with moodboard/SREF):`, finalPrompt);
-            
-            // Create a dummy theme for bulk prompt mode
-            const dummyTheme: Theme = {
-              id: 'bulk-prompt',
-              name: 'Bulk Prompt',
-              description: 'Bulk prompt import',
-              thumbnail: '',
-              basePrompt: prompt,
-              styleKeywords: []
-            };
-            
-            const result = await generateWithTtapi(
-              dummyTheme,
-              settings,
-              undefined, // parametersForMJ
-              settings.aspectRatio || '1:1', // aspectRatio
-              processMode, // processMode (may be overridden to 'fast' if relax failed)
-              undefined, // onProgress
-              promptIndex, // variationIndex
-              finalPrompt.trim() || undefined, // customPrompt
-              accountId // accountId for explicit account selection
-            );
-            
-            // Extract results
-            const originalUrls = (result as any)?.originalUrls as string[] | undefined;
-            const originalGridUrl = (result as any)?.originalGridUrl as string | undefined;
-            const isGrid = (result as any)?.isGrid as boolean | undefined;
-            const allBase64Urls = Array.isArray(result) ? result : (result ? [result] : []);
-            const base64Urls = allBase64Urls.slice(0, imagesPerPromptToUse);
-            
-            // Update placeholder images
-            const startIndex = promptIndex * imagesPerPromptToUse;
-            const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
-            
-            if (base64Urls.length > 0) {
-              for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
-                updatedImages[startIndex + i].url = base64Urls[i];
-                if (isGrid && originalGridUrl) {
-                  updatedImages[startIndex + i].originalUrl = originalGridUrl;
-                  (updatedImages[startIndex + i] as any).gridSliceIndex = i;
-                } else if (originalUrls && originalUrls[i]) {
-                  updatedImages[startIndex + i].originalUrl = originalUrls[i];
-                }
-                updatedImages[startIndex + i].status = 'completed';
-                updatedImages[startIndex + i].prompt = finalPrompt;
+
+            try {
+              // Apply moodboard and SREF if provided
+              let finalPrompt = prompt.trim();
+
+              // Add moodboard if provided
+              if (bulkMoodboard.trim()) {
+                let moodboardId = bulkMoodboard.trim();
+                moodboardId = moodboardId.replace(/^--p\s*/i, '').trim();
+                moodboardId = moodboardId.replace(/^m/, '').trim();
+                finalPrompt += ` --p m${moodboardId}`;
               }
+
+              // Add SREF if provided
+              if (bulkSrefCode.trim()) {
+                finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
+              }
+
+              // Add aspect ratio
+              if (settings.aspectRatio) {
+                finalPrompt += ` --ar ${settings.aspectRatio}`;
+              }
+
+              // Determine which mode to use (fallback to fast if relax failed before)
+              const processMode = shouldUseFastMode ? 'fast' : (settings.midjourneyMode || 'fast');
+              if (shouldUseFastMode && settings.midjourneyMode === 'relax') {
+                addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ⚠️ Relax mode unavailable, using fast mode instead`, 'log');
+              }
+
+              // Log the full prompt (including WordPress URL if present) for debugging
+              const promptPreview = prompt.length > 100 ? prompt.substring(0, 100) + '...' : prompt;
+              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] 🚀 Starting (keeping ${imagesPerPromptToUse} of 4): "${promptPreview}"`);
+              console.log(`[Bulk Prompt ${promptIndex + 1}] Full prompt:`, prompt);
+              console.log(`[Bulk Prompt ${promptIndex + 1}] Final prompt (with moodboard/SREF):`, finalPrompt);
+
+              // Create a dummy theme for bulk prompt mode
+              const dummyTheme: Theme = {
+                id: 'bulk-prompt',
+                name: 'Bulk Prompt',
+                description: 'Bulk prompt import',
+                thumbnail: '',
+                basePrompt: prompt,
+                styleKeywords: []
+              };
+
+              const result = await generateWithTtapi(
+                dummyTheme,
+                settings,
+                undefined, // parametersForMJ
+                settings.aspectRatio || '1:1', // aspectRatio
+                processMode, // processMode (may be overridden to 'fast' if relax failed)
+                undefined, // onProgress
+                promptIndex, // variationIndex
+                finalPrompt.trim() || undefined, // customPrompt
+                accountId // accountId for explicit account selection
+              );
+
+              // Extract results
+              const originalUrls = (result as any)?.originalUrls as string[] | undefined;
+              const originalGridUrl = (result as any)?.originalGridUrl as string | undefined;
+              const isGrid = (result as any)?.isGrid as boolean | undefined;
+              const allBase64Urls = Array.isArray(result) ? result : (result ? [result] : []);
+              const base64Urls = allBase64Urls.slice(0, imagesPerPromptToUse);
+
+              // Update placeholder images
+              const startIndex = promptIndex * imagesPerPromptToUse;
+              const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
+
+              if (base64Urls.length > 0) {
+                for (let i = 0; i < base64Urls.length && (startIndex + i) < actualTotal; i++) {
+                  updatedImages[startIndex + i].url = base64Urls[i];
+                  if (isGrid && originalGridUrl) {
+                    updatedImages[startIndex + i].originalUrl = originalGridUrl;
+                    (updatedImages[startIndex + i] as any).gridSliceIndex = i;
+                  } else if (originalUrls && originalUrls[i]) {
+                    updatedImages[startIndex + i].originalUrl = originalUrls[i];
+                  }
+                  updatedImages[startIndex + i].status = 'completed';
+                  updatedImages[startIndex + i].prompt = finalPrompt;
+                }
+              }
+
+              setGeneratedImages([...updatedImages]);
+              setCurrentProgress(prev => Math.min(prev + base64Urls.length, actualTotal));
+              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${base64Urls.length} images)`, 'success');
+              return { success: true, promptIndex };
+
+            } catch (error: any) {
+              console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
+
+              const errorMessage = error.message || '';
+              const isNoAccountsError = errorMessage.includes('No available accounts') ||
+                errorMessage.includes('no available accounts') ||
+                errorMessage.includes('HOLD_RELAX_MODE_NOT_SUPPORTED');
+              const isRelaxMode = settings.midjourneyMode === 'relax';
+
+              if (isNoAccountsError && isRelaxMode && !shouldUseFastMode) {
+                // HOLD account relax mode issue - TTAPI API bug
+                addLog(`[Bulk Prompt ${promptIndex + 1}] ⚠️ TTAPI API Error: "No available accounts"`, 'error');
+                addLog(`[Bulk Prompt ${promptIndex + 1}] 🔍 This is a known TTAPI API bug with HOLD accounts (0 fast hours + "Only Relax" mode)`, 'log');
+                addLog(`[Bulk Prompt ${promptIndex + 1}] ✅ Your account works fine - manual Discord jobs complete successfully`, 'log');
+                addLog(`[Bulk Prompt ${promptIndex + 1}] 💡 Workaround: Use TTAPI dashboard directly, or contact TTAPI support about this API bug`, 'log');
+                addLog(`[Bulk Prompt ${promptIndex + 1}] 📧 Report this to TTAPI: HOLD account API returns "No available accounts" despite account being valid`, 'log');
+
+                // Don't retry - this is an API bug that won't be fixed by retrying
+                // The user needs to either use the dashboard or contact TTAPI support
+              }
+
+              // Regular error handling
+              const startIndex = promptIndex * imagesPerPromptToUse;
+              const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
+
+              for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
+                updatedImages[i].status = 'error';
+                updatedImages[i].prompt = prompt;
+              }
+              setGeneratedImages([...updatedImages]);
+              addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
+              return { success: false, promptIndex };
             }
-            
-            setGeneratedImages([...updatedImages]);
-            setCurrentProgress(prev => Math.min(prev + base64Urls.length, actualTotal));
-            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ✅ Completed (${base64Urls.length} images)`, 'success');
-            return { success: true, promptIndex };
-            
-          } catch (error: any) {
-            console.error(`[Bulk Prompt ${promptIndex + 1}] Generation failed:`, error);
-            
-            const errorMessage = error.message || '';
-            const isNoAccountsError = errorMessage.includes('No available accounts') || 
-                                     errorMessage.includes('no available accounts') ||
-                                     errorMessage.includes('HOLD_RELAX_MODE_NOT_SUPPORTED');
-            const isRelaxMode = settings.midjourneyMode === 'relax';
-            
-            if (isNoAccountsError && isRelaxMode && !shouldUseFastMode) {
-              // HOLD account relax mode issue - TTAPI API bug
-              addLog(`[Bulk Prompt ${promptIndex + 1}] ⚠️ TTAPI API Error: "No available accounts"`, 'error');
-              addLog(`[Bulk Prompt ${promptIndex + 1}] 🔍 This is a known TTAPI API bug with HOLD accounts (0 fast hours + "Only Relax" mode)`, 'log');
-              addLog(`[Bulk Prompt ${promptIndex + 1}] ✅ Your account works fine - manual Discord jobs complete successfully`, 'log');
-              addLog(`[Bulk Prompt ${promptIndex + 1}] 💡 Workaround: Use TTAPI dashboard directly, or contact TTAPI support about this API bug`, 'log');
-              addLog(`[Bulk Prompt ${promptIndex + 1}] 📧 Report this to TTAPI: HOLD account API returns "No available accounts" despite account being valid`, 'log');
-              
-              // Don't retry - this is an API bug that won't be fixed by retrying
-              // The user needs to either use the dashboard or contact TTAPI support
-            }
-            
-            // Regular error handling
-            const startIndex = promptIndex * imagesPerPromptToUse;
-            const endIndex = Math.min(startIndex + imagesPerPromptToUse, actualTotal);
-            
-            for (let i = startIndex; i < endIndex && i < actualTotal; i++) {
-              updatedImages[i].status = 'error';
-              updatedImages[i].prompt = prompt;
-            }
-            setGeneratedImages([...updatedImages]);
-            addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
-            return { success: false, promptIndex };
-          }
           });
-          
+
           // Wait for all requests in this batch to complete
           const batchResults = await Promise.allSettled(batchPromises);
           const batchCompleted = batchResults.filter(r => r.status === 'fulfilled' && r.value?.success).length;
           addLog(`[Ttapi Bulk] ✅ Batch ${batchNumber}/${totalBatches} completed: ${batchCompleted}/${batchEnd - batchStart} prompts successful`, 'success');
-          
+
           // Small delay between batches to avoid overwhelming the API
           if (batchEnd < promptsToProcess.length) {
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -806,7 +808,7 @@ const App: React.FC = () => {
           try {
             // Apply moodboard and SREF if provided
             let finalPrompt = prompt.trim();
-            
+
             // Add moodboard if provided
             if (bulkMoodboard.trim()) {
               // Remove any existing --p prefix and m prefix, then add them properly
@@ -818,23 +820,23 @@ const App: React.FC = () => {
               // Add m prefix and --p parameter
               finalPrompt += ` --p m${moodboardId}`;
             }
-            
+
             // Add SREF if provided
             if (bulkSrefCode.trim()) {
               finalPrompt += ` --sref ${bulkSrefCode.trim()} --sw 1000`;
             }
-            
+
             // Add aspect ratio
             if (settings.aspectRatio) {
               finalPrompt += ` --ar ${settings.aspectRatio}`;
             }
-            
+
             addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] Generating: "${prompt.substring(0, 60)}..."`);
-            
+
             // Replicate/Pollinations: 1 image per prompt
             const imageIndex = promptIndex;
             if (imageIndex >= actualTotal) return;
-            
+
             // Create a dummy theme for bulk prompt mode
             const dummyTheme: Theme = {
               id: 'bulk-prompt',
@@ -844,7 +846,7 @@ const App: React.FC = () => {
               basePrompt: prompt,
               styleKeywords: []
             };
-            
+
             let imageUrl = '';
             if (settings.imageService === 'replicate') {
               imageUrl = await generateWithReplicate(
@@ -869,7 +871,7 @@ const App: React.FC = () => {
                 finalPrompt // customPrompt
               );
             }
-            
+
             if (imageUrl) {
               updatedImages[imageIndex].url = imageUrl;
               updatedImages[imageIndex].status = 'completed';
@@ -891,19 +893,19 @@ const App: React.FC = () => {
             addLog(`[Bulk Prompt ${promptIndex + 1}/${promptsToProcess.length}] ❌ Failed: ${error.message || 'Unknown error'}`, 'error');
           }
         });
-        
+
         await Promise.allSettled(imagePromises);
       }
-      
+
       const completed = updatedImages.filter(img => img.status === 'completed').length;
       const errored = updatedImages.filter(img => img.status === 'error').length;
-      
+
       addLog(`[Bulk Prompt Mode] ✅ Completed: ${completed} successful, ${errored} failed`, completed > 0 ? 'success' : 'error');
       setStatus(GenerationStatus.COMPLETED);
       setCurrentProgress(actualTotal);
       return;
     }
-    
+
     // Determine the theme name to use
     // If SREF mode: use the SREF subject
     // If Image Theme Expansion mode: use the PRIMARY SUBJECT (theme) from the single uploaded image
@@ -913,11 +915,11 @@ const App: React.FC = () => {
     const themeName = isSrefModeForTheme && srefSubject.trim()
       ? srefSubject.trim()
       : isImageThemeExpansion && singleImageForTheme?.theme
-      ? singleImageForTheme.theme // Use PRIMARY SUBJECT from single image
-      : isCustomTheme && customThemePrompt.trim() 
-      ? customThemePrompt.trim() 
-      : selectedTheme?.name || 'Custom Theme';
-    
+        ? singleImageForTheme.theme // Use PRIMARY SUBJECT from single image
+        : isCustomTheme && customThemePrompt.trim()
+          ? customThemePrompt.trim()
+          : selectedTheme?.name || 'Custom Theme';
+
     // For Image Theme Expansion: use the PRIMARY SUBJECT as the theme for all variations
     // ChatGPT will generate different subjects but same theme/style
     // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
@@ -925,23 +927,23 @@ const App: React.FC = () => {
     const primarySubjectForExpansion = (isImageThemeMode && singleImageForTheme?.theme)
       ? singleImageForTheme.theme
       : (selectedTheme?.id === 'image-theme-expansion' && selectedTheme?.basePrompt)
-      ? selectedTheme.basePrompt // Fallback: use basePrompt from selectedTheme (set when "Continue with Image Theme" is clicked)
-      : settings.primarySubject?.trim() || undefined;
+        ? selectedTheme.basePrompt // Fallback: use basePrompt from selectedTheme (set when "Continue with Image Theme" is clicked)
+        : settings.primarySubject?.trim() || undefined;
     console.log(`[Image Theme Expansion] primarySubjectForExpansion: "${primarySubjectForExpansion}", isImageThemeExpansion: ${isImageThemeExpansion}, selectedTheme?.id: "${selectedTheme?.id}", selectedTheme?.basePrompt: "${selectedTheme?.basePrompt}", singleImageForTheme?.theme: "${singleImageForTheme?.theme}"`);
-    
+
     // Note: customThemePrompt and customArtStyle fields have been removed from UI
     // They are kept in settings for backward compatibility but are no longer used
-    
+
     // For Ttapi: Only generate prompts for the number of requests needed (1 prompt per 4 images)
     // For Pollinations/Replicate: Generate a prompt for each image
     let promptsToGenerate: number;
     let generatedPrompts: string[];
-    
+
     // Generate image-specific subject lists for each uploaded image
     // Each image gets its own nature-focused subject list
     const usedSubjects = new Set<string>();
     const imageSubjectLists: Map<number, string[]> = new Map();
-    
+
     // Metrics tracking (defined here so it's accessible to all code paths)
     const metrics = {
       headerMissing: 0,
@@ -951,18 +953,18 @@ const App: React.FC = () => {
       subjectSwaps: 0,
       finalAccepts: 0
     };
-    
+
     // Generate subject lists for each uploaded image
     if (uploadedImages.length > 0) {
       const usesPerImage = Math.floor(total / uploadedImages.length);
-      const apiKey = settings.promptService === 'openrouter' 
+      const apiKey = settings.promptService === 'openrouter'
         ? (import.meta.env.VITE_OPENROUTER_API_KEY || '')
         : (import.meta.env.VITE_OPENAI_API_KEY || '');
       const apiUrl = settings.promptService === 'openrouter'
         ? 'https://openrouter.ai/api/v1/chat/completions'
         : 'https://api.openai.com/v1/chat/completions';
       const useOpenRouter = settings.promptService === 'openrouter';
-      
+
       if (apiKey) {
         for (let imgIdx = 0; imgIdx < uploadedImages.length; imgIdx++) {
           const image = uploadedImages[imgIdx];
@@ -979,7 +981,7 @@ const App: React.FC = () => {
             colors: image.colors || '',
             vibe: image.vibe || ''
           } : null);
-          
+
           try {
             const subjectList = await generateImageSpecificSubjectList(
               imageAnalysis,
@@ -1002,52 +1004,52 @@ const App: React.FC = () => {
         addLog(`[Image Subject Lists] API key not configured, using fallback subjects`, 'error');
       }
     }
-    
+
     if (settings.imageService === 'ttapi') {
       // Only need prompts for the number of requests (each request generates 4 images)
       promptsToGenerate = Math.ceil(total / 4);
       const serviceName = 'Ttapi';
       addLog(`[${serviceName}] Generating ${promptsToGenerate} prompts for ${total} images (4 images per prompt)`);
-      
+
       // Calculate which image to use for each request
       const usesPerImage = uploadedImages.length > 0 ? Math.floor(total / uploadedImages.length) : 0;
       const requestsPerImage = uploadedImages.length > 0 ? Math.floor(promptsToGenerate / uploadedImages.length) : 0;
-      
+
       const promptPromises = Array.from({ length: promptsToGenerate }, async (_, i) => {
         // Determine which image to use for this request
         let imageIndex = 0;
         let imageTheme = themeName;
         let imageStyle = settings.customArtStyle || '';
         let imageSubjectList: string[] = [];
-        
+
         // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
         const isImageThemeModeForRequest = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
-        
+
         // For Image Theme Expansion mode: use the single image's theme and style for all variations
         if (isImageThemeModeForRequest && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
           imageTheme = singleImageForTheme?.theme || selectedTheme?.basePrompt || imageTheme;
           console.log(`[${serviceName} Request ${i + 1}] Image Theme Expansion mode - imageTheme: "${imageTheme}"`);
-          
+
           // Build style description from single image analysis or use settings.customArtStyle
           if (singleImageForTheme?.style) {
             // Build style description from single image analysis
             if (singleImageForTheme.fullAnalysis?.clusters?.[0]) {
               const cluster = singleImageForTheme.fullAnalysis.clusters[0];
               imageStyle = cluster.style || '';
-              
+
               if (cluster.technique) {
                 imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
               }
-              
+
               if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
                 imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
               }
-              
+
               if (cluster.palette && Array.isArray(cluster.palette)) {
                 const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
                 imageStyle = `${imageStyle} Color palette: ${colorList}.`;
               }
-              
+
               if (cluster.vibe) {
                 imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
               }
@@ -1065,43 +1067,43 @@ const App: React.FC = () => {
             imageStyle = settings.customArtStyle;
             console.log(`[${serviceName} Request ${i + 1}] Using customArtStyle from settings: "${imageStyle}"`);
           }
-          
+
           // For Image Theme Expansion, we don't need a subject list - ChatGPT will generate different subjects
           imageSubjectList = [];
-          
+
           if (i === 0) {
             addLog(`[${serviceName} Request ${i + 1}] Image Theme Expansion mode - Using PRIMARY SUBJECT: "${imageTheme}" - ChatGPT will generate different subjects for each variation`, 'success');
           }
         } else if (uploadedImages.length > 0 && requestsPerImage > 0) {
           imageIndex = Math.floor(i / requestsPerImage) % uploadedImages.length;
           const uploadedImage = uploadedImages[imageIndex];
-          
+
           // Use image-specific theme
           if (uploadedImage.theme) {
             imageTheme = uploadedImage.theme;
           }
-          
+
           // Build style description EXACTLY from image analysis (no modifications)
           if (uploadedImage.fullAnalysis?.clusters?.[0]) {
             const cluster = uploadedImage.fullAnalysis.clusters[0];
             imageStyle = cluster.style || '';
-            
+
             // Add technique if available
             if (cluster.technique) {
               imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
             }
-            
+
             // Add textures if available
             if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
               imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
             }
-            
+
             // Add colors EXACTLY as extracted
             if (cluster.palette && Array.isArray(cluster.palette)) {
               const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
               imageStyle = `${imageStyle} Color palette: ${colorList}.`;
             }
-            
+
             // Add vibe EXACTLY as extracted
             if (cluster.vibe) {
               imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
@@ -1116,29 +1118,29 @@ const App: React.FC = () => {
               imageStyle = `${imageStyle} Color palette: ${uploadedImage.colors}.`;
             }
           }
-          
+
           // Get image-specific subject list
           imageSubjectList = imageSubjectLists.get(imageIndex) || [];
-          
+
           if (i === 0 || (i % requestsPerImage === 0 && requestsPerImage > 0)) {
             addLog(`[${serviceName} Request ${i + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}", Subjects: ${imageSubjectList.length})`, 'log');
           }
         }
-        
+
         // Determine primary subject: use primarySubjectForExpansion for Image Theme Expansion, use srefSubject for SREF mode, otherwise use settings.primarySubject
         const isSrefModeForRequest = selectedTheme?.id === 'sref-style-match' || isSrefMode;
-        const primarySubjectToUse = isImageThemeModeForRequest 
-          ? primarySubjectForExpansion 
+        const primarySubjectToUse = isImageThemeModeForRequest
+          ? primarySubjectForExpansion
           : isSrefModeForRequest && srefSubject.trim()
-          ? srefSubject.trim()
-          : settings.primarySubject?.trim() || undefined;
+            ? srefSubject.trim()
+            : settings.primarySubject?.trim() || undefined;
         console.log(`[${serviceName} Request ${i + 1}] primarySubjectToUse: "${primarySubjectToUse}", isImageThemeModeForRequest: ${isImageThemeModeForRequest}`);
-        
+
         // For Image Theme Expansion: pass full image cluster data to enable base prompt generation
-        const imageClusterData = isImageThemeModeForRequest && singleImageForTheme?.fullAnalysis 
-          ? singleImageForTheme.fullAnalysis 
+        const imageClusterData = isImageThemeModeForRequest && singleImageForTheme?.fullAnalysis
+          ? singleImageForTheme.fullAnalysis
           : undefined;
-        
+
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
@@ -1166,30 +1168,30 @@ const App: React.FC = () => {
           return constructPrompt(selectedTheme, settings, i);
         });
       });
-      
+
       const requestPrompts = await Promise.all(promptPromises);
-      
+
       // Log metrics summary
       addLog(`[Metrics] Header missing: ${metrics.headerMissing}, Rewrites: ${metrics.rewrites}, Semantic mismatches: ${metrics.semanticMismatches}, Null returns: ${metrics.nullReturns}, Subject swaps: ${metrics.subjectSwaps}, Final accepts: ${metrics.finalAccepts}`, 'log');
       console.log('[Metrics Summary]', metrics);
-      
+
       // Threshold / abort policy
       const totalAttempts = requestPrompts.length;
       const semanticMismatchRate = (metrics.semanticMismatches / totalAttempts) * 100;
       const nullRate = (metrics.nullReturns / totalAttempts) * 100;
-      
+
       if (semanticMismatchRate > 15) {
         addLog(`⚠️ High semantic mismatch rate: ${semanticMismatchRate.toFixed(1)}% (threshold: 15%). Consider reviewing prompts.`, 'error');
       }
       if (nullRate > 10) {
         addLog(`⚠️ High null return rate: ${nullRate.toFixed(1)}% (threshold: 10%). Consider reviewing master subject list.`, 'error');
       }
-      
+
       // Validation: Check for corrections and semantic mismatches
       const CORRECTION_ALERT_THRESHOLD = 6; // Alert if ≥6 prompts were corrected
       let correctionCount = 0;
       let mismatchCount = 0;
-      
+
       // Duplicate detection: check for repeated PRIMARY SUBJECT headers
       // Skip duplicate detection for Image Theme Expansion mode (theme is intentionally the same)
       const isImageThemeModeForDuplicateCheck = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
@@ -1205,7 +1207,7 @@ const App: React.FC = () => {
             subjectMap.get(subject)!.push(idx);
           }
         });
-        
+
         // Log duplicates
         subjectMap.forEach((indices, subject) => {
           if (indices.length > 1) {
@@ -1216,16 +1218,16 @@ const App: React.FC = () => {
       } else {
         console.log(`[Duplicate Detection] Skipping duplicate check for Image Theme Expansion mode (theme is intentionally the same: "${primarySubjectForExpansion}")`);
       }
-      
+
       // Check console logs for correction warnings (approximate count)
       const correctionWarnings = consoleLogs.filter(log => log.message.includes('was corrected')).length;
       if (correctionWarnings >= CORRECTION_ALERT_THRESHOLD) {
         addLog(`⚠️ High correction rate detected: ${correctionWarnings} prompts were corrected. Consider reviewing the master subject list.`, 'error');
       }
-      
+
       // Expand prompts: each request prompt is used for 4 images
       generatedPrompts = [];
-    for (let i = 0; i < total; i++) {
+      for (let i = 0; i < total; i++) {
         const requestIdx = Math.floor(i / 4);
         generatedPrompts.push(requestPrompts[requestIdx] || constructPrompt(selectedTheme, settings, i));
       }
@@ -1233,52 +1235,52 @@ const App: React.FC = () => {
       // For Pollinations/Replicate: Generate a prompt for each image
       promptsToGenerate = total;
       console.log(`[Pollinations/Replicate] Generating ${promptsToGenerate} prompts (1 prompt per image)`);
-      
+
       // If we have uploaded images, use their theme/style for prompt generation
       // Cycle through uploaded images if we have fewer images than total prompts needed
       // Calculate how many times each image should be used
       const usesPerImage = uploadedImages.length > 0 ? Math.floor(total / uploadedImages.length) : 0;
-      
+
       if (uploadedImages.length > 0 && usesPerImage > 0) {
         addLog(`[Prompt Generation] Using ${uploadedImages.length} uploaded image(s). Each image will be used ${usesPerImage} time(s) for ${total} total generations.`, 'success');
       }
-      
+
       const promptPromises = Array.from({ length: total }, (_, i) => {
         // Cycle through uploaded images equally
         // Example: 6 images, 36 generations = each image used 6 times
         // Example: 6 images, 24 generations = each image used 4 times
         let imageTheme = themeName;
         let imageStyle = settings.customArtStyle || '';
-        
+
         let imageSubjectList: string[] = [];
-        
+
         // For Image Theme Expansion mode: use the single image's theme and style for all variations
         // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
         const isImageThemeMode = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
         if (isImageThemeMode && (singleImageForTheme || selectedTheme?.id === 'image-theme-expansion')) {
           imageTheme = singleImageForTheme?.theme || selectedTheme?.basePrompt || imageTheme;
           console.log(`[Image Theme Expansion] imageTheme set to: "${imageTheme}", singleImageForTheme?.theme: "${singleImageForTheme?.theme}", selectedTheme?.basePrompt: "${selectedTheme?.basePrompt}"`);
-          
+
           // Build style description from single image analysis or use settings.customArtStyle
           if (singleImageForTheme?.style) {
             // Build style description from single image analysis
             if (singleImageForTheme.fullAnalysis?.clusters?.[0]) {
               const cluster = singleImageForTheme.fullAnalysis.clusters[0];
               imageStyle = cluster.style || '';
-              
+
               if (cluster.technique) {
                 imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
               }
-              
+
               if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
                 imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
               }
-              
+
               if (cluster.palette && Array.isArray(cluster.palette)) {
                 const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
                 imageStyle = `${imageStyle} Color palette: ${colorList}.`;
               }
-              
+
               if (cluster.vibe) {
                 imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
               }
@@ -1298,19 +1300,19 @@ const App: React.FC = () => {
           }
           // For Image Theme Expansion, we don't need a subject list - ChatGPT will generate different subjects
           imageSubjectList = [];
-          
+
           if (i === 0) {
             addLog(`[Image Theme Expansion] Using PRIMARY SUBJECT: "${imageTheme}" - ChatGPT will generate different subjects for each variation`, 'success');
           }
         } else if (uploadedImages.length > 0) {
           // Calculate which image to use for this prompt
           // This ensures each image is used equally: imageIndex = Math.floor(i / usesPerImage) % uploadedImages.length
-          const imageIndex = usesPerImage > 0 
+          const imageIndex = usesPerImage > 0
             ? Math.floor(i / usesPerImage) % uploadedImages.length
             : i % uploadedImages.length;
-          
+
           const uploadedImage = uploadedImages[imageIndex];
-          
+
           if (uploadedImage.theme) {
             imageTheme = uploadedImage.theme;
           }
@@ -1319,23 +1321,23 @@ const App: React.FC = () => {
             if (uploadedImage.fullAnalysis?.clusters?.[0]) {
               const cluster = uploadedImage.fullAnalysis.clusters[0];
               imageStyle = cluster.style || '';
-              
+
               // Add technique if available
               if (cluster.technique) {
                 imageStyle = `${imageStyle} Technique: ${cluster.technique}.`;
               }
-              
+
               // Add textures if available
               if (cluster.dominant_textures && cluster.dominant_textures.length > 0) {
                 imageStyle = `${imageStyle} Textures: ${cluster.dominant_textures.join(', ')}.`;
               }
-              
+
               // Add colors EXACTLY as extracted
               if (cluster.palette && Array.isArray(cluster.palette)) {
                 const colorList = cluster.palette.map((c: any) => `${c.name} (${c.hex})`).join(', ');
                 imageStyle = `${imageStyle} Color palette: ${colorList}.`;
               }
-              
+
               // Add vibe EXACTLY as extracted
               if (cluster.vibe) {
                 imageStyle = `${imageStyle} Vibe/Atmosphere: ${cluster.vibe}.`;
@@ -1351,23 +1353,23 @@ const App: React.FC = () => {
               }
             }
           }
-          
+
           // Get image-specific subject list
           imageSubjectList = imageSubjectLists.get(imageIndex) || [];
-          
+
           if (i === 0 || (i % usesPerImage === 0 && usesPerImage > 0)) {
             addLog(`[Prompt ${i + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}", Subjects: ${imageSubjectList.length})`, 'log');
           }
         }
-        
+
         // For Image Theme Expansion: pass full image cluster data to enable base prompt generation
-        const imageClusterDataForPoll = isImageThemeMode && singleImageForTheme?.fullAnalysis 
-          ? singleImageForTheme.fullAnalysis 
+        const imageClusterDataForPoll = isImageThemeMode && singleImageForTheme?.fullAnalysis
+          ? singleImageForTheme.fullAnalysis
           : undefined;
-        
+
         // Check if SREF mode is active
         const isSrefModeForPoll = selectedTheme?.id === 'sref-style-match' || isSrefMode;
-        
+
         return generatePromptWithChatGPT(
           imageTheme,
           settings.pageStyle,
@@ -1397,7 +1399,7 @@ const App: React.FC = () => {
 
       generatedPrompts = await Promise.all(promptPromises);
     }
-    
+
     // Update all prompts in the images
     setGeneratedImages(prev => prev.map((img, idx) => ({
       ...img,
@@ -1406,12 +1408,12 @@ const App: React.FC = () => {
 
     // STEP 2: Generate all images
     addLog(`[${settings.imageService}] Generating all images...`);
-    const generateFunction = settings.imageService === 'pollinations' 
-      ? generateWithPollinations 
+    const generateFunction = settings.imageService === 'pollinations'
+      ? generateWithPollinations
       : settings.imageService === 'replicate'
-      ? generateWithReplicate
-      : generateWithTtapi; // Default to Ttapi
-    
+        ? generateWithReplicate
+        : generateWithTtapi; // Default to Ttapi
+
     addLog(`[${settings.imageService}] Selected generate function: ${generateFunction.name || 'anonymous'}`);
 
     // For Replicate, maximize the 6 requests/minute limit
@@ -1420,101 +1422,101 @@ const App: React.FC = () => {
     if (settings.imageService === 'replicate') {
       const requestsPerMinute = 6;
       const delayBetweenRequests = (60 * 1000) / requestsPerMinute; // Exactly 10 seconds between requests
-      
+
       addLog(`Sending ${total} Replicate requests at ${requestsPerMinute} requests/minute (${delayBetweenRequests / 1000}s intervals)...`);
-      
+
       // Start all requests with proper timing to maximize rate limit usage
       const requestPromises: Promise<void>[] = [];
-      
-    for (let i = 0; i < total; i++) {
+
+      for (let i = 0; i < total; i++) {
         // Calculate delay for this request (staggered starts)
         const startDelay = i * delayBetweenRequests;
-        
+
         const requestPromise = (async () => {
           // Wait for the staggered start time
           if (startDelay > 0) {
             await new Promise(resolve => setTimeout(resolve, startDelay));
           }
-          
+
           addLog(`[Image ${i + 1}/${total}] 🚀 Starting Replicate generation...`);
-          
+
           try {
             const base64Url = await generateFunction(
-              selectedTheme, 
+              selectedTheme,
               settings,
               settings.parametersForMJ,
               settings.aspectRatio || '1:1',
               settings.midjourneyMode || 'fast',
               (status) => {
                 console.log(`[Image ${i + 1}/${total}] 📊 Status: ${status.toUpperCase()}`);
-                setGeneratedImages(prev => prev.map((img, idx) => 
+                setGeneratedImages(prev => prev.map((img, idx) =>
                   idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
                 ));
               },
               i,
               generatedPrompts[i]
             );
-            
-            setGeneratedImages(prev => prev.map((img, idx) => 
-              idx === i ? { 
-                ...img, 
-          url: base64Url,
-                status: 'completed' as const 
+
+            setGeneratedImages(prev => prev.map((img, idx) =>
+              idx === i ? {
+                ...img,
+                url: base64Url,
+                status: 'completed' as const
               } : img
             ));
-            
+
             setCurrentProgress((prev) => {
               const completed = ((i + 1) / total) * 100;
               return Math.min(completed, 100);
             });
 
             addLog(`[Image ${i + 1}/${total}] ✅ COMPLETED`, 'success');
-      } catch (err: any) {
+          } catch (err: any) {
             addLog(`[Image ${i + 1}/${total}] ❌ ERROR: ${err.message || err}`, 'error');
-        setErrorMsg(err.message || "Failed to generate some pages.");
-            setGeneratedImages(prev => prev.map((img, idx) => 
+            setErrorMsg(err.message || "Failed to generate some pages.");
+            setGeneratedImages(prev => prev.map((img, idx) =>
               idx === i ? { ...img, status: 'error' as const } : img
             ));
           }
         })();
-        
+
         requestPromises.push(requestPromise);
       }
-      
+
       // Wait for all requests to complete
       await Promise.allSettled(requestPromises);
     } else if (settings.imageService === 'pollinations') {
       // For Pollinations, send ALL requests in parallel through serverless function with proxy support
       // Each request uses a different proxy, allowing 100+ parallel requests
       addLog(`[Pollinations] Generating ${total} images in parallel with proxy support...`);
-      
+
       const imagePromises = Array.from({ length: total }, async (_, i) => {
         addLog(`[Image ${i + 1}/${total}] 🚀 Starting Pollinations generation...`);
         try {
           const base64Url = await generateFunction(
-            selectedTheme, 
+            selectedTheme,
             settings,
             settings.parametersForMJ,
             settings.aspectRatio || '1:1',
             settings.midjourneyMode || 'fast',
             (status) => {
               addLog(`[Image ${i + 1}/${total}] 📊 Status: ${status.toUpperCase()}`);
-              setGeneratedImages(prev => prev.map((img, idx) => 
+              setGeneratedImages(prev => prev.map((img, idx) =>
                 idx === i ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } : img
               ));
             },
             i,
             generatedPrompts[i]
           );
-          
-          setGeneratedImages(prev => prev.map((img, idx) => 
-            idx === i ? { 
-              ...img, 
-              url: base64Url, 
-              status: 'completed' as const 
+
+          setGeneratedImages(prev => prev.map((img, idx) =>
+            idx === i ? {
+              ...img,
+              url: base64Url,
+              status: 'completed' as const
             } : img
           ));
-          
+
           setCurrentProgress((prev) => {
             const completed = ((i + 1) / total) * 100;
             return Math.min(completed, 100);
@@ -1525,13 +1527,13 @@ const App: React.FC = () => {
         } catch (err: any) {
           addLog(`[Image ${i + 1}/${total}] ❌ ERROR: ${err.message || err}`, 'error');
           setErrorMsg(err.message || "Failed to generate some pages.");
-          setGeneratedImages(prev => prev.map((img, idx) => 
+          setGeneratedImages(prev => prev.map((img, idx) =>
             idx === i ? { ...img, status: 'error' as const } : img
           ));
           return { success: false, index: i, error: err };
         }
       });
-      
+
       // Wait for all requests to complete in parallel
       await Promise.allSettled(imagePromises);
     } else if (settings.imageService === 'ttapi') {
@@ -1539,12 +1541,12 @@ const App: React.FC = () => {
       // Note: Midjourney returns 4 images per request, so we need fewer requests
       const serviceName = 'Ttapi';
       const requestsNeeded = Math.ceil(total / 4);
-      
+
       // Rate limiting: Process requests in concurrent batches
       // For Ttapi: Dynamic based on account count (accounts × 3)
       // For other services: Can send more in parallel
       const isTtapi = settings.imageService === 'ttapi';
-      
+
       // For TTAPI, assume 2 accounts for Hold Account Mode and send 6 parallel requests
       // TTAPI will handle load balancing automatically if account_id is not specified
       let maxConcurrent = 5; // Default for non-TTAPI services
@@ -1563,22 +1565,22 @@ const App: React.FC = () => {
           maxConcurrent = 3; // Fallback to 3 if detection fails
         }
       }
-      
+
       if (isTtapi) {
         addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request) with ${maxConcurrent} concurrent requests per batch (${Math.floor(maxConcurrent / 3)} account(s) available)...`);
       } else {
         addLog(`[${serviceName}] Starting ${requestsNeeded} request(s) for ${total} images (4 images per request)...`);
       }
-      
+
       // Process requests in batches of maxConcurrent
       const processRequest = async (requestIdx: number) => {
         const startIdx = requestIdx * 4;
         const endIdx = Math.min(startIdx + 4, total);
         const imageRange = `${startIdx + 1}-${endIdx}`;
-        
+
         // Don't specify account_id - let TTAPI handle load balancing automatically
         const accountId = undefined;
-        
+
         // Log immediately when request starts (all requests in batch start simultaneously)
         addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 🚀 Starting generation for images ${imageRange}...`);
         try {
@@ -1587,12 +1589,12 @@ const App: React.FC = () => {
           // For regular mode: use round-robin distribution through uploaded images
           let imageStyleRefUrl: string | undefined;
           let imageIndex = 0;
-          
+
           // Check if we're in Image Theme Expansion mode (either by flag or by selected theme ID)
           const isImageThemeMode = isImageThemeExpansion || selectedTheme?.id === 'image-theme-expansion';
           // Check if we're in SREF mode
           const isSrefModeForGeneration = selectedTheme?.id === 'sref-style-match' || isSrefMode;
-          
+
           if (isSrefModeForGeneration) {
             // SREF mode: use the SREF code/URL as style reference ONLY if provided
             if (srefCode.trim()) {
@@ -1633,12 +1635,12 @@ const App: React.FC = () => {
             // Fallback: use settings.styleRefUrl
             imageStyleRefUrl = settings.styleRefUrl;
           }
-          
+
           // TEMPORARY DEBUG: Uncomment to test with single reference URL
           // const debugStyleRefUrl = "https://gold-stingray-884517.hostingersite.com/wp-content/uploads/2025/12/style-ref-1764982392518.png"; // Replace with your test URL
           // const imageStyleRefUrl = debugStyleRefUrl;
           // console.log(`[DEBUG] Forcing same style reference for all requests: ${debugStyleRefUrl}`);
-          
+
           // Create modified settings with image-specific styleRefUrl
           // For Image Theme Expansion mode: skip style reference URL, rely on detailed prompt only
           // For SREF mode: use the SREF code as style reference (don't skip)
@@ -1652,18 +1654,18 @@ const App: React.FC = () => {
             // Non-SREF mode: use image-specific URL or fall back to settings
             finalStyleRefUrl = imageStyleRefUrl || settings.styleRefUrl;
           }
-          
+
           const imageSpecificSettings = {
             ...settings,
             styleRefUrl: finalStyleRefUrl,
             moodboardId: isSrefModeForGeneration && srefMoodboard.trim() ? srefMoodboard.trim() : undefined, // Add moodboard ID for SREF mode
             skipStyleReference: isImageThemeMode ? true : false // SREF mode should NOT skip style reference
           };
-          
+
           if (isSrefModeForGeneration && srefMoodboard.trim()) {
             console.log(`[Midjourney Request ${requestIdx + 1}] Using moodboard: --p ${srefMoodboard.trim()}`);
           }
-          
+
           let imageTheme = 'Unknown';
           if (isImageThemeMode) {
             imageTheme = singleImageForTheme?.theme || selectedTheme?.basePrompt || 'Unknown';
@@ -1672,7 +1674,7 @@ const App: React.FC = () => {
             imageTheme = uploadedImages[imageIndex]?.theme || uploadedImages[imageIndex]?.fullAnalysis?.clusters?.[0]?.theme || 'Unknown';
             console.log(`[Midjourney Request ${requestIdx + 1}] Using uploaded image ${imageIndex + 1}/${uploadedImages.length} (Theme: "${imageTheme}")`);
           }
-          
+
           if (imageStyleRefUrl) {
             console.log(`[Midjourney Request ${requestIdx + 1}] Style reference URL: ${imageStyleRefUrl}`);
             if (isImageThemeMode) {
@@ -1689,10 +1691,10 @@ const App: React.FC = () => {
               console.log(`[Midjourney Request ${requestIdx + 1}] ℹ️ Image Theme Expansion mode - styleRefUrl intentionally skipped (relying on detailed prompt only)`);
             }
           }
-          
+
           // Ttapi returns an array of images (typically 4)
           const base64Urls = await generateFunction(
-            selectedTheme, 
+            selectedTheme,
             imageSpecificSettings,  // ✅ CHANGED: was "settings", now "imageSpecificSettings"
             settings.parametersForMJ, // Use original parametersForMJ from settings
             settings.aspectRatio || '1:1',
@@ -1700,9 +1702,9 @@ const App: React.FC = () => {
             (status) => {
               addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] 📊 Status: ${status.toUpperCase()} (Images ${imageRange})`);
               // Update all images that will come from this request
-              setGeneratedImages(prev => prev.map((img, idx) => 
-                idx >= startIdx && idx < endIdx 
-                  ? { ...img, status: status === 'completed' ? 'completed' : 'generating' } 
+              setGeneratedImages(prev => prev.map((img, idx) =>
+                idx >= startIdx && idx < endIdx
+                  ? { ...img, status: status === 'completed' ? 'completed' : 'generating' }
                   : img
               ));
             },
@@ -1710,22 +1712,22 @@ const App: React.FC = () => {
             generatedPrompts[requestIdx * 4], // Use prompt from first image in this batch
             accountId // accountId for explicit account selection
           ) as string[]; // Type assertion: Midjourney returns array
-          
+
           // Extract original URLs if available (attached as property for backward compatibility)
           const originalUrls = (base64Urls as any)?.originalUrls as string[] | undefined;
           const originalGridUrl = (base64Urls as any)?.originalGridUrl as string | undefined;
           const isGrid = (base64Urls as any)?.isGrid as boolean | undefined;
           const base64Array = Array.isArray(base64Urls) ? base64Urls : [];
-          
+
           // Add all images from this request to the gallery
           base64Array.forEach((base64Url, imgIdx) => {
             const actualIdx = startIdx + imgIdx;
             if (actualIdx < total) {
               addLog(`[Image ${actualIdx + 1}/${total}] ✅ COMPLETED`, 'success');
-              setGeneratedImages(prev => prev.map((img, idx) => 
-                idx === actualIdx ? { 
-                  ...img, 
-                  url: base64Url, 
+              setGeneratedImages(prev => prev.map((img, idx) =>
+                idx === actualIdx ? {
+                  ...img,
+                  url: base64Url,
                   // Store original URL if available for high-quality downloads
                   // For grid images, store the grid URL so we can split it fresh on download
                   originalUrl: isGrid && originalGridUrl ? originalGridUrl : (originalUrls && originalUrls[imgIdx] ? originalUrls[imgIdx] : undefined),
@@ -1737,7 +1739,7 @@ const App: React.FC = () => {
               ));
             }
           });
-          
+
           setCurrentProgress((prev) => {
             const completed = ((requestIdx + 1) / requestsNeeded) * 100;
             return Math.min(completed, 100);
@@ -1745,12 +1747,12 @@ const App: React.FC = () => {
 
           addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ✅ COMPLETED - Generated ${base64Urls.length} images (Images ${imageRange})`, 'success');
           return { success: true, index: requestIdx };
-      } catch (err: any) {
+        } catch (err: any) {
           addLog(`[${serviceName} Request ${requestIdx + 1}/${requestsNeeded}] ❌ ERROR (Images ${imageRange}): ${err.message || err}`, 'error');
-        setErrorMsg(err.message || "Failed to generate some pages.");
+          setErrorMsg(err.message || "Failed to generate some pages.");
           const startIdx = requestIdx * 4;
           const endIdx = Math.min(startIdx + 4, total);
-          setGeneratedImages(prev => prev.map((img, idx) => 
+          setGeneratedImages(prev => prev.map((img, idx) =>
             idx >= startIdx && idx < endIdx ? { ...img, status: 'error' as const } : img
           ));
           return { success: false, index: requestIdx, error: err };
@@ -1759,39 +1761,39 @@ const App: React.FC = () => {
 
       // Process requests in batches
       const results: Array<PromiseSettledResult<{ success: boolean; index: number; error?: any }>> = [];
-      
+
       for (let batchStart = 0; batchStart < requestsNeeded; batchStart += maxConcurrent) {
         const batchEnd = Math.min(batchStart + maxConcurrent, requestsNeeded);
         const batchSize = batchEnd - batchStart;
         const batchNumber = Math.floor(batchStart / maxConcurrent) + 1;
         const totalBatches = Math.ceil(requestsNeeded / maxConcurrent);
-        
+
         if (isTtapi) {
           addLog(`[${serviceName}] 🚀 Starting batch ${batchNumber}/${totalBatches}: Processing ${batchSize} request(s) in parallel (requests ${batchStart + 1}-${batchEnd} of ${requestsNeeded})...`, 'log');
         }
-        
+
         // Process this batch in parallel - all requests start simultaneously
         // Create all promises at once - they all start executing immediately
         const batchPromises: Promise<{ success: boolean; index: number; error?: any }>[] = [];
         for (let i = 0; i < batchSize; i++) {
           batchPromises.push(processRequest(batchStart + i));
         }
-        
+
         // All promises are now running in parallel - wait for all to complete
         const batchResults = await Promise.allSettled(batchPromises);
         results.push(...batchResults);
-        
+
         if (isTtapi) {
           const batchCompleted = batchResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
           addLog(`[${serviceName}] ✅ Batch ${batchNumber}/${totalBatches} completed: ${batchCompleted}/${batchSize} requests successful`, 'success');
         }
-        
+
         // Small delay between batches to avoid overwhelming the API
         if (batchEnd < requestsNeeded && isTtapi) {
           await new Promise(resolve => setTimeout(resolve, 1000)); // 1s delay between batches
         }
       }
-      
+
       // Calculate summary from actual results
       let completedCount = 0;
       let errorCount = 0;
@@ -1803,15 +1805,15 @@ const App: React.FC = () => {
           completedCount += (endIdx - startIdx);
         } else {
           // Count errors from this failed request
-          const requestIdx = result.status === 'fulfilled' && result.value.index !== undefined 
-            ? result.value.index 
+          const requestIdx = result.status === 'fulfilled' && result.value.index !== undefined
+            ? result.value.index
             : idx;
           const startIdx = requestIdx * 4;
           const endIdx = Math.min(startIdx + 4, total);
           errorCount += (endIdx - startIdx);
         }
       });
-      
+
       addLog(`\n📊 Generation Summary:`, 'success');
       addLog(`   ✅ Completed: ${completedCount}/${total}`, 'success');
       addLog(`   ❌ Errors: ${errorCount}/${total}`, errorCount > 0 ? 'error' : 'success');
@@ -1824,7 +1826,7 @@ const App: React.FC = () => {
 
   const constructPrompt = (theme: Theme, settings: GenerationSettings, variationIndex?: number): string => {
     const texture = getTexturePrompt(settings.textureIntensity);
-    
+
     let layoutPrompt = '';
     switch (settings.pageStyle) {
       case 'Full Page': layoutPrompt = 'A full page seamless background texture'; break;
@@ -1834,8 +1836,8 @@ const App: React.FC = () => {
       case 'Ephemera Sheet': layoutPrompt = 'A sheet containing multiple cut-out ephemera items like tags, tickets, and cards'; break;
     }
 
-    const elementsPrompt = settings.elements.length > 0 
-      ? `featuring elements: ${settings.elements.join(', ')}` 
+    const elementsPrompt = settings.elements.length > 0
+      ? `featuring elements: ${settings.elements.join(', ')}`
       : '';
 
     const extraDetails = [
@@ -1849,14 +1851,14 @@ const App: React.FC = () => {
       'alternative perspective', 'original design', 'creative variation', 'individual character',
       'unique details', 'distinct elements', 'original arrangement', 'creative composition'
     ];
-    
+
     const styleVariations = [
       'slightly different lighting', 'varied color tones', 'different texture pattern',
       'alternative color palette', 'unique shading', 'distinctive mood', 'varied atmosphere',
       'different depth', 'alternative focus', 'unique perspective', 'distinctive angle'
     ];
 
-    const variationMod = variationIndex !== undefined 
+    const variationMod = variationIndex !== undefined
       ? variationModifiers[variationIndex % variationModifiers.length]
       : '';
     const styleVar = variationIndex !== undefined
@@ -1867,33 +1869,33 @@ const App: React.FC = () => {
     if (settings.colorIntensity === 'Custom / Override') {
       // Custom / Override: Safe, neutral fallback - minimal constraints
       let prompt = theme.basePrompt;
-      
+
       // Add custom art style if provided
       if (settings.customArtStyle && settings.customArtStyle.trim()) {
         prompt += `. ${settings.customArtStyle.trim()}`;
       }
-      
+
       // Add ONLY technical constraints - no color/style forcing
       prompt += `. Flat illustration, 2D, high resolution, printable design.`;
-      
+
       // Add seed for variation
       if (variationIndex !== undefined && typeof variationIndex === 'number') {
         const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
         prompt += ` --seed ${seed}`;
       }
-      
+
       // Add additional parameters if provided
       if (settings.parametersForMJ) {
         prompt += ` ${settings.parametersForMJ}`;
       }
-      
+
       return prompt;
     }
-    
+
     // Get color palette and style constraints based on color intensity setting
     let colorPalette: string;
     let styleConstraints: string;
-    
+
     if (settings.colorIntensity === 'Muted') {
       // Muted: sepia, brown tones, faded
       colorPalette = 'muted sepia and brown tones, old faded colors, muted color palette, NOT bright vibrant colors';
@@ -1911,20 +1913,20 @@ const App: React.FC = () => {
       colorPalette = 'vivid, alive, bright, vibrant colors - wide range of vivid colors (blues, greens, purples, oranges, yellows, pinks, teals, vibrant hues), modern watercolor palette, fresh and lively colors';
       styleConstraints = `${colorPalette}, modern watercolor illustration, vivid and alive, fresh and vibrant, clean modern design, NOT vintage, NOT aged, NOT distressed, NOT junk journal style, NOT handwritten text overlays, NOT vintage ephemera, NOT postage stamps, NOT sepia, NOT muted, NOT coffee-stained, flat printable page, SINGLE PAGE ONLY, not a scene, not multiple objects, not a still life composition, no 3D objects, no shadows, no depth, no realistic photography, no realistic lighting, flat illustration style, top-down view, printable scrapbook page, digital design, flat lay design, high resolution printable journal page, modern colorful illustration.`;
     }
-    
+
     let prompt = `${theme.basePrompt}. ${layoutPrompt}. Texture: ${texture}. ${elementsPrompt}. ${extraDetails}. ${theme.styleKeywords.join(', ')} style. ${variationMod}${variationMod && styleVar ? ', ' : ''}${styleVar}. ${styleConstraints}`;
-    
+
     // Add seed or random element for additional variation
     if (variationIndex !== undefined && typeof variationIndex === 'number') {
       const seed = Math.floor(Math.random() * 1000000) + Math.floor(variationIndex) * 1000;
       prompt += ` --seed ${seed}`;
     }
-    
+
     // Add additional parameters if provided
     if (settings.parametersForMJ) {
       prompt += ` ${settings.parametersForMJ}`;
     }
-    
+
     return prompt;
   };
 
@@ -1938,20 +1940,20 @@ const App: React.FC = () => {
 
   const regenerateImage = async (img: GeneratedImage, index: number) => {
     if (!selectedTheme) return;
-    
+
     addLog(`[Image ${index + 1}] 🔄 Regenerating...`);
-    
+
     // Update status to generating
-    setGeneratedImages(prev => prev.map((item, idx) => 
+    setGeneratedImages(prev => prev.map((item, idx) =>
       idx === index ? { ...item, status: 'generating' as const } : item
     ));
 
     try {
-      const generateFunction = settings.imageService === 'pollinations' 
-        ? generateWithPollinations 
+      const generateFunction = settings.imageService === 'pollinations'
+        ? generateWithPollinations
         : settings.imageService === 'replicate'
-        ? generateWithReplicate
-        : generateWithTtapi; // Default to Ttapi
+          ? generateWithReplicate
+          : generateWithTtapi; // Default to Ttapi
 
       // For Ttapi, we need to handle arrays
       if (settings.imageService === 'ttapi') {
@@ -1962,7 +1964,7 @@ const App: React.FC = () => {
           settings.aspectRatio || '1:1',
           settings.midjourneyMode || 'fast',
           (status) => {
-            setGeneratedImages(prev => prev.map((item, idx) => 
+            setGeneratedImages(prev => prev.map((item, idx) =>
               idx === index ? { ...item, status: status === 'completed' ? 'completed' : 'generating' } : item
             ));
           },
@@ -1973,23 +1975,23 @@ const App: React.FC = () => {
         // Extract original URLs if available
         const originalUrls = (base64Urls as any)?.originalUrls as string[] | undefined;
         const base64Array = Array.isArray(base64Urls) ? base64Urls : [];
-        
+
         // Update with the first image from the array (or use the index if multiple)
         if (base64Array.length > 0) {
           const imageIdx = index % base64Array.length;
           const imageToUse = base64Array[imageIdx] || base64Array[0];
           const originalUrlToUse = originalUrls && originalUrls[imageIdx] ? originalUrls[imageIdx] : undefined;
-          
-          setGeneratedImages(prev => prev.map((item, idx) => 
-            idx === index ? { 
-              ...item, 
+
+          setGeneratedImages(prev => prev.map((item, idx) =>
+            idx === index ? {
+              ...item,
               url: imageToUse,
               originalUrl: originalUrlToUse, // Store original URL for high-quality downloads
-              status: 'completed' as const 
+              status: 'completed' as const
             } : item
           ));
         }
-    } else {
+      } else {
         // For Pollinations/Replicate, single image
         const base64Url = await generateFunction(
           selectedTheme,
@@ -1998,7 +2000,7 @@ const App: React.FC = () => {
           settings.aspectRatio || '1:1',
           settings.midjourneyMode || 'fast',
           (status) => {
-            setGeneratedImages(prev => prev.map((item, idx) => 
+            setGeneratedImages(prev => prev.map((item, idx) =>
               idx === index ? { ...item, status: status === 'completed' ? 'completed' : 'generating' } : item
             ));
           },
@@ -2006,18 +2008,18 @@ const App: React.FC = () => {
           img.prompt // Use the same prompt
         ) as string;
 
-        setGeneratedImages(prev => prev.map((item, idx) => 
-          idx === index ? { 
-            ...item, 
-            url: base64Url, 
-            status: 'completed' as const 
+        setGeneratedImages(prev => prev.map((item, idx) =>
+          idx === index ? {
+            ...item,
+            url: base64Url,
+            status: 'completed' as const
           } : item
         ));
       }
     } catch (err: any) {
       console.error(`Regeneration failed for image ${index + 1}:`, err);
       setErrorMsg(err.message || "Failed to regenerate image.");
-      setGeneratedImages(prev => prev.map((item, idx) => 
+      setGeneratedImages(prev => prev.map((item, idx) =>
         idx === index ? { ...item, status: 'error' as const } : item
       ));
     }
@@ -2036,10 +2038,10 @@ const App: React.FC = () => {
   const downloadImage = async (img: GeneratedImage, index: number) => {
     try {
       let blob: Blob;
-      
+
       // Check if this is a grid image that needs to be split fresh for maximum quality
       const gridSliceIndex = (img as any).gridSliceIndex as number | undefined;
-      
+
       if (img.originalUrl && gridSliceIndex !== undefined) {
         // This is a grid image - split it fresh from the original URL to preserve maximum quality
         console.log(`[Download] Grid image detected, splitting fresh from original URL for slice ${gridSliceIndex}`);
@@ -2049,7 +2051,7 @@ const App: React.FC = () => {
           // Use the proxy URL to fetch the grid image
           const proxyUrl = `/api/ttapi?operation=image&url=${encodeURIComponent(img.originalUrl)}`;
           const slices = await splitGridImage(proxyUrl);
-          
+
           // Extract the specific slice (slices are base64 data URLs)
           if (slices[gridSliceIndex]) {
             blob = await (await fetch(slices[gridSliceIndex])).blob();
@@ -2075,7 +2077,7 @@ const App: React.FC = () => {
         // Use base64 URL - convert to blob for better compatibility
         blob = await (await fetch(img.url)).blob();
       }
-      
+
       // Create download link with blob
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -2090,13 +2092,13 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Error downloading image:', error);
       // Fallback to simple base64 download
-    const link = document.createElement('a');
-    link.href = img.url;
+      const link = document.createElement('a');
+      link.href = img.url;
       const paddedIndex = String(index + 1).padStart(3, '0');
       link.download = `image_${paddedIndex}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -2131,17 +2133,17 @@ const App: React.FC = () => {
    */
   const detectImagesPerPrompt = (images: GeneratedImage[]): number => {
     if (images.length === 0) return bulkImagesPerPrompt;
-    
+
     // Try to detect the pattern by looking at prompts
     // Images generated from the same prompt should have the same prompt text (before Midjourney parameters)
     let currentPrompt = '';
     let count = 0;
     let maxCount = 0;
-    
+
     for (const img of images) {
       // Extract the base prompt (before --ar, --v, etc.)
       const basePrompt = img.prompt.split(' --')[0].trim();
-      
+
       if (basePrompt === currentPrompt) {
         count++;
       } else {
@@ -2152,18 +2154,18 @@ const App: React.FC = () => {
         count = 1;
       }
     }
-    
+
     // Check the last group
     if (count > maxCount) {
       maxCount = count;
     }
-    
+
     // If we detected a pattern, use it; otherwise fall back to bulkImagesPerPrompt
     // Valid values are 1, 2, or 4
     if (maxCount > 0 && (maxCount === 1 || maxCount === 2 || maxCount === 4)) {
       return maxCount;
     }
-    
+
     return bulkImagesPerPrompt;
   };
 
@@ -2175,21 +2177,21 @@ const App: React.FC = () => {
   const filterImagesByPromptCount = (images: GeneratedImage[]): GeneratedImage[] => {
     // Detect the actual number of images per prompt from the generated images
     const actualImagesPerPrompt = detectImagesPerPrompt(images);
-    
+
     // If all positions are selected, return all images
-    const allPositionsSelected = selectedImagePositions.size === actualImagesPerPrompt && 
+    const allPositionsSelected = selectedImagePositions.size === actualImagesPerPrompt &&
       Array.from({ length: actualImagesPerPrompt }, (_, i) => i + 1).every(pos => selectedImagePositions.has(pos as 1 | 2 | 3 | 4));
-    
+
     if (allPositionsSelected) {
       return images; // Return all images
     }
-    
+
     const filtered: GeneratedImage[] = [];
-    
+
     // Group images by prompt (every N images = 1 prompt, where N = actualImagesPerPrompt)
     for (let i = 0; i < images.length; i += actualImagesPerPrompt) {
       const promptGroup = images.slice(i, i + actualImagesPerPrompt);
-      
+
       // Select images based on selected positions
       selectedImagePositions.forEach((position) => {
         const imageIndex = position - 1; // Convert 1-4 to 0-3
@@ -2198,7 +2200,7 @@ const App: React.FC = () => {
         }
       });
     }
-    
+
     return filtered;
   };
 
@@ -2208,14 +2210,14 @@ const App: React.FC = () => {
       const selectedImagesArray = generatedImages.filter(
         img => selectedImages.has(img.id) && img.status === 'completed' && img.url
       );
-      
+
       if (selectedImagesArray.length === 0) {
         alert('No images selected for download');
         return;
       }
 
       const zip = new JSZip();
-      
+
       // Show loading state
       addLog(`[Download] Preparing ${selectedImagesArray.length} selected images for download...`);
 
@@ -2224,13 +2226,13 @@ const App: React.FC = () => {
 
       // Import splitGridImage for grid images
       const { splitGridImage } = await import('./services/ttapiService');
-      
+
       for (let i = 0; i < shuffledImages.length; i++) {
         const img = shuffledImages[i];
         try {
           let blob: Blob;
           const gridSliceIndex = (img as any).gridSliceIndex as number | undefined;
-          
+
           // Check if this is a grid image that needs to be split fresh
           if (img.originalUrl && gridSliceIndex !== undefined) {
             try {
@@ -2259,7 +2261,7 @@ const App: React.FC = () => {
           } else {
             blob = await (await fetch(img.url)).blob();
           }
-          
+
           // Generate random filename
           const randomName = `image_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.png`;
           zip.file(randomName, blob);
@@ -2278,9 +2280,9 @@ const App: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       addLog(`[Download] ✅ Downloaded ${shuffledImages.length} selected images as ZIP`, 'success');
-      
+
       // Clear selection after download
       setSelectedImages(new Set());
     } catch (error: any) {
@@ -2293,7 +2295,7 @@ const App: React.FC = () => {
     try {
       const zip = new JSZip();
       const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
-      
+
       if (completedImages.length === 0) {
         alert('No completed images to download');
         return;
@@ -2301,7 +2303,7 @@ const App: React.FC = () => {
 
       // Filter images based on imagesPerPromptToDownload setting
       const filteredImages = filterImagesByPromptCount(completedImages);
-      
+
       if (filteredImages.length === 0) {
         alert('No images to download after filtering');
         return;
@@ -2325,13 +2327,13 @@ const App: React.FC = () => {
       // Use original URLs for high-quality downloads if available
       // Import splitGridImage for grid images
       const { splitGridImage } = await import('./services/ttapiService');
-      
+
       for (let i = 0; i < shuffledImages.length; i++) {
         const img = shuffledImages[i];
         try {
           let blob: Blob;
           const gridSliceIndex = (img as any).gridSliceIndex as number | undefined;
-          
+
           // Check if this is a grid image that needs to be split fresh
           if (img.originalUrl && gridSliceIndex !== undefined) {
             // Grid image - split fresh for maximum quality
@@ -2366,7 +2368,7 @@ const App: React.FC = () => {
             // Use base64 URL
             blob = await (await fetch(img.url)).blob();
           }
-          
+
           // Use generic filename: image_001.png, image_002.png, etc.
           const paddedIndex = String(i + 1).padStart(3, '0');
           const fileName = `image_${paddedIndex}.png`;
@@ -2416,7 +2418,7 @@ const App: React.FC = () => {
 
   const uploadToGoogleDrive = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
-    
+
     if (completedImages.length === 0) {
       alert('No completed images to upload');
       return;
@@ -2425,7 +2427,7 @@ const App: React.FC = () => {
 
     // Filter images based on imagesPerPromptToDownload setting
     const filteredImages = filterImagesByPromptCount(completedImages);
-    
+
     if (filteredImages.length === 0) {
       alert('No images to upload after filtering');
       return;
@@ -2462,7 +2464,7 @@ const App: React.FC = () => {
         addLog(`[Google Drive Account ${googleDriveAccount}] ⚠️ ${result.failed} images failed to upload`, 'warn');
       }
       addLog(`[Google Drive Account ${googleDriveAccount}] 📁 Folder URL: ${result.folderUrl}`, 'success');
-      
+
       // Copy URLs to clipboard if possible
       const urls = result.uploadedFiles.map(f => f.url).join('\n');
       if (navigator.clipboard && urls) {
@@ -2473,7 +2475,7 @@ const App: React.FC = () => {
           console.warn('Failed to copy to clipboard:', clipError);
         }
       }
-      
+
       // Show success modal
       setGoogleDriveModalData({
         title: `Upload Successful! (Account ${googleDriveAccount})`,
@@ -2486,7 +2488,7 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error('Error uploading to Google Drive:', error);
       addLog(`[Google Drive] ❌ Unexpected error: ${error.message || 'Unknown error'}`, 'error');
-      
+
       setGoogleDriveModalData({
         title: 'Upload Failed',
         message: error.message || 'Unknown error occurred',
@@ -2501,7 +2503,7 @@ const App: React.FC = () => {
   const downloadAllAsPdf = async () => {
     try {
       const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
-      
+
       if (completedImages.length === 0) {
         alert('No completed images to download');
         return;
@@ -2509,21 +2511,21 @@ const App: React.FC = () => {
 
       // Filter images based on imagesPerPromptToDownload setting
       const filteredImages = filterImagesByPromptCount(completedImages);
-      
+
       if (filteredImages.length === 0) {
         alert('No images to download after filtering');
         return;
       }
 
       // Show loading state
-      const positionsDesc = selectedImagePositions.has(4) 
-        ? 'all images' 
+      const positionsDesc = selectedImagePositions.has(4)
+        ? 'all images'
         : Array.from(selectedImagePositions).sort().map(p => {
-            if (p === 1) return '1st';
-            if (p === 2) return '2nd';
-            if (p === 3) return '3rd';
-            return '4th';
-          }).join(' and ');
+          if (p === 1) return '1st';
+          if (p === 2) return '2nd';
+          if (p === 3) return '3rd';
+          return '4th';
+        }).join(' and ');
       const loadingMsg = `Preparing ${filteredImages.length} images for PDF (${positionsDesc} from each prompt)...`;
       alert(loadingMsg);
 
@@ -2539,7 +2541,7 @@ const App: React.FC = () => {
           // Fetch image and convert to base64
           const response = await fetch(img.url);
           const blob = await response.blob();
-          
+
           // Convert blob to base64
           const base64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -2571,7 +2573,7 @@ const App: React.FC = () => {
           const margin = 10;
           const maxWidth = 210 - (margin * 2);
           const maxHeight = 297 - (margin * 2);
-          
+
           const imgWidth = imgElement.width;
           const imgHeight = imgElement.height;
           const aspectRatio = imgWidth / imgHeight;
@@ -2579,7 +2581,7 @@ const App: React.FC = () => {
           // Scale to fit page
           let finalWidth = maxWidth;
           let finalHeight = maxWidth / aspectRatio;
-          
+
           if (finalHeight > maxHeight) {
             finalHeight = maxHeight;
             finalWidth = maxHeight * aspectRatio;
@@ -2591,7 +2593,7 @@ const App: React.FC = () => {
 
           // Add image to PDF (use base64 directly)
           pdf.addImage(base64, 'PNG', x, y, finalWidth, finalHeight);
-          
+
           // Add variation number as text at bottom
           pdf.setFontSize(10);
           pdf.setTextColor(100, 100, 100);
@@ -2612,7 +2614,7 @@ const App: React.FC = () => {
   // Grid Generator Function
   const generateGrids = async () => {
     const completedImages = generatedImages.filter(img => img.status === 'completed' && img.url);
-    
+
     if (completedImages.length === 0) {
       alert('No completed images available to create grids');
       return;
@@ -2620,7 +2622,7 @@ const App: React.FC = () => {
 
     // Filter images based on selected positions
     const filteredImages = filterImagesByPromptCount(completedImages);
-    
+
     if (filteredImages.length === 0) {
       alert('No images available after filtering');
       return;
@@ -2653,7 +2655,7 @@ const App: React.FC = () => {
       for (let gridIndex = 0; gridIndex < numGridPages; gridIndex++) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
+
         if (!ctx) {
           throw new Error('Could not get canvas context');
         }
@@ -2678,7 +2680,7 @@ const App: React.FC = () => {
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
             const imageIndex = gridIndex * imagesPerGrid + row * cols + col;
-            
+
             // If we run out of images, stop
             if (imageIndex >= availableImages) {
               break;
@@ -2692,18 +2694,18 @@ const App: React.FC = () => {
             await new Promise<void>((resolve, reject) => {
               const img = new window.Image();
               img.crossOrigin = 'anonymous';
-              
+
               img.onload = () => {
                 try {
                   // Calculate aspect ratios
                   const imgAspect = img.width / img.height;
                   const cellAspect = cellWidth / cellHeight;
-                  
+
                   let drawWidth = cellWidth;
                   let drawHeight = cellHeight;
                   let drawX = x;
                   let drawY = y;
-                  
+
                   // Fit image to cell while maintaining aspect ratio (cover mode)
                   if (imgAspect > cellAspect) {
                     // Image is wider - fit to height
@@ -2714,7 +2716,7 @@ const App: React.FC = () => {
                     drawHeight = cellWidth / imgAspect;
                     drawY = y - (drawHeight - cellHeight) / 2;
                   }
-                  
+
                   // Draw image to fill cell (cover mode)
                   ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
                   resolve();
@@ -2723,12 +2725,12 @@ const App: React.FC = () => {
                   resolve(); // Continue even if one image fails
                 }
               };
-              
+
               img.onerror = () => {
                 console.error('Failed to load image:', imageUrl);
                 resolve(); // Continue even if one image fails
               };
-              
+
               img.src = imageUrl;
             });
           }
@@ -2804,7 +2806,7 @@ const App: React.FC = () => {
         // Try to parse as JSON first, if that fails, get text
         let errorMessage = `Failed to load folders: ${response.status}`;
         const contentType = response.headers.get('content-type');
-        
+
         if (contentType && contentType.includes('application/json')) {
           try {
             const errorData = await response.json();
@@ -2909,7 +2911,7 @@ const App: React.FC = () => {
       for (let gridIndex = 0; gridIndex < numGridPages; gridIndex++) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
+
         if (!ctx) {
           throw new Error('Could not get canvas context');
         }
@@ -2931,7 +2933,7 @@ const App: React.FC = () => {
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
             const imageIndex = gridIndex * imagesPerGrid + row * cols + col;
-            
+
             if (imageIndex >= availableImages) {
               break;
             }
@@ -2943,17 +2945,17 @@ const App: React.FC = () => {
             await new Promise<void>((resolve) => {
               const img = new window.Image();
               img.crossOrigin = 'anonymous';
-              
+
               img.onload = () => {
                 try {
                   const imgAspect = img.width / img.height;
                   const cellAspect = cellWidth / cellHeight;
-                  
+
                   let drawWidth = cellWidth;
                   let drawHeight = cellHeight;
                   let drawX = x;
                   let drawY = y;
-                  
+
                   if (imgAspect > cellAspect) {
                     drawWidth = cellHeight * imgAspect;
                     drawX = x - (drawWidth - cellWidth) / 2;
@@ -2961,7 +2963,7 @@ const App: React.FC = () => {
                     drawHeight = cellWidth / imgAspect;
                     drawY = y - (drawHeight - cellHeight) / 2;
                   }
-                  
+
                   ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
                   resolve();
                 } catch (err) {
@@ -2969,12 +2971,12 @@ const App: React.FC = () => {
                   resolve();
                 }
               };
-              
+
               img.onerror = () => {
                 console.error('Failed to load image:', imageUrl);
                 resolve();
               };
-              
+
               img.src = imageUrl;
             });
           }
@@ -3064,7 +3066,7 @@ const App: React.FC = () => {
           // Convert blob URL to base64 with compression
           const response = await fetch(gridPages[i]);
           const blob = await response.blob();
-          
+
           // Compress image to reduce size (max 2000x2000 to stay under 4MB limit)
           const base64Image = await new Promise<string>((resolve, reject) => {
             const img = document.createElement('img');
@@ -3080,7 +3082,7 @@ const App: React.FC = () => {
               let width = img.width;
               let height = img.height;
               const maxDimension = 2000;
-              
+
               if (width > maxDimension || height > maxDimension) {
                 if (width > height) {
                   height = (height / width) * maxDimension;
@@ -3093,10 +3095,10 @@ const App: React.FC = () => {
 
               canvas.width = width;
               canvas.height = height;
-              
+
               // Draw and compress
               ctx.drawImage(img, 0, 0, width, height);
-              
+
               // Convert to JPEG with compression to reduce size (quality 0.85)
               canvas.toBlob((blob) => {
                 if (!blob) {
@@ -3323,6 +3325,17 @@ const App: React.FC = () => {
       );
     }
 
+    // If Etsy SEO Optimizer is open, show it
+    if (showEtsySEOOptimizer) {
+      return (
+        <div className="animate-fade-in max-w-6xl mx-auto px-4">
+          <EtsySEOOptimizer
+            onClose={() => setShowEtsySEOOptimizer(false)}
+          />
+        </div>
+      );
+    }
+
     // If Arcane Splitter is open, show it
     if (showArcaneSplitter) {
       return (
@@ -3340,8 +3353,8 @@ const App: React.FC = () => {
       return (
         <div className="animate-fade-in max-w-6xl mx-auto px-4">
           <div className="mb-8 flex items-center gap-4">
-            <button 
-              onClick={() => setShowGoogleDriveGridGenerator(false)} 
+            <button
+              onClick={() => setShowGoogleDriveGridGenerator(false)}
               className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
             >
               <ChevronLeft />
@@ -3525,23 +3538,23 @@ const App: React.FC = () => {
                             </>
                           )}
                         </button>
-                      <button
-                        onClick={uploadDriveGridsToDropbox}
-                        disabled={uploadingDriveGridsToDropbox || gridPages.length === 0}
-                        className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {uploadingDriveGridsToDropbox ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={16} />
-                            Upload to Dropbox
-                          </>
-                        )}
-                      </button>
+                        <button
+                          onClick={uploadDriveGridsToDropbox}
+                          disabled={uploadingDriveGridsToDropbox || gridPages.length === 0}
+                          className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {uploadingDriveGridsToDropbox ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={16} />
+                              Upload to Dropbox
+                            </>
+                          )}
+                        </button>
                         <button
                           onClick={downloadAllGrids}
                           className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
@@ -3620,9 +3633,9 @@ const App: React.FC = () => {
     if (isImageThemeExpansion) {
       return (
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
-      <div className="text-center space-y-4">
+          <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-4 mb-4">
-              <button 
+              <button
                 onClick={() => {
                   setIsImageThemeExpansion(false);
                   setSingleImageForTheme(null);
@@ -3635,9 +3648,9 @@ const App: React.FC = () => {
             </div>
             <p className="text-slate-400">
               Upload ONE image. ChatGPT will extract the theme (PRIMARY SUBJECT) and generate multiple prompts with DIFFERENT subjects but the SAME theme and style.
-        </p>
-      </div>
-      
+            </p>
+          </div>
+
           <div className="bg-gothic-800 p-8 rounded-xl border border-slate-700 space-y-6">
             {/* Single Image Upload Section */}
             <div>
@@ -3653,7 +3666,7 @@ const App: React.FC = () => {
                     const files = e.target.files;
                     if (!files || files.length === 0) return;
                     const file = files[0]; // Only take first file
-                    
+
                     if (!file.type.startsWith('image/')) {
                       alert(`"${file.name}" is not an image file.`);
                       return;
@@ -3668,18 +3681,18 @@ const App: React.FC = () => {
                     reader.onload = async (e) => {
                       const base64Image = e.target?.result as string;
                       const id = `single-theme-${Date.now()}`;
-                      
+
                       // Analyze the image
                       setIsAnalyzingImage(true);
                       try {
                         const analysis = await analyzeReferenceImage(base64Image);
                         if (analysis && analysis.theme && analysis.style) {
                           const { theme, style, colors, vibe, fullAnalysis } = analysis;
-                          
+
                           // Upload to WordPress
                           setIsUploadingStyleRef(true);
                           const wordPressUrl = await uploadImageToWordPress(base64Image);
-                          
+
                           const imageData = {
                             id,
                             base64: base64Image,
@@ -3690,9 +3703,9 @@ const App: React.FC = () => {
                             styleRefUrl: wordPressUrl.status === 'fulfilled' ? wordPressUrl.value : undefined,
                             fullAnalysis
                           };
-                          
+
                           setSingleImageForTheme(imageData);
-                          
+
                           // Update settings with style reference
                           if (wordPressUrl.status === 'fulfilled') {
                             setSettings(prev => ({
@@ -3702,7 +3715,7 @@ const App: React.FC = () => {
                               colorIntensity: 'Custom / Override'
                             }));
                           }
-                          
+
                           addLog(`✅ Image analyzed: Theme="${theme}", Style="${style}"`, 'success');
                           if (wordPressUrl.status === 'fulfilled') {
                             addLog(`✅ Style Reference uploaded: ${wordPressUrl.value}`, 'success');
@@ -3726,13 +3739,12 @@ const App: React.FC = () => {
                 />
                 <label
                   htmlFor="single-image-upload"
-                  className={`block w-full p-8 border-2 border-dashed rounded-lg cursor-pointer transition-all ${
-                    isAnalyzingImage
-                      ? 'border-slate-600 bg-slate-900/50 cursor-not-allowed'
-                      : singleImageForTheme
+                  className={`block w-full p-8 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isAnalyzingImage
+                    ? 'border-slate-600 bg-slate-900/50 cursor-not-allowed'
+                    : singleImageForTheme
                       ? 'border-gothic-gold bg-gothic-gold/10'
                       : 'border-slate-600 bg-slate-900 hover:border-gothic-gold hover:bg-slate-800'
-                  }`}
+                    }`}
                 >
                   {isAnalyzingImage ? (
                     <div className="flex flex-col items-center gap-2">
@@ -3762,7 +3774,7 @@ const App: React.FC = () => {
                             </div>
                           )}
                         </div>
-          <button
+                        <button
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -3795,7 +3807,7 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </label>
-                
+
                 <p className="text-xs text-slate-500 mt-2">
                   Upload ONE image. ChatGPT will extract the PRIMARY SUBJECT (theme) and generate different subjects for each variation while maintaining the same style.
                 </p>
@@ -3843,7 +3855,7 @@ const App: React.FC = () => {
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-4 mb-4">
-              <button 
+              <button
                 onClick={() => {
                   setIsSrefMode(false);
                   setSrefCode('');
@@ -3955,7 +3967,7 @@ const App: React.FC = () => {
                   if (!hasSref && !hasMoodboard) {
                     description += ` (No style reference - using prompt only)`;
                   }
-                  
+
                   const customTheme: Theme = {
                     id: 'sref-style-match',
                     name: 'SREF Style Match',
@@ -3993,12 +4005,12 @@ const App: React.FC = () => {
       };
 
       const detectedPrompts = parsePrompts(bulkPrompts);
-      
+
       return (
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-4 mb-4">
-              <button 
+              <button
                 onClick={() => {
                   setIsBulkPromptMode(false);
                   setBulkPrompts('');
@@ -4028,14 +4040,14 @@ const App: React.FC = () => {
                 <span className="text-xs opacity-75">(Slice grids & generate prompts)</span>
               </button>
             </div>
-            
+
             <div className="relative flex items-center justify-center">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-700"></div>
               </div>
               <span className="relative px-4 bg-gothic-800 text-sm text-slate-500">or paste prompts manually</span>
             </div>
-            
+
             {/* Bulk Prompts Textarea */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-3">
@@ -4108,11 +4120,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   <button
                     key={num}
                     onClick={() => setBulkImagesPerPrompt(num)}
-                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                      bulkImagesPerPrompt === num
-                        ? 'bg-gothic-gold text-black'
-                        : 'bg-gothic-900 border border-slate-600 text-slate-300 hover:border-gothic-gold/50'
-                    }`}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${bulkImagesPerPrompt === num
+                      ? 'bg-gothic-gold text-black'
+                      : 'bg-gothic-900 border border-slate-600 text-slate-300 hover:border-gothic-gold/50'
+                      }`}
                   >
                     {num} of 4
                   </button>
@@ -4136,7 +4147,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   if (hasMoodboard) {
                     description += `, Moodboard: ${bulkMoodboard.trim()}`;
                   }
-                  
+
                   const customTheme: Theme = {
                     id: 'bulk-prompt-import',
                     name: 'Bulk Prompt Import',
@@ -4169,7 +4180,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
         <div className="animate-fade-in space-y-8 max-w-3xl mx-auto">
           <div className="text-center space-y-4">
             <div className="flex items-center justify-center gap-4 mb-4">
-              <button 
+              <button
                 onClick={() => {
                   setIsCustomTheme(false);
                   setCustomThemePrompt('');
@@ -4204,13 +4215,12 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 />
                 <label
                   htmlFor="image-upload"
-                  className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                    isAnalyzingImage
-                      ? 'border-slate-600 bg-slate-800 cursor-not-allowed'
-                      : uploadedImages.length > 0
+                  className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isAnalyzingImage
+                    ? 'border-slate-600 bg-slate-800 cursor-not-allowed'
+                    : uploadedImages.length > 0
                       ? 'border-gothic-gold bg-gothic-gold/10'
                       : 'border-slate-600 bg-slate-900 hover:border-gothic-gold hover:bg-slate-800'
-                  }`}
+                    }`}
                 >
                   {isAnalyzingImage ? (
                     <div className="flex flex-col items-center gap-2">
@@ -4227,7 +4237,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                               alt={`Reference ${idx + 1}`}
                               className="w-full h-full object-cover"
                             />
-            </div>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-gothic-gold font-medium">Image {idx + 1}</div>
                             {img.theme && (
@@ -4260,7 +4270,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                             className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-900/20 flex-shrink-0"
                           >
                             <X size={14} />
-          </button>
+                          </button>
                         </div>
                       ))}
                       <button
@@ -4284,8 +4294,8 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     </div>
                   )}
                 </label>
-                
-                
+
+
                 <p className="text-xs text-slate-500 mt-2">
                   Upload multiple images to create a combined analysis. Uses GPT-4o-mini vision.
                 </p>
@@ -4347,22 +4357,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               <Sparkles className="animate-pulse" size={20} />
               Continue with Custom Theme
             </button>
-      </div>
-    </div>
-  );
+          </div>
+        </div>
+      );
     }
 
     // Default theme selection view
     return (
-    <div className="animate-fade-in space-y-8">
-      <div className="text-center space-y-4">
-        <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
-        <p className="text-slate-400 max-w-2xl mx-auto">
-          Choose how you want to generate your journal pages - with a custom theme description, by uploading an image to extract the theme, using a Midjourney style reference code, or by pasting multiple prompts.
-        </p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+      <div className="animate-fade-in space-y-8">
+        <div className="text-center space-y-4">
+          <h2 className="text-3xl font-serif text-gothic-gold">Select Your Aesthetic</h2>
+          <p className="text-slate-400 max-w-2xl mx-auto">
+            Choose how you want to generate your journal pages - with a custom theme description, by uploading an image to extract the theme, using a Midjourney style reference code, or by pasting multiple prompts.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
           {/* Custom Theme Option */}
           <button
             onClick={handleCustomThemeSelect}
@@ -4443,6 +4453,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             </div>
           </button>
 
+          {/* Etsy SEO Optimizer Option */}
+          <button
+            onClick={() => setShowEtsySEOOptimizer(true)}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <Sparkles className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Etsy SEO Optimizer</h3>
+              <p className="text-sm text-slate-400">
+                Optimize Etsy listings using AI and 2026 SEO guidelines
+              </p>
+            </div>
+          </button>
+
           {/* Google Drive Grid Generator Option */}
           <button
             onClick={() => setShowGoogleDriveGridGenerator(true)}
@@ -4458,16 +4484,16 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               </p>
             </div>
           </button>
+        </div>
       </div>
-    </div>
-  );
+    );
   };
 
   const renderSettings = () => (
     <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="mb-8 flex items-center gap-4">
-        <button 
-          onClick={() => setStep(1)} 
+        <button
+          onClick={() => setStep(1)}
           className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
         >
           <ChevronLeft />
@@ -4478,13 +4504,13 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Form */}
         <div className="lg:col-span-2 space-y-8">
-          
+
           {/* Section 1: Page Specs */}
           <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
             <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
               <Settings size={18} /> Page Specifications
             </h3>
-            
+
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Page Style</label>
@@ -4493,11 +4519,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <button
                       key={style}
                       onClick={() => handleSettingChange('pageStyle', style)}
-                      className={`px-4 py-3 rounded-lg text-sm text-left transition-all ${
-                        settings.pageStyle === style 
-                          ? 'bg-gothic-accent/20 border-gothic-accent text-white border' 
-                          : 'bg-slate-900 border-transparent text-slate-400 hover:bg-slate-800'
-                      }`}
+                      className={`px-4 py-3 rounded-lg text-sm text-left transition-all ${settings.pageStyle === style
+                        ? 'bg-gothic-accent/20 border-gothic-accent text-white border'
+                        : 'bg-slate-900 border-transparent text-slate-400 hover:bg-slate-800'
+                        }`}
                     >
                       {style}
                     </button>
@@ -4506,16 +4531,16 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               </div>
 
               <div>
-                 <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Quantity (1-500)
                 </label>
                 <div className="flex gap-3 items-center">
-                <input 
-                  type="range" 
-                  min="1" 
-                    max="500" 
+                  <input
+                    type="range"
+                    min="1"
+                    max="500"
                     value={Math.min(settings.pageCount, 500)}
-                  onChange={(e) => handleSettingChange('pageCount', parseInt(e.target.value))}
+                    onChange={(e) => handleSettingChange('pageCount', parseInt(e.target.value))}
                     className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-gothic-gold"
                   />
                   <input
@@ -4536,11 +4561,11 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   <span className="text-gothic-gold font-bold">{settings.pageCount} Pages</span>
                   <span>500 Pages</span>
                 </div>
-                 {settings.pageCount > 50 && (
-                   <p className="text-xs text-amber-500 mt-2">
-                     ⚠️ Generating {settings.pageCount} images may take a while and use significant API credits.
-                   </p>
-                 )}
+                {settings.pageCount > 50 && (
+                  <p className="text-xs text-amber-500 mt-2">
+                    ⚠️ Generating {settings.pageCount} images may take a while and use significant API credits.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -4550,11 +4575,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <button
                       key={intensity}
                       onClick={() => handleSettingChange('textureIntensity', intensity)}
-                      className={`flex-1 py-2 text-sm rounded-md transition-all ${
-                        settings.textureIntensity === intensity 
-                          ? 'bg-gothic-700 text-white shadow-lg' 
-                          : 'text-slate-500 hover:text-slate-300'
-                      }`}
+                      className={`flex-1 py-2 text-sm rounded-md transition-all ${settings.textureIntensity === intensity
+                        ? 'bg-gothic-700 text-white shadow-lg'
+                        : 'text-slate-500 hover:text-slate-300'
+                        }`}
                     >
                       {intensity}
                     </button>
@@ -4569,35 +4593,34 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <button
                       key={intensity}
                       onClick={() => handleSettingChange('colorIntensity', intensity)}
-                      className={`py-2 px-3 text-sm rounded-md transition-all ${
-                        settings.colorIntensity === intensity 
-                          ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
-                          : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
-                      }`}
+                      className={`py-2 px-3 text-sm rounded-md transition-all ${settings.colorIntensity === intensity
+                        ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
+                        }`}
                       title={
                         intensity === 'Muted' ? 'Sepia, brown tones, faded colors' :
-                        intensity === 'Normal' ? 'Normal colors, gothic/vintage aesthetic' :
-                        intensity === 'Colorful' ? 'Vibrant colors with vintage charm' :
-                        intensity === 'Multicolored' ? 'Modern, vivid, colorful (not vintage)' :
-                        'Custom style - bypasses all default prompts, follows theme exactly'
+                          intensity === 'Normal' ? 'Normal colors, gothic/vintage aesthetic' :
+                            intensity === 'Colorful' ? 'Vibrant colors with vintage charm' :
+                              intensity === 'Multicolored' ? 'Modern, vivid, colorful (not vintage)' :
+                                'Custom style - bypasses all default prompts, follows theme exactly'
                       }
                     >
                       {intensity === 'Custom / Override' ? 'Custom / Override' : intensity}
                     </button>
                   ))}
-            </div>
+                </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  {settings.colorIntensity === 'Muted' 
-                    ? 'Vintage sepia and brown tones (coffee-stained look)' 
+                  {settings.colorIntensity === 'Muted'
+                    ? 'Vintage sepia and brown tones (coffee-stained look)'
                     : settings.colorIntensity === 'Normal'
-                    ? 'Normal colors, gothic/vintage aesthetic (deep burgundy, maroon, dark grey, black, antique gold)'
-                    : settings.colorIntensity === 'Colorful'
-                    ? 'Vibrant colors while maintaining vintage aesthetic'
-                    : settings.colorIntensity === 'Multicolored'
-                    ? 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'
-                    : 'Custom style - no automatic junk journal or modern constraints, follows your theme exactly'}
+                      ? 'Normal colors, gothic/vintage aesthetic (deep burgundy, maroon, dark grey, black, antique gold)'
+                      : settings.colorIntensity === 'Colorful'
+                        ? 'Vibrant colors while maintaining vintage aesthetic'
+                        : settings.colorIntensity === 'Multicolored'
+                          ? 'Vivid, alive, modern colorful - NOT vintage, NOT junk journal style'
+                          : 'Custom style - no automatic junk journal or modern constraints, follows your theme exactly'}
                 </p>
-          </div>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Primary Subject (Optional)</label>
@@ -4620,17 +4643,16 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <button
                       key={ratio}
                       onClick={() => handleSettingChange('aspectRatio', ratio)}
-                      className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                        settings.aspectRatio === ratio 
-                          ? 'bg-gothic-accent/20 border-gothic-accent text-white border' 
-                          : 'bg-slate-900 border-transparent text-slate-400 hover:bg-slate-800'
-                      }`}
+                      className={`px-3 py-2 rounded-lg text-sm transition-all ${settings.aspectRatio === ratio
+                        ? 'bg-gothic-accent/20 border-gothic-accent text-white border'
+                        : 'bg-slate-900 border-transparent text-slate-400 hover:bg-slate-800'
+                        }`}
                     >
                       {ratio}
                     </button>
                   ))}
-            </div>
-          </div>
+                </div>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Image Generation Service</label>
@@ -4643,11 +4665,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <button
                       key={service.value}
                       onClick={() => handleSettingChange('imageService', service.value as 'pollinations' | 'replicate' | 'ttapi')}
-                      className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
-                        settings.imageService === service.value 
-                          ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
-                          : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
-                      }`}
+                      className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${settings.imageService === service.value
+                        ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
+                        }`}
                       title={service.desc}
                     >
                       <div className="font-medium">{service.label}</div>
@@ -4668,11 +4689,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <button
                       key={service.value}
                       onClick={() => handleSettingChange('promptService', service.value as 'openai' | 'openrouter' | 'huggingface')}
-                      className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${
-                        (settings.promptService || 'openai') === service.value 
-                          ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold' 
-                          : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
-                      }`}
+                      className={`w-full py-2 px-3 text-sm rounded-md transition-all text-left ${(settings.promptService || 'openai') === service.value
+                        ? 'bg-gothic-700 text-white shadow-lg border border-gothic-gold'
+                        : 'bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-700'
+                        }`}
                       title={service.desc}
                     >
                       <div className="font-medium">{service.label}</div>
@@ -4681,11 +4701,11 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   ))}
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  {settings.promptService === 'openrouter' 
+                  {settings.promptService === 'openrouter'
                     ? '⚠️ Requires VITE_OPENROUTER_API_KEY environment variable'
                     : settings.promptService === 'huggingface'
-                    ? '⚠️ Requires VITE_HUGGINGFACE_API_KEY environment variable'
-                    : '✓ Requires VITE_OPENAI_API_KEY environment variable'}
+                      ? '⚠️ Requires VITE_HUGGINGFACE_API_KEY environment variable'
+                      : '✓ Requires VITE_OPENAI_API_KEY environment variable'}
                 </p>
               </div>
 
@@ -4719,11 +4739,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                       <>
                         <button
                           onClick={() => handleSettingChange('midjourneyMode', 'fast')}
-                          className={`flex-1 py-2 px-3 text-sm rounded-md transition-all ${
-                            settings.midjourneyMode === 'fast' 
-                              ? 'bg-gothic-700 text-white shadow-lg' 
-                              : 'text-slate-500 hover:text-slate-300'
-                          }`}
+                          className={`flex-1 py-2 px-3 text-sm rounded-md transition-all ${settings.midjourneyMode === 'fast'
+                            ? 'bg-gothic-700 text-white shadow-lg'
+                            : 'text-slate-500 hover:text-slate-300'
+                            }`}
                           title="Flux Schnell - Faster generation"
                         >
                           <div className="font-medium">Fast (Flux Schnell)</div>
@@ -4731,11 +4750,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                         </button>
                         <button
                           onClick={() => handleSettingChange('midjourneyMode', 'relax')}
-                          className={`flex-1 py-2 px-3 text-sm rounded-md transition-all ${
-                            settings.midjourneyMode === 'relax' 
-                              ? 'bg-gothic-700 text-white shadow-lg' 
-                              : 'text-slate-500 hover:text-slate-300'
-                          }`}
+                          className={`flex-1 py-2 px-3 text-sm rounded-md transition-all ${settings.midjourneyMode === 'relax'
+                            ? 'bg-gothic-700 text-white shadow-lg'
+                            : 'text-slate-500 hover:text-slate-300'
+                            }`}
                           title="Flux Pro - Higher quality"
                         >
                           <div className="font-medium">Pro (Flux Pro)</div>
@@ -4748,11 +4766,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                           <button
                             key={mode}
                             onClick={() => handleSettingChange('midjourneyMode', mode)}
-                            className={`flex-1 py-2 text-sm rounded-md transition-all capitalize ${
-                              settings.midjourneyMode === mode 
-                                ? 'bg-gothic-700 text-white shadow-lg' 
-                                : 'text-slate-500 hover:text-slate-300'
-                            }`}
+                            className={`flex-1 py-2 text-sm rounded-md transition-all capitalize ${settings.midjourneyMode === mode
+                              ? 'bg-gothic-700 text-white shadow-lg'
+                              : 'text-slate-500 hover:text-slate-300'
+                              }`}
                           >
                             {mode}
                           </button>
@@ -4783,7 +4800,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
 
           {/* Section 2: Elements */}
           <div className="bg-gothic-800 p-6 rounded-xl border border-slate-700">
-             <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-serif text-gothic-gold mb-4 flex items-center gap-2">
               <Sparkles size={18} /> Optional Elements
             </h3>
             <div className="flex flex-wrap gap-3">
@@ -4791,11 +4808,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <button
                   key={el}
                   onClick={() => toggleElement(el)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                    settings.elements.includes(el)
-                      ? 'bg-gothic-gold/20 border-gothic-gold text-gothic-gold'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${settings.elements.includes(el)
+                    ? 'bg-gothic-gold/20 border-gothic-gold text-gothic-gold'
+                    : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+                    }`}
                 >
                   {el}
                 </button>
@@ -4803,25 +4819,23 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             </div>
 
             <div className="mt-6 flex gap-6">
-               <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                    settings.includeFrames ? 'bg-gothic-gold border-gothic-gold' : 'border-slate-600 bg-slate-900'
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${settings.includeFrames ? 'bg-gothic-gold border-gothic-gold' : 'border-slate-600 bg-slate-900'
                   }`}>
-                    {settings.includeFrames && <div className="w-2.5 h-2.5 bg-black rounded-sm" />}
-                  </div>
-                  <input type="checkbox" className="hidden" checked={settings.includeFrames} onChange={(e) => handleSettingChange('includeFrames', e.target.checked)} />
-                  <span className="text-slate-300 group-hover:text-white transition-colors">Include Frames</span>
-               </label>
+                  {settings.includeFrames && <div className="w-2.5 h-2.5 bg-black rounded-sm" />}
+                </div>
+                <input type="checkbox" className="hidden" checked={settings.includeFrames} onChange={(e) => handleSettingChange('includeFrames', e.target.checked)} />
+                <span className="text-slate-300 group-hover:text-white transition-colors">Include Frames</span>
+              </label>
 
-               <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                    settings.includeBorders ? 'bg-gothic-gold border-gothic-gold' : 'border-slate-600 bg-slate-900'
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${settings.includeBorders ? 'bg-gothic-gold border-gothic-gold' : 'border-slate-600 bg-slate-900'
                   }`}>
-                    {settings.includeBorders && <div className="w-2.5 h-2.5 bg-black rounded-sm" />}
-                  </div>
-                  <input type="checkbox" className="hidden" checked={settings.includeBorders} onChange={(e) => handleSettingChange('includeBorders', e.target.checked)} />
-                  <span className="text-slate-300 group-hover:text-white transition-colors">Include Borders</span>
-               </label>
+                  {settings.includeBorders && <div className="w-2.5 h-2.5 bg-black rounded-sm" />}
+                </div>
+                <input type="checkbox" className="hidden" checked={settings.includeBorders} onChange={(e) => handleSettingChange('includeBorders', e.target.checked)} />
+                <span className="text-slate-300 group-hover:text-white transition-colors">Include Borders</span>
+              </label>
             </div>
           </div>
         </div>
@@ -4841,7 +4855,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 <span className="text-slate-500">Style</span>
                 <span className="text-slate-300">{settings.pageStyle}</span>
               </div>
-               <div className="flex justify-between pb-2 border-b border-slate-800">
+              <div className="flex justify-between pb-2 border-b border-slate-800">
                 <span className="text-slate-500">Texture</span>
                 <span className="text-slate-300">{settings.textureIntensity}</span>
               </div>
@@ -4881,20 +4895,20 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
       </div>
       <h2 className="text-2xl font-serif text-white mb-2">Weaving Magic...</h2>
       <p className="text-slate-400 mb-8 max-w-md">
-        {settings.imageService === 'pollinations' 
-          ? 'Pollinations.AI is crafting your' 
+        {settings.imageService === 'pollinations'
+          ? 'Pollinations.AI is crafting your'
           : settings.imageService === 'ttapi'
-          ? 'Ttapi is crafting your'
-          : settings.imageService === 'replicate'
-          ? 'Replicate is crafting your'
-          : 'Ttapi is crafting your'} {selectedTheme?.name} journal pages. 
-        {settings.imageService === 'pollinations' 
-          ? ' This should be quick!' 
+            ? 'Ttapi is crafting your'
+            : settings.imageService === 'replicate'
+              ? 'Replicate is crafting your'
+              : 'Ttapi is crafting your'} {selectedTheme?.name} journal pages.
+        {settings.imageService === 'pollinations'
+          ? ' This should be quick!'
           : ' This process may take a few minutes as we generate high-resolution images.'}
       </p>
-      
+
       <div className="w-full max-w-md bg-slate-800 rounded-full h-2 overflow-hidden">
-        <div 
+        <div
           className="bg-gothic-gold h-full transition-all duration-300 ease-out"
           style={{ width: `${currentProgress}%` }}
         />
@@ -4905,12 +4919,12 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
           Status: Processing... This may take 2-10 minutes per image
         </p>
       )}
-      
+
       {errorMsg && (
         <div className="mt-8 p-4 bg-red-900/30 border border-red-800 text-red-200 rounded-lg max-w-md">
           <p className="font-bold">Error:</p>
           <p>{errorMsg}</p>
-          <button 
+          <button
             onClick={() => { setStatus(GenerationStatus.IDLE); setStep(2); }}
             className="mt-4 px-4 py-2 bg-red-900/50 hover:bg-red-900 rounded border border-red-700 transition-colors"
           >
@@ -4929,33 +4943,32 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
     const detectedImagesPerPrompt = detectImagesPerPrompt(completedImages);
 
     return (
-    <div className="animate-fade-in">
-       <div className="mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <button 
+      <div className="animate-fade-in">
+        <div className="mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button
               onClick={() => {
                 setStep(2);
-              }} 
-            className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
-          >
-            <ChevronLeft />
-          </button>
+              }}
+              className="p-2 hover:bg-gothic-700 rounded-full transition-colors text-slate-400 hover:text-white"
+            >
+              <ChevronLeft />
+            </button>
             <h2 className="text-3xl font-serif text-slate-100">
               Your Collection {generatedImages.length > 0 && `(${generatedImages.length} images)`}
             </h2>
-        </div>
-        
+          </div>
+
           <div className="flex gap-3 flex-wrap">
             {completedCount > 0 && (
               <>
                 {/* Selection Controls */}
-                <button 
+                <button
                   onClick={toggleSelectAll}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                    selectedImages.size === completedCount 
-                      ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                      : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${selectedImages.size === completedCount
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                    }`}
                   title={selectedImages.size === completedCount ? "Deselect all images" : "Select all images"}
                 >
                   {selectedImages.size === completedCount ? (
@@ -4968,7 +4981,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     </>
                   )}
                 </button>
-                
+
                 {/* Images Per Prompt Selector - Multi-select */}
                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700" title={`Detected ${detectedImagesPerPrompt} image(s) per prompt. Select multiple positions to download (e.g., 1st and 2nd).`}>
                   <span className="text-xs text-slate-300 whitespace-nowrap">Image:</span>
@@ -4995,11 +5008,10 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                             }
                             setSelectedImagePositions(newSet);
                           }}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            isSelected
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          }`}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${isSelected
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                            }`}
                           title={`${isSelected ? 'Deselect' : 'Select'} the ${num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'} image from each prompt`}
                         >
                           {num === 1 ? '1st' : num === 2 ? '2nd' : num === 3 ? '3rd' : '4th'}
@@ -5009,7 +5021,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     {/* Always show "All" option */}
                     <button
                       onClick={() => {
-                        const allSelected = Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos => 
+                        const allSelected = Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos =>
                           selectedImagePositions.has(pos as 1 | 2 | 3 | 4)
                         );
                         if (allSelected) {
@@ -5024,13 +5036,12 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                           setSelectedImagePositions(allPositions);
                         }
                       }}
-                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                        Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos => 
-                          selectedImagePositions.has(pos as 1 | 2 | 3 | 4)
-                        )
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                      }`}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-colors ${Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos =>
+                        selectedImagePositions.has(pos as 1 | 2 | 3 | 4)
+                      )
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        }`}
                       title={`${Array.from({ length: detectedImagesPerPrompt }, (_, i) => i + 1).every(pos => selectedImagePositions.has(pos as 1 | 2 | 3 | 4)) ? 'Deselect' : 'Select'} all ${detectedImagesPerPrompt} image(s) from each prompt`}
                     >
                       All
@@ -5040,7 +5051,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
 
                 {/* Download Selected - only show when images are selected */}
                 {selectedImages.size > 0 && (
-                  <button 
+                  <button
                     onClick={downloadSelectedAsZip}
                     className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
                     title="Download only selected images as ZIP"
@@ -5048,28 +5059,28 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <Archive size={18} /> Download Selected ({selectedImages.size})
                   </button>
                 )}
-                
-                <button 
+
+                <button
                   onClick={downloadAllAsZip}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
                   title={`Download the ${Array.from(selectedImagePositions).sort().map(p => {
-                        if (p === 1) return '1st';
-                        if (p === 2) return '2nd';
-                        if (p === 3) return '3rd';
-                        return '4th';
-                      }).join(' and ')} image(s) from each prompt as ZIP`}
+                    if (p === 1) return '1st';
+                    if (p === 2) return '2nd';
+                    if (p === 3) return '3rd';
+                    return '4th';
+                  }).join(' and ')} image(s) from each prompt as ZIP`}
                 >
                   <Archive size={18} /> Download All ({filteredCount})
                 </button>
-                <button 
+                <button
                   onClick={downloadAllAsPdf}
                   className="flex items-center gap-2 px-4 py-2 bg-gothic-gold hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
                   title={`Download the ${Array.from(selectedImagePositions).sort().map(p => {
-                        if (p === 1) return '1st';
-                        if (p === 2) return '2nd';
-                        if (p === 3) return '3rd';
-                        return '4th';
-                      }).join(' and ')} image(s) from each prompt as PDF`}
+                    if (p === 1) return '1st';
+                    if (p === 2) return '2nd';
+                    if (p === 3) return '3rd';
+                    return '4th';
+                  }).join(' and ')} image(s) from each prompt as PDF`}
                 >
                   <FileText size={18} /> Download PDF ({filteredCount})
                 </button>
@@ -5083,16 +5094,16 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     <option value="1">Google Drive Account 1</option>
                     <option value="2">Google Drive Account 2</option>
                   </select>
-                  <button 
+                  <button
                     onClick={uploadToGoogleDrive}
                     disabled={isUploadingToGoogleDrive}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                     title={`Upload the ${Array.from(selectedImagePositions).sort().map(p => {
-                          if (p === 1) return '1st';
-                          if (p === 2) return '2nd';
-                          if (p === 3) return '3rd';
-                          return '4th';
-                        }).join(' and ')} image(s) from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
+                      if (p === 1) return '1st';
+                      if (p === 2) return '2nd';
+                      if (p === 3) return '3rd';
+                      return '4th';
+                    }).join(' and ')} image(s) from each prompt to Google Drive (images will be shuffled, renamed, converted to JPG, and organized in a folder)`}
                   >
                     {isUploadingToGoogleDrive ? (
                       <>
@@ -5107,19 +5118,19 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                 </div>
               </>
             )}
-           <button 
-            onClick={() => {
-              setStep(2);
-              setGeneratedImages([]);
-              setSelectedImages(new Set());
-              setStatus(GenerationStatus.IDLE);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-          >
-            <RefreshCw size={18} /> New Batch
-          </button>
+            <button
+              onClick={() => {
+                setStep(2);
+                setGeneratedImages([]);
+                setSelectedImages(new Set());
+                setStatus(GenerationStatus.IDLE);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+            >
+              <RefreshCw size={18} /> New Batch
+            </button>
+          </div>
         </div>
-      </div>
 
         {/* Grid Generator Tool */}
         {completedCount > 0 && (
@@ -5238,159 +5249,157 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               const actualIndex = idx;
               const isSelected = selectedImages.has(img.id);
               return (
-          <div key={img.id} className={`bg-white rounded-xl overflow-hidden shadow-lg border-2 transition-all ${
-            isSelected ? 'border-purple-500 ring-2 ring-purple-300' : 'border-gray-200'
-          }`}>
-            {/* Image Container */}
-            <div className="relative bg-gray-100 aspect-square flex items-center justify-center">
-              {/* Selection Checkbox - only show for completed images */}
-              {img.status === 'completed' && img.url && (
-                <button
-                  onClick={() => toggleImageSelection(img.id)}
-                  className={`absolute top-3 left-3 z-10 p-1.5 rounded-lg transition-all ${
-                    isSelected 
-                      ? 'bg-purple-600 text-white shadow-lg' 
-                      : 'bg-white/90 text-gray-600 hover:bg-white hover:text-purple-600 shadow'
-                  }`}
-                  title={isSelected ? "Deselect image" : "Select image"}
-                >
-                  {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
-                </button>
-              )}
-              
-              {img.status === 'generating' ? (
-                <div className="flex flex-col items-center justify-center p-8">
-                  <div className="w-16 h-16 border-4 border-gothic-gold border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-gray-500 text-sm">Generating...</p>
-                </div>
-              ) : img.status === 'error' ? (
-                <div className="flex flex-col items-center justify-center p-8 text-red-500">
-                  <ImageIcon size={48} className="mb-2" />
-                  <p className="text-sm">Generation Failed</p>
-                </div>
-              ) : img.url ? (
-            <img 
-              src={img.url} 
-                  alt={`Variation ${img.variationNumber || idx + 1}`} 
-                  className={`w-full h-full object-cover transition-opacity ${isSelected ? 'opacity-90' : ''}`}
-                  onClick={() => img.status === 'completed' && toggleImageSelection(img.id)}
-                  style={{ cursor: img.status === 'completed' ? 'pointer' : 'default' }}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-gray-400">
-                  <ImageIcon size={48} className="mb-2" />
-                  <p className="text-sm">No Image</p>
-                </div>
-              )}
-            </div>
-            
-            {/* Card Content */}
-            <div className="p-4">
-              {/* Variation Label */}
-              <div className="mb-2">
-                <span className="text-xs font-semibold text-purple-600 uppercase tracking-wide">
-                  VARIATION #{img.variationNumber || idx + 1}
-                </span>
-              </div>
-              
-              {/* Prompt Text with Copy Button */}
-              <div className="mb-4">
-                <div className="flex items-start gap-2 mb-2">
-                  <p className="text-sm text-gray-700 line-clamp-3 min-h-[3rem] flex-1">
-                    {img.prompt}
-                  </p>
-              <button 
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(img.prompt);
-                        setCopiedPromptIndex(idx);
-                        setTimeout(() => setCopiedPromptIndex(null), 2000);
-                      } catch (err) {
-                        console.error('Failed to copy prompt:', err);
-                      }
-                    }}
-                    className="flex-shrink-0 p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                    title="Copy prompt"
-                  >
-                    {copiedPromptIndex === idx ? (
-                      <Check size={16} className="text-green-600" />
-                    ) : (
-                      <Copy size={16} />
+                <div key={img.id} className={`bg-white rounded-xl overflow-hidden shadow-lg border-2 transition-all ${isSelected ? 'border-purple-500 ring-2 ring-purple-300' : 'border-gray-200'
+                  }`}>
+                  {/* Image Container */}
+                  <div className="relative bg-gray-100 aspect-square flex items-center justify-center">
+                    {/* Selection Checkbox - only show for completed images */}
+                    {img.status === 'completed' && img.url && (
+                      <button
+                        onClick={() => toggleImageSelection(img.id)}
+                        className={`absolute top-3 left-3 z-10 p-1.5 rounded-lg transition-all ${isSelected
+                          ? 'bg-purple-600 text-white shadow-lg'
+                          : 'bg-white/90 text-gray-600 hover:bg-white hover:text-purple-600 shadow'
+                          }`}
+                        title={isSelected ? "Deselect image" : "Select image"}
+                      >
+                        {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                      </button>
                     )}
-              </button>
-            </div>
-          </div>
-              
-              {/* Action Buttons */}
-              {img.status === 'completed' && img.url ? (
-                <div className="flex gap-2">
-              <button 
-                    onClick={() => setPreviewImage(img)}
-                    className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                    <Eye size={16} />
-                    Preview
-              </button>
-                  <button 
-                    onClick={() => downloadImage(img, actualIndex)}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Download size={16} />
-                    Download
-                  </button>
-                  <button 
-                    onClick={() => regenerateImage(img, actualIndex)}
-                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                    title="Regenerate this image with the same prompt"
-                  >
-                    <RefreshCw size={16} />
-                    Regenerate
-                  </button>
-            </div>
-              ) : img.status === 'generating' ? (
-                <button 
-                  disabled
-                  className="w-full bg-gray-300 text-gray-500 font-medium py-2 px-4 rounded-lg cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  <RefreshCw size={16} className="animate-spin" />
-                  Generating...
-                </button>
-              ) : (
-                <button 
-                  onClick={() => {
-                    // Regenerate this specific image
-                    setGeneratedImages(prev => prev.map((imgItem, i) => 
-                      i === actualIndex ? { ...imgItem, status: 'generating', url: '' } : imgItem
-                    ));
-                    // Trigger regeneration logic here
-                  }}
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <RefreshCw size={16} />
-                  Generate
-                </button>
-              )}
-          </div>
-          </div>
-            );
+
+                    {img.status === 'generating' ? (
+                      <div className="flex flex-col items-center justify-center p-8">
+                        <div className="w-16 h-16 border-4 border-gothic-gold border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-gray-500 text-sm">Generating...</p>
+                      </div>
+                    ) : img.status === 'error' ? (
+                      <div className="flex flex-col items-center justify-center p-8 text-red-500">
+                        <ImageIcon size={48} className="mb-2" />
+                        <p className="text-sm">Generation Failed</p>
+                      </div>
+                    ) : img.url ? (
+                      <img
+                        src={img.url}
+                        alt={`Variation ${img.variationNumber || idx + 1}`}
+                        className={`w-full h-full object-cover transition-opacity ${isSelected ? 'opacity-90' : ''}`}
+                        onClick={() => img.status === 'completed' && toggleImageSelection(img.id)}
+                        style={{ cursor: img.status === 'completed' ? 'pointer' : 'default' }}
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-8 text-gray-400">
+                        <ImageIcon size={48} className="mb-2" />
+                        <p className="text-sm">No Image</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="p-4">
+                    {/* Variation Label */}
+                    <div className="mb-2">
+                      <span className="text-xs font-semibold text-purple-600 uppercase tracking-wide">
+                        VARIATION #{img.variationNumber || idx + 1}
+                      </span>
+                    </div>
+
+                    {/* Prompt Text with Copy Button */}
+                    <div className="mb-4">
+                      <div className="flex items-start gap-2 mb-2">
+                        <p className="text-sm text-gray-700 line-clamp-3 min-h-[3rem] flex-1">
+                          {img.prompt}
+                        </p>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(img.prompt);
+                              setCopiedPromptIndex(idx);
+                              setTimeout(() => setCopiedPromptIndex(null), 2000);
+                            } catch (err) {
+                              console.error('Failed to copy prompt:', err);
+                            }
+                          }}
+                          className="flex-shrink-0 p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                          title="Copy prompt"
+                        >
+                          {copiedPromptIndex === idx ? (
+                            <Check size={16} className="text-green-600" />
+                          ) : (
+                            <Copy size={16} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    {img.status === 'completed' && img.url ? (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setPreviewImage(img)}
+                          className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Eye size={16} />
+                          Preview
+                        </button>
+                        <button
+                          onClick={() => downloadImage(img, actualIndex)}
+                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Download size={16} />
+                          Download
+                        </button>
+                        <button
+                          onClick={() => regenerateImage(img, actualIndex)}
+                          className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          title="Regenerate this image with the same prompt"
+                        >
+                          <RefreshCw size={16} />
+                          Regenerate
+                        </button>
+                      </div>
+                    ) : img.status === 'generating' ? (
+                      <button
+                        disabled
+                        className="w-full bg-gray-300 text-gray-500 font-medium py-2 px-4 rounded-lg cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={16} className="animate-spin" />
+                        Generating...
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          // Regenerate this specific image
+                          setGeneratedImages(prev => prev.map((imgItem, i) =>
+                            i === actualIndex ? { ...imgItem, status: 'generating', url: '' } : imgItem
+                          ));
+                          // Trigger regeneration logic here
+                        }}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={16} />
+                        Generate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
             })
           )}
-      </div>
-      
+        </div>
+
         {/* Progress indicator if generating */}
         {status === GenerationStatus.GENERATING && (
           <div className="mt-8 p-6 bg-slate-900/50 rounded-xl border border-slate-800 text-center">
             <div className="w-full max-w-md mx-auto bg-slate-800 rounded-full h-2 overflow-hidden mb-2">
-              <div 
+              <div
                 className="bg-gothic-gold h-full transition-all duration-300 ease-out"
                 style={{ width: `${currentProgress}%` }}
               />
-      </div>
+            </div>
             <p className="text-gothic-gold font-mono text-sm">{Math.round(currentProgress)}% Completed</p>
           </div>
         )}
-    </div>
-  );
+      </div>
+    );
   };
 
   return (
@@ -5405,7 +5414,7 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
             <h1 className="text-xl font-serif font-bold text-slate-100 tracking-wide">{APP_NAME}</h1>
           </div>
           <div className="flex items-center gap-4">
-          <div className="text-xs text-slate-500 font-mono hidden md:block">
+            <div className="text-xs text-slate-500 font-mono hidden md:block">
               AI-POWERED • V.1.0 • {settings.imageService === 'pollinations' ? 'POLLINATIONS' : settings.imageService === 'replicate' ? 'REPLICATE' : 'TTAPI'}
             </div>
             {APP_PASSWORD && (
@@ -5423,9 +5432,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
 
       {/* Main Content */}
       <main className={`max-w-7xl mx-auto px-6 py-12 transition-all duration-300 ${showSidebar ? 'mr-80' : ''}`}>
-            {step === 1 && renderThemeSelection()}
-            {step === 2 && renderSettings()}
-            {step === 4 && renderGallery()}
+        {step === 1 && renderThemeSelection()}
+        {step === 2 && renderSettings()}
+        {step === 4 && renderGallery()}
         {step === 3 && status === GenerationStatus.GENERATING && renderLoading()}
       </main>
 
@@ -5461,13 +5470,12 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                   return (
                     <div
                       key={log.id}
-                      className={`p-2 rounded border-l-2 ${
-                        log.type === 'error'
-                          ? 'bg-red-900/20 border-red-500 text-red-300'
-                          : log.type === 'success'
+                      className={`p-2 rounded border-l-2 ${log.type === 'error'
+                        ? 'bg-red-900/20 border-red-500 text-red-300'
+                        : log.type === 'success'
                           ? 'bg-green-900/20 border-green-500 text-green-300'
                           : 'bg-slate-800/50 border-slate-600 text-slate-300'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start gap-2">
                         <span className="text-slate-500 text-[10px] mt-0.5 flex-shrink-0">{time}</span>
@@ -5509,11 +5517,11 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
 
       {/* Preview Modal */}
       {previewImage && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setPreviewImage(null)}
         >
-          <div 
+          <div
             className="bg-slate-900 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto border border-slate-700 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -5537,9 +5545,9 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
 
             {/* Modal Image */}
             <div className="p-4">
-              <img 
-                src={previewImage.url} 
-                alt="Preview" 
+              <img
+                src={previewImage.url}
+                alt="Preview"
                 className="w-full h-auto rounded-lg"
               />
             </div>
@@ -5639,32 +5647,32 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
                     </div>
                     <div className="space-y-2">
                       {googleDriveModalData.urls.map((url, index) => (
-                      <div key={index} className="flex items-start gap-2">
-                        <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-400 hover:text-emerald-300 break-all text-xs flex-1"
-                        >
-                          {url}
-                        </a>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(url);
-                              addLog(`[Google Drive] 📋 URL ${index + 1} copied!`, 'success');
-                            } catch (error) {
-                              console.error('Failed to copy:', error);
-                            }
-                          }}
-                          className="text-slate-400 hover:text-emerald-400 transition-colors p-1"
-                          title="Copy URL"
-                        >
-                          <Copy size={12} />
-                        </button>
-                      </div>
-                    ))}
+                        <div key={index} className="flex items-start gap-2">
+                          <span className="text-slate-500 text-xs mt-1">{index + 1}.</span>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-400 hover:text-emerald-300 break-all text-xs flex-1"
+                          >
+                            {url}
+                          </a>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(url);
+                                addLog(`[Google Drive] 📋 URL ${index + 1} copied!`, 'success');
+                              } catch (error) {
+                                console.error('Failed to copy:', error);
+                              }
+                            }}
+                            className="text-slate-400 hover:text-emerald-400 transition-colors p-1"
+                            title="Copy URL"
+                          >
+                            <Copy size={12} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </>

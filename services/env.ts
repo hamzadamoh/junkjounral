@@ -9,12 +9,12 @@ export const getOpenAIApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env && process.env.VITE_OPENAI_API_KEY) {
     return process.env.VITE_OPENAI_API_KEY;
   }
-  
+
   // Check globalThis mock (for Jest test environment)
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_OPENAI_API_KEY) {
     return (globalThis as any).import.meta.env.VITE_OPENAI_API_KEY;
   }
-  
+
   // Fallback to import.meta.env (for Vite production/dev)
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore - import.meta is available in Vite but not in Jest
@@ -30,12 +30,12 @@ export const getOpenRouterApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env && process.env.VITE_OPENROUTER_API_KEY) {
     return process.env.VITE_OPENROUTER_API_KEY;
   }
-  
+
   // Check globalThis mock (for Jest test environment)
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_OPENROUTER_API_KEY) {
     return (globalThis as any).import.meta.env.VITE_OPENROUTER_API_KEY;
   }
-  
+
   // Fallback to import.meta.env (for Vite production/dev)
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore - import.meta is available in Vite but not in Jest
@@ -51,12 +51,12 @@ export const getHuggingFaceApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env && process.env.VITE_HUGGINGFACE_API_KEY) {
     return process.env.VITE_HUGGINGFACE_API_KEY;
   }
-  
+
   // Check globalThis mock (for Jest test environment)
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_HUGGINGFACE_API_KEY) {
     return (globalThis as any).import.meta.env.VITE_HUGGINGFACE_API_KEY;
   }
-  
+
   // Fallback to import.meta.env (for Vite production/dev)
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore - import.meta is available in Vite but not in Jest
@@ -77,7 +77,7 @@ export const getWordPressConfig = () => {
       password: process.env.VITE_WP_APP_PASSWORD || process.env.VITE_WORDPRESS_PASSWORD || '',
     };
   }
-  
+
   // Check globalThis mock
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env) {
     const env = (globalThis as any).import.meta.env;
@@ -87,7 +87,7 @@ export const getWordPressConfig = () => {
       password: env.VITE_WP_APP_PASSWORD || env.VITE_WORDPRESS_PASSWORD || '',
     };
   }
-  
+
   // Fallback to import.meta.env
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -116,7 +116,7 @@ export const getSupabaseConfig = () => {
       bucket: process.env.VITE_SUPABASE_BUCKET || 'images',
     };
   }
-  
+
   // Check globalThis mock
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env) {
     const env = (globalThis as any).import.meta.env;
@@ -126,7 +126,7 @@ export const getSupabaseConfig = () => {
       bucket: env.VITE_SUPABASE_BUCKET || 'images',
     };
   }
-  
+
   // Fallback to import.meta.env
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -164,7 +164,7 @@ export const getGoogleDriveConfig = (accountNumber: 1 | 2 = 1) => {
       parentFolderId: process.env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
-  
+
   // Check globalThis mock
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env) {
     const env = (globalThis as any).import.meta.env;
@@ -183,7 +183,7 @@ export const getGoogleDriveConfig = (accountNumber: 1 | 2 = 1) => {
       parentFolderId: env.VITE_GOOGLE_DRIVE_PARENT_FOLDER_ID || '1OcAoiBpvjmbHuzSPrTCiJ6KDXhzs_cLU',
     };
   }
-  
+
   // Fallback to import.meta.env
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -218,12 +218,12 @@ export const getEtsyApiKey = (): string => {
   if (typeof process !== 'undefined' && process.env && process.env.VITE_ETSY_API_KEY) {
     return process.env.VITE_ETSY_API_KEY;
   }
-  
+
   // Check globalThis mock (for Jest test environment)
   if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_ETSY_API_KEY) {
     return (globalThis as any).import.meta.env.VITE_ETSY_API_KEY;
   }
-  
+
   // Fallback to import.meta.env (for Vite production/dev)
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore - import.meta is available in Vite but not in Jest
@@ -232,6 +232,34 @@ export const getEtsyApiKey = (): string => {
   } catch {
     return '';
   }
+};
+
+export const getEtsySharedSecret = (): string => {
+  // Check process.env first (for Node.js/Jest environments)
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_ETSY_SHARED_SECRET) {
+    return process.env.VITE_ETSY_SHARED_SECRET;
+  }
+
+  // Check globalThis mock (for Jest test environment)
+  if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.VITE_ETSY_SHARED_SECRET) {
+    return (globalThis as any).import.meta.env.VITE_ETSY_SHARED_SECRET;
+  }
+
+  // Fallback to import.meta.env (for Vite production/dev)
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore - import.meta is available in Vite but not in Jest
+  try {
+    return (import.meta.env?.VITE_ETSY_SHARED_SECRET as string) || '';
+  } catch {
+    return '';
+  }
+};
+
+export const getEtsyConfig = () => {
+  return {
+    apiKey: getEtsyApiKey(),
+    sharedSecret: getEtsySharedSecret(),
+  };
 };
 
 export const getDropboxAccessToken = (): string => {

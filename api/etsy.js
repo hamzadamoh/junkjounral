@@ -23,6 +23,78 @@ export default async function handler(req, res) {
     const listingIds = bodyParams.listingIds;
     const listingIdParam = queryParams.listingId || bodyParams.listingId;
     const url = queryParams.url || bodyParams.url;
+    const apiKey = bodyParams.apiKey || queryParams.apiKey || process.env.VITE_ETSY_API_KEY || process.env.ETSY_API_KEY;
+    const sharedSecret = bodyParams.sharedSecret || queryParams.sharedSecret || process.env.VITE_ETSY_SHARED_SECRET || process.env.ETSY_SHARED_SECRET;
+
+    // Scraper for listing details (Title, Description, Tags)
+    const scrapeListingDetails = async (listingIdOrUrl) => {
+      let listingUrl = listingIdOrUrl;
+      if (!listingUrl.startsWith('http')) {
+        listingUrl = `https://www.etsy.com/listing/${listingIdOrUrl}`;
+      }
+
+      console.log(`[Etsy Scraper] Scraping details for ${listingUrl}...`);
+
+      try {
+        const response = await fetch(listingUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://www.google.com/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          }
+        });
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        // Title extraction
+        const title = $('h1[data-buy-box-listing-title="true"]').text().trim() ||
+          $('h1').first().text().trim() ||
+          $('title').text().replace(' | Etsy', '').trim();
+
+        // Description extraction
+        const description = $('#listing-page-cart .wt-text-body-01').text().trim() ||
+          $('.listing-page-image-ads-content-wrapper .wt-text-body-01').text().trim() ||
+          $('p[data-id="listing-description-text"]').text().trim() ||
+          $('.wt-content-toggle__body-container').text().trim();
+
+        // Tags extraction (usually at the bottom in "Related to this item" or "Explore related searches")
+        const tags = [];
+        $('.wt-alignment-center .wt-display-inline-block .wt-chip').each((i, el) => {
+          const tag = $(el).text().trim();
+          if (tag) tags.push(tag);
+        });
+
+        if (tags.length === 0) {
+          // Alternative selector for tags
+          $('ul.wt-grid.wt-grid--block li a').each((i, el) => {
+            const tag = $(el).text().trim();
+            if (tag && !tag.includes('Etsy')) tags.push(tag);
+          });
+        }
+
+        // Image extraction (reusing strategy 2 as fallback/main)
+        const imageUrl = $('meta[property="og:image"]').attr('content') ||
+          $('img[data-palette-listing-image]').first().attr('src');
+
+        return {
+          success: true,
+          title,
+          description,
+          tags,
+          imageUrl,
+          listingId: listingUrl.match(/listing\/(\d+)/)?.[1] || null
+        };
+      } catch (err) {
+        console.error(`[Etsy Scraper] Details failed for ${listingUrl}:`, err.message);
+        return { success: false, error: err.message };
+      }
+    };
 
     // Scraper (no Etsy API)
     const scrapeListingImages = async (listingId) => {
@@ -227,6 +299,22 @@ export default async function handler(req, res) {
         return res.status(500).json({
           error: `Scraping failed: ${err.message}`
         });
+      }
+
+      // Handle scrape-details operation
+    } else if (operation === 'scrape-details' || (!operation && url && url.includes('etsy.com/listing'))) {
+      const targetUrl = queryParams.url || bodyParams.url || url;
+      if (!targetUrl) return res.status(400).json({ error: 'URL is required' });
+
+      try {
+        const details = await scrapeListingDetails(targetUrl);
+        if (details.success) {
+          return res.status(200).json(details);
+        } else {
+          return res.status(500).json({ error: details.error || 'Failed to scrape details' });
+        }
+      } catch (err) {
+        return res.status(500).json({ error: err.message });
       }
 
       // Handle proxy-image operation
