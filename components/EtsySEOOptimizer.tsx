@@ -67,13 +67,16 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 Act as an Etsy SEO Expert specializing in the "2026 Etsy Model".
 Optimize this Etsy listing following these STRICT rules:
 
-═══ TITLE RULES (100-140 characters total) ═══
+═══ TITLE RULES (MUST be 120-140 characters — use the FULL Etsy limit!) ═══
+- Etsy allows up to 140 characters. You MUST use at least 120 characters. A short title wastes SEO opportunity.
 - First 50-70 characters: strongest buyer-intent phrase.
-- Structure: [Primary Keyword Phrase] + [Secondary Buyer Phrase] + [Format Clarifier]
-- Use natural language, NOT keyword stacking.
-- One dominant phrase + 2-3 supporting phrases.
+- Structure: [Primary Keyword Phrase], [Secondary Buyer Phrase] [Style/Theme Words] [Format Clarifier] [Additional Keywords]
+- Use natural language, NOT keyword stacking. But DO fill the space with useful descriptors.
+- One dominant phrase + 2-3 supporting phrases + style/theme words to reach 140 chars.
 - Avoid excessive punctuation. Keep it smooth and readable.
-- Example: "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"
+- EXAMPLE (104 chars): "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download"
+- BETTER (133 chars): "Rustic Greenhouse Junk Journal Kit Printable, Vintage Garden Ephemera Pages Cottagecore Digital Download Botanical Scrapbook Paper"
+- Count your characters! If under 120, add more relevant descriptors.
 
 ═══ TAG RULES (exactly 13 tags) ═══
 - CRITICAL: Each tag must be MAX 20 characters (Etsy hard limit). Count carefully!
