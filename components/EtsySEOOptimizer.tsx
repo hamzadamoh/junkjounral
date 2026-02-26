@@ -411,7 +411,13 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
                                                 <Tag className="w-3 h-3" /> Optimized Tags ({optimizedData.tags?.length || 0}/13)
                                             </label>
-                                            <span className="text-xs text-slate-500">Click a tag to copy it</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs text-slate-500">Click a tag to copy it</span>
+                                                <button onClick={() => copyToClipboard(optimizedData.tags.join(', '), 'all-tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                                    {copiedField === 'all-tags' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                                    {copiedField === 'all-tags' ? 'Copied' : 'Copy All'}
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 p-3 bg-slate-900 border border-amber-500/20 rounded-lg">
                                             {optimizedData.tags.map((tag, i) => (
