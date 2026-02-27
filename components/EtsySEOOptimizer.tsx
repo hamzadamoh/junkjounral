@@ -69,14 +69,15 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             'Description:',
             listing.description.substring(0, 2000),
             '',
-            '=== OUTPUT (JSON ONLY) ===',
+            '=== OUTPUT FORMAT (STRICT JSON ONLY) ===',
+            'Return ONLY valid JSON matching this exact schema. DO NOT RETURN THESE LITERAL VALUES. Calculate real scores based on the input provided above.',
             '{',
-            '  "overallScore": 85,',
-            '  "titleScore": 90,',
-            '  "tagsScore": 80,',
-            '  "descriptionScore": 85,',
-            '  "strengths": ["Strong emotional hook", "Great tag variety"],',
-            '  "weaknesses": ["Title is too short (115 chars)", "One tag exceeds 20 chars"]',
+            '  "overallScore": <number 0-100 based on overall quality>,',
+            '  "titleScore": <number 0-100>,',
+            '  "tagsScore": <number 0-100>,',
+            '  "descriptionScore": <number 0-100>,',
+            '  "strengths": ["<string>", "<string>"],',
+            '  "weaknesses": ["<string>", "<string>"]',
             '}'
         ].join('\n');
 
