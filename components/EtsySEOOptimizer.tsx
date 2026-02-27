@@ -537,22 +537,29 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                         </div>
 
                         {scrapedData.score && (
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
-                                    <div className="text-xs text-slate-500 font-bold uppercase mb-2">Strengths</div>
-                                    <ul className="space-y-1 text-xs text-emerald-400">
-                                        {scrapedData.score.strengths.slice(0, 2).map((s, i) => (
-                                            <li key={i} className="flex items-start gap-1"><Check className="w-3 h-3 mt-0.5 shrink-0" /> {s}</li>
-                                        ))}
-                                    </ul>
+                            <div className="space-y-2 mb-4">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
+                                        <div className="text-xs text-slate-500 font-bold uppercase mb-2">Strengths</div>
+                                        <ul className="space-y-1 text-xs text-emerald-400">
+                                            {scrapedData.score.strengths.slice(0, 2).map((s, i) => (
+                                                <li key={i} className="flex items-start gap-1"><Check className="w-3 h-3 mt-0.5 shrink-0" /> {s}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
+                                        <div className="text-xs text-slate-500 font-bold uppercase mb-2">Weaknesses</div>
+                                        <ul className="space-y-1 text-xs text-red-400">
+                                            {scrapedData.score.weaknesses.slice(0, 2).map((w, i) => (
+                                                <li key={i} className="flex items-start gap-1"><span className="text-[10px] mt-0.5 shrink-0">⚠️</span> {w}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 </div>
-                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
-                                    <div className="text-xs text-slate-500 font-bold uppercase mb-2">Weaknesses</div>
-                                    <ul className="space-y-1 text-xs text-red-400">
-                                        {scrapedData.score.weaknesses.slice(0, 2).map((w, i) => (
-                                            <li key={i} className="flex items-start gap-1"><span className="text-[10px] mt-0.5 shrink-0">⚠️</span> {w}</li>
-                                        ))}
-                                    </ul>
+                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 flex justify-between text-xs text-slate-400">
+                                    <span><strong className="text-slate-500">TITLE </strong> <span className={scrapedData.score.titleScore < 60 ? 'text-red-400' : scrapedData.score.titleScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}>{scrapedData.score.titleScore}/100</span></span>
+                                    <span><strong className="text-slate-500">TAGS </strong> <span className={scrapedData.score.tagsScore < 60 ? 'text-red-400' : scrapedData.score.tagsScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}>{scrapedData.score.tagsScore}/100</span></span>
+                                    <span><strong className="text-slate-500">DESC </strong> <span className={scrapedData.score.descriptionScore < 60 ? 'text-red-400' : scrapedData.score.descriptionScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}>{scrapedData.score.descriptionScore}/100</span></span>
                                 </div>
                             </div>
                         )}
@@ -618,7 +625,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                 </div>
 
                                 {optimizedData.score && (
-                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="space-y-2 mb-4">
                                         <div className="p-3 rounded-lg bg-slate-900/80 border border-emerald-900/50">
                                             <div className="text-xs text-slate-500 font-bold uppercase mb-2">Resolved</div>
                                             <ul className="space-y-1 text-xs text-emerald-400">
@@ -627,15 +634,10 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                                 ))}
                                             </ul>
                                         </div>
-                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="text-xs text-slate-500 font-bold uppercase">Sub-Scores</div>
-                                            </div>
-                                            <div className="space-y-1 text-xs text-slate-400">
-                                                <div className="flex justify-between"><span>Title:</span> <span className={optimizedData.score.titleScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.titleScore}</span></div>
-                                                <div className="flex justify-between"><span>Tags:</span> <span className={optimizedData.score.tagsScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.tagsScore}</span></div>
-                                                <div className="flex justify-between"><span>Desc:</span> <span className={optimizedData.score.descriptionScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.descriptionScore}</span></div>
-                                            </div>
+                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 flex justify-between text-xs text-slate-400">
+                                            <span><strong className="text-slate-500">TITLE </strong> <span className={optimizedData.score.titleScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.titleScore}/100</span></span>
+                                            <span><strong className="text-slate-500">TAGS </strong> <span className={optimizedData.score.tagsScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.tagsScore}/100</span></span>
+                                            <span><strong className="text-slate-500">DESC </strong> <span className={optimizedData.score.descriptionScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.descriptionScore}/100</span></span>
                                         </div>
                                     </div>
                                 )}
