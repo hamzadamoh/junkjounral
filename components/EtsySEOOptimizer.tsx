@@ -218,11 +218,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '2. Do NOT introduce another competing primary phrase.',
             '3. Supporting angles must MODIFY the dominant phrase — not compete with it.',
             '',
-            'F. Title Length & Padding Rule (SHARPNESS OVER COVERAGE):',
-            '- NEVER add generic trailing filler (e.g., "DIY Scrapbook Ephemera", "Printable Stationery", "Craft Supplies") just to reach 140 characters.',
+            'F. Title Length & Padding Rule (SHARPNESS + COVERAGE):',
+            '- Target Length: 120-135 characters.',
+            '- DO NOT overly truncate. You MUST use secondary angles and specific format modifiers to fill the space cleanly and competitively.',
+            '- NEVER add generic trailing filler (e.g., "DIY Scrapbook Ephemera", "Printable Stationery", "Craft Supplies").',
             '- STRICTLY BAN ChatGPT-isms: "Creative Souls", "Crafting Delight", "Elevate", "Whimsical Journey", "Unleash your creativity". Titles are product names, not poetry.',
-            '- It is perfectly acceptable and PREFERRED to stop at 100-120 characters if the niche identity is fully established.',
-            '- If the choice is between a concise 115 character sharp title and a 140 character diluted title, choose 115.',
             '- Your hard cap is 140 characters. DO NOT cut off mid-word.',
             '',
             '=== H. EMOTIONAL DISTINCTION LAYER (HIGH-COMPETITION MODE) ===',
@@ -265,8 +265,8 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             'D. Buyer Intent Filter (MANDATORY):',
             'Tags are entry doors. They must be hyper-specific things buyers type to purchase.',
             'MANDATORY FORMULA: Product + Theme + Format/Use Case (e.g., "sakura journal kit", "romantic spring junk", "pink floral ephemera").',
-            'BANNED TAGS: "digital download", "instant download", "printable art", "digital paper pack", "botanical crafting", "shabby chic art".',
-            'Do NOT use vague aesthetic labels alone or broad category terms.',
+            'BANNED TAGS: "digital download", "instant download", "printable art", "digital paper pack", "botanical crafting", "shabby chic art", "creative journaling", "vintage aesthetics".',
+            'Do NOT use vague aesthetic labels alone or broad category terms. EVERY tag must sound like a physical or digital product people query.',
             '',
             'E. Strict Character Enforcement:',
             'Before finalizing output:',
@@ -394,13 +394,13 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             let aiResponse = JSON.parse(content);
 
             // Safety net: if title is very short (<90), retry with context
-            if (aiResponse.title && aiResponse.title.length < 90) {
+            if (aiResponse.title && aiResponse.title.length < 110) {
                 const retryLines = [
                     'Your title is only ' + aiResponse.title.length + ' characters: "' + aiResponse.title + '"',
                     '',
-                    'Extend this title naturally to around 110-130 characters. Add ONE highly relevant aesthetic or format modifier.',
+                    'Extend this title naturally to around 125-135 characters. Add ONE highly relevant aesthetic or format modifier.',
                     'Follow the Pro Seller structure: [Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier].',
-                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus.',
+                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus and strong buyer intent.',
                     '',
                     'Return JSON only: { "title": "extended title here" }',
                 ].join('\n');
@@ -505,10 +505,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             optimizedData.description.substring(0, 2000),
             '',
             '=== STRICT CONSTRAINTS ===',
-            '- Title: Target 110-130 chars. Max 140. Structure: [Primary Buyer Phrase], [Secondary Angle] [Descriptor] [Format].',
+            '- Title: Target 120-135 chars. Max 140. Structure: [Primary Buyer Phrase], [Secondary Angle] [Descriptor] [Format].',
             '- CRITICAL TITLE RULE: Do NOT remove or replace the primary buyer-intent product phrase from the original (e.g., KEEP "Junk Journal Kit", do not downgrade to "Vintage Journal").',
-            '- Sharpness over length. BAN poetic filler ("Creative Souls", "Delight", "Elevate").',
-            '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. Formula: Product + Theme + Use Case. Focus on commercial buyer phrasing, avoid weak tags like "creative journaling".',
+            '- NEVER remove strong secondary angles just to make the title short. Keep it competitive and dense with buyer intent.',
+            '- BAN poetic filler ("Creative Souls", "Delight", "Elevate").',
+            '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. Formula: Product + Theme + Use Case. Focus on commercial buyer phrasing, avoid weak tags like "creative journaling" or "vintage aesthetics".',
             '- Description: OVER 800 chars. Pick ONE dominant market cluster. MUST USE \\n for line breaks to preserve formatting.',
             '',
             '=== OUTPUT (JSON ONLY) ===',
@@ -541,13 +542,13 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             let aiResponse = JSON.parse(content);
 
             // Safety net: if title is very short (<90), retry with context
-            if (aiResponse.title && aiResponse.title.length < 90) {
+            if (aiResponse.title && aiResponse.title.length < 110) {
                 const retryLines = [
                     'Your title is only ' + aiResponse.title.length + ' characters: "' + aiResponse.title + '"',
                     '',
-                    'Extend this title naturally to around 110-130 characters. Add ONE highly relevant aesthetic or format modifier.',
+                    'Extend this title naturally to around 125-135 characters. Add ONE highly relevant aesthetic or format modifier.',
                     'Follow the Pro Seller structure: [Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier].',
-                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus.',
+                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus and strong buyer intent.',
                     '',
                     'Return JSON only: { "title": "extended title here" }',
                 ].join('\n');
