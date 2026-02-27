@@ -1,18 +1,29 @@
 import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
 
+interface SEOScore {
+    overallScore: number;
+    titleScore: number;
+    tagsScore: number;
+    descriptionScore: number;
+    strengths: string[];
+    weaknesses: string[];
+}
+
 interface ScrapedDetails {
     title: string;
     description: string;
     tags: string[];
     imageUrl?: string;
     listingId?: string;
+    score?: SEOScore;
 }
 
 interface OptimizedDetails {
     title: string;
     description: string;
     tags: string[];
+    score?: SEOScore;
 }
 
 interface EtsySEOOptimizerProps {
@@ -23,10 +34,74 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [url, setUrl] = useState('');
     const [isScraping, setIsScraping] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
+    const [isEvaluatingOriginal, setIsEvaluatingOriginal] = useState(false);
+    const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapedDetails | null>(null);
     const [optimizedData, setOptimizedData] = useState<OptimizedDetails | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }): Promise<SEOScore> => {
+        const promptLines = [
+            'You are a strict Etsy SEO Evaluator operating under the 2026 Etsy AI Search Model.',
+            'Grade this listing based strictly on the following constraints:',
+            '',
+            '=== EVALUATION CRITERIA ===',
+            'TITLE (125-140 chars is ideal):',
+            '- Does it have ONE dominant buyer-intent phrase in the first 60 chars?',
+            '- Are other phrases just supporting modifiers?',
+            '- Is it unnaturally keyword-stacked or too short?',
+            '',
+            'TAGS (Max 20 chars each, Exactly 13 tags):',
+            '- Do any exceed 20 characters?',
+            '- Are they transactional (Buyer Intent)?',
+            '- Are there at least 2 aesthetic/subculture signaling tags?',
+            '- Are there single-word generic tags?',
+            '',
+            'DESCRIPTION (800+ chars):',
+            '- Is the opening paragraph emotionally positioned and sensory?',
+            '- Is there a unique differentiating element?',
+            '- Is it properly formatted with line breaks?',
+            '',
+            '=== INPUT ===',
+            'Title: ' + listing.title,
+            'Tags: ' + listing.tags.join(', '),
+            'Description:',
+            listing.description.substring(0, 2000),
+            '',
+            '=== OUTPUT (JSON ONLY) ===',
+            '{',
+            '  "overallScore": 85,',
+            '  "titleScore": 90,',
+            '  "tagsScore": 80,',
+            '  "descriptionScore": 85,',
+            '  "strengths": ["Strong emotional hook", "Great tag variety"],',
+            '  "weaknesses": ["Title is too short (115 chars)", "One tag exceeds 20 chars"]',
+            '}'
+        ].join('\n');
+
+        const response = await fetch('/api/openai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: 'You are an Etsy SEO expert grader. Respond ONLY with valid JSON matching the requested SEOScore schema.' },
+                    { role: 'user', content: promptLines }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.2
+            }),
+        });
+
+        if (!response.ok) throw new Error('Evaluation failed');
+        const result = await response.json();
+        let content = result.choices[0].message.content;
+        if (content.includes('```')) {
+            content = content.replace(/```json|```/g, '').trim();
+        }
+        return JSON.parse(content) as SEOScore;
+    };
 
     const handleScrape = async () => {
         if (!url.trim()) return;
@@ -50,6 +125,22 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 
             const data = await response.json();
             setScrapedData(data);
+
+            // Kick off original listing evaluation
+            setIsEvaluatingOriginal(true);
+            try {
+                const score = await evaluateListing({
+                    title: data.title,
+                    description: data.description,
+                    tags: data.tags
+                });
+                setScrapedData(prev => prev ? { ...prev, score } : null);
+            } catch (evalErr) {
+                console.error("Failed to evaluate original listing:", evalErr);
+            } finally {
+                setIsEvaluatingOriginal(false);
+            }
+
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -116,6 +207,21 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '- Ideal range: 125-140.',
             'Do NOT pad unnaturally to reach maximum length.',
             '',
+            '=== H. EMOTIONAL DISTINCTION LAYER (HIGH-COMPETITION MODE) ===',
+            'If the theme belongs to a competitive aesthetic (floral, gothic, cottagecore, vintage, botanical, fantasy):',
+            '- Include ONE emotionally charged descriptor that enhances click appeal.',
+            '- This descriptor must support the dominant phrase, not compete with it.',
+            '- Avoid over-dramatic language or hype words.',
+            '- The title must still read like a product name — not a poem.',
+            '',
+            'Examples of controlled emotional descriptors:',
+            '- Romantic Spring',
+            '- Moody Victorian',
+            '- Enchanted Forest',
+            '- Delicate Sakura',
+            '- Antique Library',
+            '- Dreamy Pastel',
+            '',
             '=== 2. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
             'Output exactly 13 tags.',
@@ -150,6 +256,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '- If any tag exceeds 20 characters, shorten or replace it.',
             '- Do NOT approximate. Hard limit: 20 characters.',
             '- If constraint cannot be met, regenerate tag list.',
+            '',
+            '=== F. AESTHETIC SIGNAL TAG RULE ===',
+            'At least 2 tags must clearly signal the aesthetic mood or subculture identity (e.g., cottagecore paper, dark academia art, romantic floral kit).',
+            'These must still pass the Buyer Intent Filter.',
+            'Do NOT use vague aesthetic-only tags without product context.',
             '',
             '=== 3. DESCRIPTION OPTIMIZATION (AI + CONVERSION MODEL) ===',
             '',
@@ -190,6 +301,16 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             'F. Input Boundaries Rule:',
             'Do NOT introduce themes, motifs, aesthetics, or use cases that are not supported by the original title or description.',
             'Enhance — do not fabricate.',
+            '',
+            '=== G. EMOTIONAL POSITIONING ENGINE (MANDATORY) ===',
+            'The first paragraph MUST:',
+            '1. Establish a clear mood or atmosphere (romantic, moody, whimsical, nostalgic, enchanted, serene, etc.).',
+            '2. Identify the ideal buyer type (junk journal creators, scrapbook artists, cottagecore lovers, fantasy journal fans, etc.).',
+            '3. Include at least one sensory or visual detail (soft watercolor blooms, aged parchment textures, moody cathedral shadows, delicate lace overlays, etc.).',
+            '4. Communicate why this specific kit feels special or immersive — not just what it contains.',
+            '',
+            'Do NOT write a neutral or informational opening.',
+            'The opening must create an emotional image in the buyer\'s mind.',
             '',
             '=== 4. WHAT TO AVOID (2026 PENALTY ZONE) ===',
             '- Keyword stuffing',
@@ -318,6 +439,22 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             }
 
             setOptimizedData(aiResponse);
+
+            // Kick off optimized listing evaluation
+            setIsEvaluatingOptimized(true);
+            try {
+                const score = await evaluateListing({
+                    title: aiResponse.title,
+                    description: aiResponse.description,
+                    tags: aiResponse.tags
+                });
+                setOptimizedData(prev => prev ? { ...prev, score } : null);
+            } catch (evalErr) {
+                console.error("Failed to evaluate optimized listing:", evalErr);
+            } finally {
+                setIsEvaluatingOptimized(false);
+            }
+
         } catch (err: any) {
             setError('AI Optimization failed: ' + err.message);
         } finally {
@@ -382,10 +519,43 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Current Metadata */}
                     <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-6">
-                        <h2 className="text-xl font-semibold flex items-center gap-2 text-slate-300">
-                            <ExternalLink className="w-5 h-5" />
-                            Current Listing
-                        </h2>
+                        <div className="flex justify-between items-start">
+                            <h2 className="text-xl font-semibold flex items-center gap-2 text-slate-300">
+                                <ExternalLink className="w-5 h-5" />
+                                Current Listing
+                            </h2>
+                            {scrapedData.score ? (
+                                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${scrapedData.score.overallScore >= 80 ? 'bg-emerald-900/30 border-emerald-500/50 text-emerald-400' : scrapedData.score.overallScore >= 60 ? 'bg-amber-900/30 border-amber-500/50 text-amber-400' : 'bg-red-900/30 border-red-500/50 text-red-400'}`}>
+                                    <span className="text-sm font-bold">Score: {scrapedData.score.overallScore}/100</span>
+                                </div>
+                            ) : isEvaluatingOriginal ? (
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-600 bg-slate-700/50 text-slate-400">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span className="text-xs">Grading...</span>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        {scrapedData.score && (
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
+                                    <div className="text-xs text-slate-500 font-bold uppercase mb-2">Strengths</div>
+                                    <ul className="space-y-1 text-xs text-emerald-400">
+                                        {scrapedData.score.strengths.slice(0, 2).map((s, i) => (
+                                            <li key={i} className="flex items-start gap-1"><Check className="w-3 h-3 mt-0.5 shrink-0" /> {s}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
+                                    <div className="text-xs text-slate-500 font-bold uppercase mb-2">Weaknesses</div>
+                                    <ul className="space-y-1 text-xs text-red-400">
+                                        {scrapedData.score.weaknesses.slice(0, 2).map((w, i) => (
+                                            <li key={i} className="flex items-start gap-1"><span className="text-[10px] mt-0.5 shrink-0">⚠️</span> {w}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
 
                         {scrapedData.imageUrl && (
                             <img src={scrapedData.imageUrl} alt="Listing" className="w-full h-48 object-cover rounded-lg border border-slate-700" />
@@ -430,10 +600,45 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                             </div>
                         ) : optimizedData ? (
                             <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                                <h2 className="text-xl font-semibold flex items-center gap-2 text-amber-400">
-                                    <Sparkles className="w-5 h-5" />
-                                    Optimized Result
-                                </h2>
+                                <div className="flex justify-between items-start">
+                                    <h2 className="text-xl font-semibold flex items-center gap-2 text-amber-400">
+                                        <Sparkles className="w-5 h-5" />
+                                        Optimized Result
+                                    </h2>
+                                    {optimizedData.score ? (
+                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${optimizedData.score.overallScore >= 80 ? 'bg-emerald-900/40 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)] text-emerald-400' : optimizedData.score.overallScore >= 60 ? 'bg-amber-900/30 border-amber-500/50 text-amber-400' : 'bg-red-900/30 border-red-500/50 text-red-400'}`}>
+                                            <span className="text-sm font-bold">New Score: {optimizedData.score.overallScore}/100</span>
+                                        </div>
+                                    ) : isEvaluatingOptimized ? (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/20 text-amber-400/70">
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                            <span className="text-xs">Verifying Quality...</span>
+                                        </div>
+                                    ) : null}
+                                </div>
+
+                                {optimizedData.score && (
+                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-emerald-900/50">
+                                            <div className="text-xs text-slate-500 font-bold uppercase mb-2">Resolved</div>
+                                            <ul className="space-y-1 text-xs text-emerald-400">
+                                                {optimizedData.score.strengths.slice(0, 3).map((s, i) => (
+                                                    <li key={i} className="flex items-start gap-1"><Check className="w-3 h-3 mt-0.5 shrink-0" /> {s}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="text-xs text-slate-500 font-bold uppercase">Sub-Scores</div>
+                                            </div>
+                                            <div className="space-y-1 text-xs text-slate-400">
+                                                <div className="flex justify-between"><span>Title:</span> <span className={optimizedData.score.titleScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.titleScore}</span></div>
+                                                <div className="flex justify-between"><span>Tags:</span> <span className={optimizedData.score.tagsScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.tagsScore}</span></div>
+                                                <div className="flex justify-between"><span>Desc:</span> <span className={optimizedData.score.descriptionScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.descriptionScore}</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="space-y-4">
                                     <section>
