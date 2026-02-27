@@ -34,6 +34,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [url, setUrl] = useState('');
     const [isScraping, setIsScraping] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
+    const [isRefining, setIsRefining] = useState(false);
     const [isEvaluatingOriginal, setIsEvaluatingOriginal] = useState(false);
     const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapedDetails | null>(null);
@@ -478,6 +479,104 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         }
     };
 
+    const handleRefine = async () => {
+        if (!scrapedData || !optimizedData || !optimizedData.score) return;
+
+        setIsRefining(true);
+        setError(null);
+
+        const promptLines = [
+            'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
+            '',
+            'You previously optimized this listing, but our internal grader found the following weaknesses:',
+            ...optimizedData.score.weaknesses.map((w: string) => `- ${w}`),
+            '',
+            'Your task is to REWRITE the title, tags, and description to EXPLICITLY fix these weaknesses while maintaining all previous structural rules.',
+            '',
+            '=== PREVIOUS OUTPUT ===',
+            'Title: ' + optimizedData.title,
+            'Tags: ' + optimizedData.tags.join(', '),
+            'Description:',
+            optimizedData.description.substring(0, 2000),
+            '',
+            '=== STRICT CONSTRAINTS ===',
+            '- Title: MAX 140 chars. Do NOT cut off mid-word. Sharpness over length. No generic padding.',
+            '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. Formula: Product + Theme + Use Case. No broad tags.',
+            '- Description: OVER 800 chars. Pick ONE dominant market cluster. MUST USE \\n for line breaks to preserve formatting.',
+            '',
+            '=== OUTPUT (JSON ONLY) ===',
+            'Respond ONLY with a valid JSON object matching the exact structure previously requested: {"title": "", "description": "", "tags": []}.',
+        ].join('\n');
+
+        try {
+            const response = await fetch('/api/openai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'gpt-4o',
+                    messages: [
+                        { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". CRITICAL: In the description field, use \\n (actual newline characters) to preserve formatting.' },
+                        { role: 'user', content: promptLines }
+                    ],
+                    response_format: { type: 'json_object' },
+                    temperature: 0.7
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to refine with AI');
+            const result = await response.json();
+            let content = result.choices[0].message.content;
+
+            if (content.includes('```')) {
+                content = content.replace(/```json|```/g, '').trim();
+            }
+
+            let aiResponse = JSON.parse(content);
+
+            // Enforce character caps defensively
+            if (aiResponse.title && aiResponse.title.length > 140) {
+                let text = aiResponse.title.substring(0, 140);
+                if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
+                    const lastSpaceIndex = text.lastIndexOf(' ');
+                    if (lastSpaceIndex > 0) text = text.substring(0, lastSpaceIndex);
+                }
+                aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
+            }
+
+            if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
+                aiResponse.tags = aiResponse.tags.map((tag: string) => {
+                    if (tag.length <= 20) return tag;
+                    let truncated = tag.substring(0, 20);
+                    const lastSpace = truncated.lastIndexOf(' ');
+                    if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
+                    return truncated.trim();
+                });
+            }
+
+            setOptimizedData(aiResponse as OptimizedDetails);
+
+            // Re-evaluate the new refinement
+            setIsEvaluatingOptimized(true);
+            try {
+                const score = await evaluateListing({
+                    title: aiResponse.title,
+                    description: aiResponse.description,
+                    tags: aiResponse.tags
+                });
+                setOptimizedData(prev => prev ? { ...prev, score } : null);
+            } catch (err) {
+                console.error("Evaluation failed on refinement:", err);
+            } finally {
+                setIsEvaluatingOptimized(false);
+            }
+
+        } catch (err: any) {
+            setError('AI Refinement failed: ' + err.message);
+        } finally {
+            setIsRefining(false);
+        }
+    };
+
     const copyToClipboard = (text: string, field: string) => {
         navigator.clipboard.writeText(text);
         setCopiedField(field);
@@ -656,6 +755,16 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                             <span><strong className="text-slate-500">DESC </strong> <span className={optimizedData.score.descriptionScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.descriptionScore}/100</span></span>
                                         </div>
                                     </div>
+                                )}
+
+                                {optimizedData.score && optimizedData.score.weaknesses && optimizedData.score.weaknesses.length > 0 && (
+                                    <button
+                                        onClick={handleRefine}
+                                        disabled={isRefining}
+                                        className="w-full py-2.5 bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-amber-50 border border-amber-500/50"
+                                    >
+                                        {isRefining ? <Loader2 className="animate-spin w-5 h-5" /> : <><Sparkles className="w-5 h-5 text-amber-300" /> Auto-Fix Weaknesses to Improve Score</>}
+                                    </button>
                                 )}
 
                                 <div className="space-y-4">
