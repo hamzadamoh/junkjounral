@@ -47,7 +47,8 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '',
             '=== EVALUATION CRITERIA ===',
             'TITLE:',
-            '- Length: Target is 125-140 characters. Penalize short titles.',
+            '- Length: Target is 125-140 characters. Slightly over is acceptable, but penalize under 120.',
+            '- Truncation: Heavily penalize if the title ends in a cut-off or partial word.',
             '- Structure: ONE dominant buyer-intent phrase in the first 60 chars. Other phrases should be supporting modifiers.',
             '- Readability: Avoid unnatural keyword stacking.',
             '',
@@ -211,12 +212,12 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '4. Supporting angles must MODIFY the dominant phrase — not compete with it.',
             '5. If two phrases could be primary, choose ONE and demote the other.',
             '',
-            'F. Title Length Guardrail:',
-            'If the final title is:',
-            '- Under 120 characters -> regenerate.',
-            '- Over 145 characters -> shorten.',
-            '- Ideal range: 125-140.',
-            'Do NOT pad unnaturally to reach maximum length.',
+            'F. Title Length Rules & Guardrails:',
+            '- Your hard character limit is 140 characters.',
+            '- YOU MUST finish your final word completely before hitting 140 characters.',
+            '- Do NOT return a title that cuts off mid-word (e.g. "DIY Suppli").',
+            '- Ideal range: 125-140 characters.',
+            '- If you cannot fit a final supporting keyword cleanly before 140, LEAVE IT OUT.',
             '',
             '=== H. EMOTIONAL DISTINCTION LAYER (HIGH-COMPETITION MODE) ===',
             'If the theme belongs to a competitive aesthetic (floral, gothic, cottagecore, vintage, botanical, fantasy):',
@@ -428,16 +429,21 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                 }
             }
 
-            // Enforce 140 char hard cap — cut at last complete word
+            // Enforce clean 140 char hard cap — strictly cut at the last complete word boundary
             if (aiResponse.title && aiResponse.title.length > 140) {
-                let truncated = aiResponse.title.substring(0, 140);
-                const lastSpace = truncated.lastIndexOf(' ');
-                const lastComma = truncated.lastIndexOf(',');
-                const cutPoint = Math.max(lastSpace, lastComma);
-                if (cutPoint > 80) {
-                    truncated = truncated.substring(0, cutPoint).replace(/,\s*$/, '').trim();
+                let text = aiResponse.title.substring(0, 140);
+
+                // If the 141st character is not a space, we sliced a word.
+                // We must backtrack to the last space to avoid cut-off words like "Statio"
+                if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
+                    const lastSpaceIndex = text.lastIndexOf(' ');
+                    if (lastSpaceIndex > 0) {
+                        text = text.substring(0, lastSpaceIndex);
+                    }
                 }
-                aiResponse.title = truncated;
+
+                // Clean up trailing commas or punctuation
+                aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
             }
 
             // Enforce 20 char tag limit — truncate at last complete word
