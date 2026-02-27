@@ -500,7 +500,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             optimizedData.description.substring(0, 2000),
             '',
             '=== STRICT CONSTRAINTS ===',
-            '- Title: MAX 140 chars. Do NOT cut off mid-word. Sharpness over length. No generic padding.',
+            '- Title: Target 110-130 chars. Max 140. Structure: [Primary Buyer Phrase], [Secondary Angle] [Descriptor] [Format]. Sharpness over length, but do NOT make it abruptly short. No generic padding.',
             '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. Formula: Product + Theme + Use Case. No broad tags.',
             '- Description: OVER 800 chars. Pick ONE dominant market cluster. MUST USE \\n for line breaks to preserve formatting.',
             '',
@@ -532,6 +532,45 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             }
 
             let aiResponse = JSON.parse(content);
+
+            // Safety net: if title is very short (<90), retry with context
+            if (aiResponse.title && aiResponse.title.length < 90) {
+                const retryLines = [
+                    'Your title is only ' + aiResponse.title.length + ' characters: "' + aiResponse.title + '"',
+                    '',
+                    'Extend this title naturally to around 110-130 characters. Add ONE highly relevant aesthetic or format modifier.',
+                    'Follow the Pro Seller structure: [Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier].',
+                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus.',
+                    '',
+                    'Return JSON only: { "title": "extended title here" }',
+                ].join('\n');
+
+                const retryResponse = await fetch('/api/openai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON.' },
+                            { role: 'user', content: retryLines }
+                        ],
+                        response_format: { type: 'json_object' },
+                        temperature: 0.7
+                    }),
+                });
+
+                if (retryResponse.ok) {
+                    const retryResult = await retryResponse.json();
+                    let retryContent = retryResult.choices[0].message.content;
+                    if (retryContent.includes('```')) {
+                        retryContent = retryContent.replace(/```json|```/g, '').trim();
+                    }
+                    const retryData = JSON.parse(retryContent);
+                    if (retryData.title && retryData.title.length > aiResponse.title.length) {
+                        aiResponse.title = retryData.title.substring(0, 140);
+                    }
+                }
+            }
 
             // Enforce character caps defensively
             if (aiResponse.title && aiResponse.title.length > 140) {
