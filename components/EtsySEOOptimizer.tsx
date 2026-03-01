@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
-import { evaluateListingSEO, ProductIdentity } from '../src/lib/seoScoringEngine';
+import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
+import { JunkJournalPagesIdentity } from '../src/types/productIdentity';
+import { buildIdentityLockPrompt } from '../src/lib/buildIdentityLockPrompt';
+import { buildViolationReport } from '../src/lib/buildViolationReport';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
 import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
 import { analyzeTagContainment } from '../src/lib/productBoundaryGuard';
@@ -51,12 +54,13 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapedDetails | null>(null);
     const [optimizedData, setOptimizedData] = useState<OptimizedDetails | null>(null);
-    const [extractedIdentity, setExtractedIdentity] = useState<ProductIdentity | null>(null);
+    const [extractedIdentity, setExtractedIdentity] = useState<JunkJournalPagesIdentity | null>(null);
+    const [showIdentityConfirmation, setShowIdentityConfirmation] = useState(false);
     const [isAnalyzingProduct, setIsAnalyzingProduct] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [copiedField, setCopiedField] = useState<string | null>(null);
 
-    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }, identityContract?: ProductIdentity): Promise<SEOScore> => {
+    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }, identityContract?: JunkJournalPagesIdentity): Promise<SEOScore> => {
         // Now using purely deterministic TS analysis instead of LLM token burn
         return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description, identityContract));
     };
@@ -117,28 +121,43 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         if (!currentIdentity) {
             setIsAnalyzingProduct(true);
             try {
-                const analysisPrompt = `You are not optimizing.
-Your task is to understand the product strictly from the provided listing data.
+                const analysisPrompt = `You are a product identity extraction engine for an Etsy store that sells 
+DIGITAL PRINTABLE JUNK JOURNAL PAGES ONLY.
 
-Extract:
-1. Core Product Type (what it fundamentally is)
-2. Format (digital, physical, printable, etc.)
-3. Primary Use Case
-4. Functional Attributes (blank, lined, decorative, etc.)
-5. Design Motif (if any, e.g., floral, none)
-6. Target Audience
-7. Non-Negotiable Identity Terms (words that define the product and cannot be removed)
+The store sells themed decorative journal pages (160+ JPGs, 8.5x11, 300 DPI).
+Delivery is via a PDF file that contains a Google Drive download link.
+All listings include commercial use license.
+There are NO physical items, NO kits, NO pockets, NO tags — pages only.
 
-Return exactly this JSON structure ONLY:
+Analyze the listing title, tags, and description provided.
+Extract ONLY what is factually present. Do NOT invent motifs or themes.
+
+Return a single JSON object matching this exact structure:
+
 {
-  "core_product_type": "string",
-  "format": "string",
-  "primary_use_case": "string",
-  "functional_attributes": ["string"],
-  "design_motif": "string",
-  "target_audience": "string",
-  "locked_identity_terms": ["string"]
+  "core_product_type": "junk_journal_pages",
+  "format": "digital_printable",
+  "delivery_method": "pdf_google_drive_link",
+  "file_types": ["JPG"],
+  "print_size": "8.5x11",
+  "page_count": 160,
+  "dpi": "300 DPI",
+  "license_type": "commercial_use",
+  "primary_theme": "string",
+  "secondary_themes": ["string"],
+  "color_palette": ["string"],
+  "mood": "string",
+  "locked_identity_terms": ["string"],
+  "theme_cluster": "string",
+  "confidence": 0.9
 }
+
+RULES:
+- If no theme is present, set primary_theme to "unthemed"
+- If secondary_themes are not present, return []
+- If confidence is below 0.7, still return the JSON but flag it
+- Never add themes that are not explicitly supported by the original listing
+- The locked_identity_terms MUST include the primary theme noun and "junk journal pages"
 
 Do not invent motifs. Do not add aesthetics not present. Only extract what is explicitly implied.
 
@@ -167,8 +186,14 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 if (analysisContent.includes('```')) {
                     analysisContent = analysisContent.replace(/```json|```/g, '').trim();
                 }
-                currentIdentity = JSON.parse(analysisContent) as ProductIdentity;
+                currentIdentity = JSON.parse(analysisContent) as JunkJournalPagesIdentity;
                 setExtractedIdentity(currentIdentity);
+
+                if (currentIdentity.confidence < 0.7) {
+                    setShowIdentityConfirmation(true);
+                    setIsAnalyzingProduct(false);
+                    return; // Pause the pipeline
+                }
             } catch (err: any) {
                 setError('Identity extraction failed: ' + err.message);
                 setIsAnalyzingProduct(false);
@@ -184,17 +209,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
-            'You MUST preserve the following product identity in your generated output:',
-            `Core Product Type: ${currentIdentity.core_product_type}`,
-            `Format: ${currentIdentity.format}`,
-            `Functional Attributes: ${currentIdentity.functional_attributes.join(', ')}`,
-            `Locked Identity Terms: ${currentIdentity.locked_identity_terms.join(', ')}`,
+            buildIdentityLockPrompt(currentIdentity!),
             '',
-            'Rules:',
-            '- Do NOT change the product type.',
-            '- Do NOT introduce new motifs unless explicitly stated.',
-            '- Do NOT remove the functional attributes.',
-            '- SEO optimize within this identity ONLY.',
             '',
             'Your goal is to optimize for:',
             '- Search match relevance',
@@ -334,21 +350,32 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '',
             'C. Structure Preservation Rule - when optimizing:',
             '- Keep existing sections, formatting, emojis, and bullet lists',
-            '- Expand and improve, do NOT delete structure',
-            '- Minimum length: 800+ characters',
             '- CRITICAL: Use \\n (newline characters) in the JSON description value to preserve line breaks, section headers, spacing, and paragraph structure',
-            '- Each section header (like ### or emoji headers) MUST be on its own line',
-            '- Bullet points and numbered lists MUST each be on their own line',
-            '- Add blank lines (\\n\\n) between sections for readability',
+            '- Minimum length: 800+ characters',
             '',
-            'D. Conversion Layer - add where appropriate:',
-            '- Use-case scenarios',
-            '- Gift positioning',
-            '- Emotional triggers',
-            '- Clear digital explanation',
-            '- Reassurance statements',
+            'DESCRIPTION STRUCTURE GUIDE (follow this order):',
             '',
-            'E. Differentiation Requirement:',
+            'Paragraph 1 — Emotional Hook (2-3 sentences)',
+            'Lead with theme/mood language. Name the buyer.',
+            'Example: "Transform your junk journals with these richly detailed [THEME] pages, designed for collectors, crafters, and artists who love [MOOD] aesthetics."',
+            '',
+            "Paragraph 2 — What is Included (bullet list)",
+            '- [NUMBER]+ high-resolution JPG journal pages',
+            '- Print size: 8.5 x 11 inches',
+            '- Resolution: 300 DPI — print-ready quality',
+            '- Theme: [PRIMARY THEME] with [SECONDARY THEMES]',
+            '- Commercial use license included',
+            '',
+            'Paragraph 3 — How Delivery Works (critical — must be clear)',
+            '"This is a DIGITAL DOWNLOAD. After purchase you will receive a PDF file. Inside that PDF is a Google Drive link where you can instantly download all [NUMBER]+ JPG image files directly to your device. No physical item will be shipped."',
+            '',
+            'Paragraph 4 — Usage Ideas (2-3 sentences)',
+            'Print at home or at a print shop. Use in junk journals, art journals, scrapbooks, mixed media projects, or planners.',
+            '',
+            'Paragraph 5 — License Statement (1-2 sentences)',
+            '"Commercial use license is included with your purchase. You may use these pages in journals or products you sell."',
+            '',
+            'D. Differentiation Requirement:',
             'The description must include at least ONE specific differentiating element unique to this listing, such as: unique motif, unique mood, unique color palette, unique cultural inspiration, or unique seasonal positioning.',
             'Do NOT write a generic description that could apply to any junk journal kit. Each listing must feel distinct.',
             '',
@@ -478,11 +505,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     currentPromptLines = [
                         'You are a Pro Seller Level Etsy SEO expert.',
                         `Your previous optimization attempt scored ${evalScore.overallScore}/100.`,
-                        `Our rigid deterministic testing engine flagged these EXACT weaknesses that MUST be fixed:`,
-                        ...evalScore.weaknesses.map((w: string) => `- ${w}`),
-                        '',
-                        'REWRITE the output to EXPLICITLY resolve these weaknesses WITHOUT breaking the core constraints (length limits, product intent, format).',
-                        '',
+                        buildViolationReport(
+                            evalScore.weaknesses,
+                            currentIdentity!,
+                            ["The page count", "The file format", "The delivery method", "The license type"]
+                        ),
                         '=== PREVIOUS OUTPUT SO YOU KNOW WHAT FAILED ===',
                         'Title: ' + aiResponse.title,
                         'Tags: ' + (aiResponse.tags || []).join(', '),
@@ -512,17 +539,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
-            'You MUST preserve the following product identity in your generated output:',
-            `Core Product Type: ${extractedIdentity?.core_product_type || "N/A"}`,
-            `Format: ${extractedIdentity?.format || "N/A"}`,
-            `Functional Attributes: ${(extractedIdentity?.functional_attributes || []).join(', ')}`,
-            `Locked Identity Terms: ${(extractedIdentity?.locked_identity_terms || []).join(', ')}`,
+            buildIdentityLockPrompt(extractedIdentity!),
             '',
-            'Rules:',
-            '- Do NOT change the product type.',
-            '- Do NOT introduce new motifs unless explicitly stated.',
-            '- Do NOT remove the functional attributes.',
-            '- SEO optimize within this identity ONLY.',
             '',
             'You previously optimized this listing, but our internal grader found the following weaknesses:',
             ...optimizedData.score.weaknesses.map((w: string) => `- ${w}`),
@@ -625,11 +643,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     currentPromptLines = [
                         'You are a Pro Seller Level Etsy SEO expert.',
                         `Your previous refinement attempt scored ${evalScore.overallScore}/100.`,
-                        `Our strict testing engine flagged these EXACT weaknesses that MUST be fixed:`,
-                        ...evalScore.weaknesses.map((w: string) => `- ${w}`),
-                        '',
-                        'REWRITE the output to EXPLICITLY resolve these weaknesses WITHOUT breaking the core constraints (length limits, product intent, format).',
-                        '',
+                        buildViolationReport(
+                            evalScore.weaknesses,
+                            extractedIdentity!,
+                            ["The page count", "The file format", "The delivery method", "The license type"]
+                        ),
                         '=== PREVIOUS OUTPUT ===',
                         'Title: ' + aiResponse.title,
                         'Tags: ' + (aiResponse.tags || []).join(', '),
@@ -788,13 +806,59 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                             </section>
                         </div>
 
-                        <button
-                            onClick={handleOptimize}
-                            disabled={isOptimizing}
-                            className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20 transition-all active:scale-95"
-                        >
-                            {isOptimizing ? <Loader2 className="animate-spin w-5 h-5" /> : <><Wand2 className="w-5 h-5" /> Optimize for 2026 Model</>}
-                        </button>
+                        {showIdentityConfirmation && extractedIdentity ? (
+                            <div className="p-4 bg-amber-900/30 border border-amber-500/50 rounded-lg space-y-4 shadow-lg shadow-amber-900/20">
+                                <h3 className="text-amber-400 font-bold flex items-center gap-2">
+                                    <span className="text-xl">⚠️</span> Low Confidence Identity Extraction
+                                </h3>
+                                <p className="text-sm text-slate-300">
+                                    Our AI had trouble cleanly identifying the exact themes for this product based on the original listing. Please confirm or edit the details below before we generate the SEO.
+                                </p>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Primary Theme</label>
+                                        <input
+                                            type="text"
+                                            value={extractedIdentity.primary_theme}
+                                            onChange={(e) => setExtractedIdentity({ ...extractedIdentity, primary_theme: e.target.value })}
+                                            className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Secondary Themes (Comma separated)</label>
+                                        <input
+                                            type="text"
+                                            value={extractedIdentity.secondary_themes.join(', ')}
+                                            onChange={(e) => setExtractedIdentity({ ...extractedIdentity, secondary_themes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                                            className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Format Specs</label>
+                                        <p className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                                            {extractedIdentity.page_count}+ Pages • {extractedIdentity.file_types.join(', ')} • {extractedIdentity.print_size} • Commercial Use
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowIdentityConfirmation(false);
+                                        handleOptimize();
+                                    }}
+                                    className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-amber-900/20"
+                                >
+                                    Confirm Identity & Generate SEO
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleOptimize}
+                                disabled={isOptimizing || isAnalyzingProduct}
+                                className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isOptimizing || isAnalyzingProduct ? <Loader2 className="animate-spin w-5 h-5" /> : <><Wand2 className="w-5 h-5" /> Optimize for 2026 Model</>}
+                            </button>
+                        )}
                     </div>
 
                     {/* Optimized Metadata */}

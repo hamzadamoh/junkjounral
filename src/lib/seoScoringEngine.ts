@@ -1,8 +1,4 @@
-import { calculateFillerDensity } from './seoEfficiencyRules';
-import { analyzeTagBalance } from './tagIntentClassifier';
-import { calculateSpecificityScore, calculateIntentDensity, checkNicheSharpness } from './semanticSpecificity';
-import { analyzeTagContainment } from './productBoundaryGuard';
-import { calculateCTRRisk } from './ctrRiskAnalyzer';
+import { JunkJournalPagesIdentity, COMPATIBLE_THEME_CLUSTERS, ThemeCluster } from '../types/productIdentity';
 
 export interface SEOPillarScores {
     title: number;
@@ -21,292 +17,325 @@ export interface SEOScore {
     ctrRiskReasons: string[];
 }
 
-export interface ProductIdentity {
-    core_product_type: string;
-    format: string;
-    primary_use_case: string;
-    functional_attributes: string[];
-    design_motif: string;
-    target_audience: string;
-    locked_identity_terms: string[];
-}
-
-export function evaluateListingSEO(title: string, tags: string[], description: string, identityContract?: ProductIdentity): SEOScore {
+export function evaluateListingSEO(title: string, tags: string[], description: string, identityContract?: JunkJournalPagesIdentity): SEOScore {
     let strengths: string[] = [];
-
     let weaknesses: string[] = [];
     let ctrRiskReasons: string[] = [];
 
-    // PILLAR 1: TITLE ENGINEERING (Max 30)
+    const lowerTitle = (title || "").toLowerCase();
+    const lowerDesc = (description || "").toLowerCase();
+    const lowerTags = (tags || []).map(t => t.toLowerCase());
+    const allTagsText = lowerTags.join(' ');
+
+    // --- PILLAR 1: TITLE ENGINEERING (Max 30) ---
     let titleScore = 0;
-    let titleCap = 100;
 
-    if (!title) {
-        weaknesses.push("Title is missing.");
+    // Buyer Intent Core (10 pts)
+    const first40 = lowerTitle.substring(0, 40);
+    const hasJunkJournalCore = lowerTitle.includes("junk journal pages") || lowerTitle.includes("journal pages");
+    const hasJunkJournalInFirst40 = first40.includes("junk journal pages") || first40.includes("journal pages");
+
+    if (hasJunkJournalCore && hasJunkJournalInFirst40) {
+        titleScore += 10;
+        strengths.push("Core intent 'junk journal pages' found in first 40 chars.");
+    } else if (hasJunkJournalCore) {
+        titleScore += 5;
+        weaknesses.push("Core product 'junk journal pages' is pushed past the first 40 characters.");
     } else {
-        const lowerTitle = title.toLowerCase();
-
-        // 1. Buyer Intent Core (10 pts)
-        const first60 = lowerTitle.substring(0, 60);
-        const intent = calculateIntentDensity(title);
-        const hasCoreInFirst60 = intent.matches.some(noun => first60.includes(noun));
-
-        if (hasCoreInFirst60) {
-            titleScore += 10;
-        } else {
-            titleCap = 20;
-            weaknesses.push("Missing core product noun in the first 60 characters.");
-        }
-
-        // 2. Intent Density (5 pts)
-        const specific = calculateSpecificityScore(title);
-        const niche = checkNicheSharpness(title);
-        const hasThemeModifier = niche.matchedAesthetics.length > 0 || specific.matches.length > 0;
-
-        if (intent.density >= 2 && hasThemeModifier) {
-            titleScore += 5;
-            strengths.push(`High intent density (${intent.density} core nouns) with thematic modifiers.`);
-        } else if (intent.density === 1 && hasThemeModifier) {
-            titleScore += 3;
-            weaknesses.push("Only 1 core product noun detected (need 2+ for max density).");
-        } else {
-            weaknesses.push("aesthetic-only title detected or missing noun density (0 points).");
-        }
-
-        // 3. Specificity Index (5 pts)
-        if (specific.matches.length >= 2) {
-            titleScore += 5;
-            strengths.push(`High specificity motif density: ${specific.matches.join(', ')}`);
-        } else if (specific.matches.length === 1) {
-            titleScore += 3;
-            strengths.push(`Specificity motif detected: ${specific.matches[0]}`);
-        } else {
-            weaknesses.push("Missing a highly specific aesthetic motif or visual differentiation marker.");
-        }
-
-        // 4. Filler Density (5 pts)
-        const fillerRatio = calculateFillerDensity(title);
-        if (fillerRatio < 0.1) {
-            titleScore += 5;
-            strengths.push(`Excellent filler density (${Math.round(fillerRatio * 100)}%).`);
-        } else if (fillerRatio <= 0.2) {
-            titleScore += 3;
-        } else if (fillerRatio <= 0.3) {
-            titleScore += 1;
-            weaknesses.push(`High filler density (${Math.round(fillerRatio * 100)}%).`);
-        } else {
-            weaknesses.push(`Severe filler density (${Math.round(fillerRatio * 100)}%).`);
-        }
-
-        // 5. Niche Sharpness (5 pts)
-        const aestheticCount = niche.matchedAesthetics.length;
-        if (aestheticCount <= 3) {
-            titleScore += 5;
-        } else if (aestheticCount === 4) {
-            titleScore += 2; // -3 from 5
-            weaknesses.push(`Aesthetic saturation warning (4 themes). Focus the niche.`);
-        } else {
-            weaknesses.push(`Aesthetic overload (${aestheticCount} themes). Severely dilutes niche.`);
-        }
+        weaknesses.push("Missing core product phrase 'junk journal pages' or 'journal pages'.");
     }
 
-    // PILLAR 2: TAG INTELLIGENCE (Max 25)
+    // Theme Anchor (8 pts) vs Complementary Theme Bonus (4 pts) vs Contradictory Penalty
+    let hasContradictoryTheme = false;
+    let missingPrimaryTheme = false;
+
+    if (identityContract && identityContract.primary_theme !== "unthemed") {
+        const primaryTheme = identityContract.primary_theme.toLowerCase();
+
+        // Theme Anchor (8 pts)
+        if (first40.includes(primaryTheme)) {
+            titleScore += 8;
+            strengths.push(`Primary theme '${primaryTheme}' anchored in first 40 chars.`);
+        } else if (lowerTitle.includes(primaryTheme)) {
+            titleScore += 4;
+            weaknesses.push(`Primary theme '${primaryTheme}' is present but pushed past the first 40 characters.`);
+        } else {
+            missingPrimaryTheme = true;
+            weaknesses.push(`IDENTITY VIOLATION: Missing primary theme '${primaryTheme}' in title.`);
+        }
+
+        // Complementary Theme Bonus (4 pts)
+        const validComplements = COMPATIBLE_THEME_CLUSTERS[identityContract.theme_cluster] || [];
+        let complementaryCount = 0;
+
+        for (const secTheme of identityContract.secondary_themes) {
+            if (lowerTitle.includes(secTheme.toLowerCase())) {
+                complementaryCount++;
+            }
+        }
+        titleScore += Math.min(4, complementaryCount * 2);
+
+        // Subcultural keyword mapping to catch cross-cluster hallucination
+        const clusterKeywords: Record<ThemeCluster, string[]> = {
+            vintage_antique: ["vintage", "antique", "retro", "old"],
+            cottagecore_botanical: ["cottagecore", "botanical", "mushroom", "forest"],
+            gothic_dark: ["gothic", "dark", "creepy", "macabre", "vampire", "witch"],
+            coastal_beach: ["coastal", "beach", "ocean", "sea", "nautical"],
+            christmas_winter: ["christmas", "winter", "snow", "holiday", "festive"],
+            halloween_spooky: ["halloween", "spooky", "scary", "ghost", "pumpkin"],
+            floral_romantic: ["floral", "romantic", "rose", "lace", "pink", "love"],
+            masculine_industrial: ["masculine", "industrial", "steampunk", "gears", "metal"],
+            mixed_eclectic: ["mixed media", "eclectic", "junk", "collage"],
+            unthemed: [],
+            other: []
+        };
+
+        for (const [cluster, keywords] of Object.entries(clusterKeywords)) {
+            if (cluster === identityContract.theme_cluster || cluster === "unthemed" || cluster === "other") continue;
+            if (validComplements.includes(cluster as ThemeCluster)) continue;
+
+            for (const kw of keywords) {
+                // To avoid accidental matches inside words, we can just check bounds but simple includes is fine for demo
+                const paddedKw = ` ${kw} `;
+                const paddedTitle = ` ${lowerTitle} `;
+
+                if (paddedTitle.includes(paddedKw)) {
+                    hasContradictoryTheme = true;
+                    weaknesses.push(`Contradictory theme detected: '${kw}' conflicts with ${identityContract.theme_cluster}.`);
+                    titleScore -= 4; // Deduction for title pillar
+                    break;
+                }
+            }
+        }
+    } else {
+        // Unthemed logic
+        titleScore += 8; // Auto-award anchor if no theme is strictly required
+    }
+
+    // Filler Density (5 pts)
+    const words = lowerTitle.split(/\s+/);
+    const fillerWords = ["gift", "for her", "beautiful", "amazing", "stunning", "perfect"];
+    const fillerCount = words.filter(w => fillerWords.includes(w)).length;
+    const fillerRatio = words.length > 0 ? fillerCount / words.length : 0;
+    if (fillerRatio < 0.1) {
+        titleScore += 5;
+    } else {
+        weaknesses.push(`High filler density in title (${Math.round(fillerRatio * 100)}%).`);
+    }
+
+    // Format Signal (3 pts)
+    if (lowerTitle.includes("printable") || lowerTitle.includes("digital download") || lowerTitle.includes("digital")) {
+        titleScore += 3;
+    } else {
+        weaknesses.push("Missing format signal ('printable' or 'digital download') in title.");
+    }
+
+    titleScore = Math.max(0, Math.min(30, titleScore));
+
+    // --- PILLAR 2: TAG INTELLIGENCE (Max 25) ---
     let tagsScore = 0;
-    if (!tags || tags.length === 0) {
-        weaknesses.push("Missing tags.");
+
+    // Buyer Intent Tag Ratio (10 pts)
+    let multiWordTags = 0;
+    let singleWordTags = 0;
+    lowerTags.forEach(tag => {
+        if (tag.split(' ').length > 1) multiWordTags++;
+        else singleWordTags++;
+    });
+
+    if (multiWordTags >= 9) {
+        tagsScore += 10;
+        strengths.push("Excellent buyer intent multi-word tag ratio.");
+    } else if (multiWordTags >= 5) {
+        tagsScore += 5;
+        weaknesses.push(`Only ${multiWordTags} multi-word tags. Shift to phrase-based tags.`);
     } else {
-        const analysis = analyzeTagBalance(tags);
-        const containment = analyzeTagContainment(tags);
-
-        // 1. Transactional Tag Ratio (10 pts)
-        if (analysis.transactional >= 9) {
-            tagsScore += 10;
-        } else if (analysis.transactional >= 6) {
-            tagsScore += 7;
-        } else {
-            weaknesses.push(`Low transactional tags (${analysis.transactional}/13). Need 6+ containing core product nouns.`);
-        }
-
-        // 2. Thematic Spread (5 pts)
-        if (analysis.thematic >= 3) {
-            tagsScore += 5;
-        } else if (analysis.thematic === 0 && analysis.transactional > 0) {
-            tagsScore += 2; // 5 - 3
-            weaknesses.push("All tags are product-only. Missing thematic spread.");
-        } else {
-            tagsScore += 3;
-            weaknesses.push(`Low thematic tags (${analysis.thematic}/13). Need 3 minimum.`);
-        }
-
-        // 3. Vague Tag Ratio (5 pts)
-        const vagueRatio = tags.length > 0 ? analysis.vague / tags.length : 1;
-        if (vagueRatio < 0.1) {
-            tagsScore += 5;
-        } else if (vagueRatio <= 0.25) {
-            tagsScore += 3;
-        } else {
-            weaknesses.push(`Too many vague tags (${Math.round(vagueRatio * 100)}%). Reduce generic phrases.`);
-        }
-
-        // 4. Containment Compliance (5 pts)
-        if (containment.isValid && containment.formatViolations.length === 0) {
-            tagsScore += 5;
-        } else {
-            titleCap = Math.min(titleCap, 85); // Auto cap at 85
-            weaknesses.push(`CRITICAL: Format containment violation detected (${containment.formatViolations.join(', ')}). Auto-capping score at 85.`);
-        }
+        weaknesses.push(`Too many single-word tags (${singleWordTags}). Needs 'theme + product' structure.`);
     }
 
-    // PILLAR 3: DESCRIPTION PERFORMANCE (Max 20)
+    // Theme Coverage (5 pts)
+    if (identityContract && identityContract.primary_theme !== "unthemed") {
+        const themeTags = lowerTags.filter(t => t.includes(identityContract.primary_theme.toLowerCase()));
+        if (themeTags.length >= 3) {
+            tagsScore += 3;
+        } else {
+            weaknesses.push(`Missing theme coverage in tags. Need at least 3 tags containing '${identityContract.primary_theme}'.`);
+        }
+
+        if (identityContract.secondary_themes.length > 0) {
+            const hasSecondary = identityContract.secondary_themes.some(st => allTagsText.includes(st.toLowerCase()));
+            if (hasSecondary) {
+                tagsScore += 2;
+            } else {
+                weaknesses.push("Missing secondary theme coverage in tags.");
+            }
+        } else {
+            tagsScore += 2; // Auto-award if no secondary themes requested
+        }
+    } else {
+        tagsScore += 5;
+    }
+
+    // Commercial Use Tag (5 pts)
+    const hasCommercial = allTagsText.includes("commercial use") || allTagsText.includes("commercial license");
+    const hasDigital = allTagsText.includes("digital download") || allTagsText.includes("printable");
+
+    if (hasCommercial && hasDigital) {
+        tagsScore += 5;
+        strengths.push("Tags contain commercial use and digital identifiers.");
+    } else if (hasCommercial || hasDigital) {
+        tagsScore += 2;
+        weaknesses.push("Tags must ideally contain both 'commercial use' and 'digital download/printable'.");
+    } else {
+        weaknesses.push("Tags missing critical 'commercial use' identifier.");
+    }
+
+    // Delivery Clarity Tag (5 pts)
+    if (allTagsText.includes("instant download") || allTagsText.includes("digital journal") || allTagsText.includes("google drive")) {
+        tagsScore += 5;
+    } else {
+        weaknesses.push("Missing delivery clarity tag (e.g., 'instant download').");
+    }
+
+    tagsScore = Math.max(0, Math.min(25, tagsScore));
+
+    // --- PILLAR 3: DESCRIPTION PERFORMANCE (Max 20) ---
     let descScore = 0;
-    if (!description) {
-        weaknesses.push("Missing description.");
+
+    // Google Drive Delivery Explanation (6 pts)
+    const hasGoogleDrive = lowerDesc.includes("google drive");
+    const hasDeliveryFlow = hasGoogleDrive && lowerDesc.includes("pdf") && (lowerDesc.includes("link") || lowerDesc.includes("download"));
+    let missingGoogleDrive = false;
+
+    if (hasDeliveryFlow) {
+        descScore += 6;
+        strengths.push("Clear Google Drive PDF delivery flow explained.");
+    } else if (hasGoogleDrive) {
+        descScore += 3;
+        weaknesses.push("Google Drive mentioned, but the PDF download delivery flow is unclear.");
     } else {
-        const firstParagraph = description.split('\n\n')[0] || description.substring(0, 300);
-        const lowerDesc = description.toLowerCase();
-
-        // 1. Emotional Hook (5 pts)
-        const sensoryWords = ["soft", "delicate", "moody", "dreamy", "aged", "textured", "faded", "hand-painted", "romantic", "whimsical", "vintage", "enchanted", "gothic", "aesthetic"];
-        const audienceTerms = ["for crafting", "journalers", "enthusiast", "maker", "creator", "artist", "scrapbooker", "diy", "you"];
-        const hasSensory = sensoryWords.some(w => firstParagraph.toLowerCase().includes(w));
-        const hasAudience = audienceTerms.some(w => firstParagraph.toLowerCase().includes(w));
-
-        let missingHooks = 0;
-        if (!hasSensory) missingHooks++;
-        if (!hasAudience) missingHooks++;
-
-        if (missingHooks === 0) {
-            descScore += 5;
-            strengths.push("Strong emotional hook and audience indicator in description.");
-        } else if (missingHooks === 1) {
-            descScore += 3;
-        } else {
-            weaknesses.push("Missing sensory/emotional hook and audience indicator in description opening.");
-        }
-
-        // 2. Differentiation Signal (5 pts)
-        const specific = calculateSpecificityScore(description);
-        if (specific.matches.length > 0) {
-            descScore += 5;
-        } else {
-            weaknesses.push("Generic description template without unique differentiation motifs.");
-        }
-
-        // 3. Format Clarity (5 pts)
-        const hasDigital = lowerDesc.includes("digital");
-        const hasPrintable = lowerDesc.includes("printable") || lowerDesc.includes("print");
-        const hasNoPhysical = lowerDesc.includes("no physical") || lowerDesc.includes("physical item");
-        const hasFormat = lowerDesc.includes("pdf") || lowerDesc.includes("jpg") || lowerDesc.includes("png") || lowerDesc.includes("zip");
-
-        if (hasDigital && hasPrintable && hasNoPhysical && hasFormat) {
-            descScore += 5;
-        } else {
-            descScore += 2; // -3 from 5
-            weaknesses.push("Ambiguous format clarity. Missing clear 'no physical item' or file format indicators.");
-        }
-
-        // 4. Structure & Length (5 pts)
-        if (description.length > 800 && description.includes("-")) {
-            descScore += 5;
-        } else if (description.length >= 600) {
-            descScore += 3;
-        } else {
-            weaknesses.push(`Description is too short (${description.length} chars). Clean formatting and depth needed.`);
-        }
+        missingGoogleDrive = true;
+        weaknesses.push("DELIVERY CONFUSION RISK: Delivery method (PDF with Google Drive link) not explicitly explained.");
     }
 
-    // PILLAR 4: CTR RISK PROFILE (Max 15)
-    // Start at 15. Subtract risk.
-    const ctrData = calculateCTRRisk(title, description);
-    ctrRiskReasons.push(...ctrData.reasons);
-    let ctrScore = ctrData.riskScore;
+    // Technical Specs Block (5 pts)
+    let techSpecsPoints = 0;
+    let missingSpecs = false;
+    if (lowerDesc.includes("160") || lowerDesc.includes("pages")) techSpecsPoints += 1.25;
+    else missingSpecs = true;
+    if (lowerDesc.includes("jpg") || lowerDesc.includes("jpeg")) techSpecsPoints += 1.25;
+    else missingSpecs = true;
+    if (lowerDesc.includes("8.5x11") || lowerDesc.includes("8.5 x 11") || lowerDesc.includes("a4")) techSpecsPoints += 1.25;
+    else missingSpecs = true;
+    if (lowerDesc.includes("300 dpi") || lowerDesc.includes("300dpi")) techSpecsPoints += 1.25;
+    else missingSpecs = true;
 
-    // PILLAR 5: CLUSTER POSITIONING (Max 10)
+    descScore += Math.round(techSpecsPoints);
+    if (techSpecsPoints < 5) {
+        weaknesses.push("Missing explicit technical specification (160+ pages, JPG, 8.5x11, 300 DPI).");
+    }
+
+    // Commercial Use Statement (4 pts)
+    let missingCommercialUseState = false;
+    if (lowerDesc.includes("commercial use") || lowerDesc.includes("commercial license")) {
+        descScore += 4;
+    } else {
+        missingCommercialUseState = true;
+        weaknesses.push("Missing explicit commercial use statement in description.");
+    }
+
+    // Emotional Hook (3 pts)
+    const sensoryWords = ["beautiful", "dreamy", "rustic", "haunting", "whimsical", "rich", "vintage", "charm", "botanical"];
+    const firstPara = lowerDesc.split('\n')[0] || lowerDesc;
+    if (sensoryWords.some(w => firstPara.includes(w))) {
+        descScore += 3;
+    } else {
+        descScore += 1;
+        weaknesses.push("First paragraph lacks strong sensory/emotional hook language.");
+    }
+
+    // Structure & Length (2 pts)
+    if (description.length > 800) descScore += 1;
+    if (description.includes("-") || description.includes("•")) descScore += 1;
+
+    descScore = Math.max(0, Math.min(20, descScore));
+
+    // --- PILLAR 4 & 5 ---
+    let ctrScore = 15;
+    if (title.length > 140) {
+        ctrScore -= 5;
+        ctrRiskReasons.push("Title exceeds 140 characters.");
+    }
+    if ((title.match(/[A-Z]/g)?.length || 0) > title.length * 0.5) {
+        ctrScore -= 5;
+        ctrRiskReasons.push("Spammy capitalization detected.");
+    }
+
     let clusterScore = 10;
-    const niche = checkNicheSharpness(title || "");
-    if (niche.matchedAesthetics.length > 2) {
-        clusterScore -= 3;
-        weaknesses.push("Blended identity cluster (Too many aesthetics). Focus on ONE dominant pattern.");
-    }
+    if (hasContradictoryTheme) clusterScore -= 3;
 
-    // CALCULATE BASE FINAL SCORE
     let overallScore = titleScore + tagsScore + descScore + ctrScore + clusterScore;
 
-    // ELITE 100 CONDITIONS CHECK
-    let isElite = true;
+    // --- IDENTITY VIOLATION PENALTIES (JUNK JOURNAL PAGES MODE) ---
+    let hardCapLimit = 100;
 
-    // IDENTITY LOCK VALIDATION (PHASE 4)
     if (identityContract) {
-        const lockedTerms = identityContract.locked_identity_terms.map(t => t.toLowerCase());
-        const funcAttrs = identityContract.functional_attributes.map(t => t.toLowerCase());
-        const lowerTitle = (title || "").toLowerCase();
-
-        // 1. Title lock (at least 2 if enough exist)
-        const titleMatches = lockedTerms.filter(t => lowerTitle.includes(t));
-        if (titleMatches.length < 2 && lockedTerms.length >= 2) {
-            weaknesses.push(`IDENTITY VIOLATION: Title missing locked identity terms. Found ${titleMatches.length}. Must include at least 2 of: ${lockedTerms.join(', ')}`);
+        // Missing Theme in Title (-20pts)
+        if (missingPrimaryTheme && identityContract.primary_theme !== "unthemed") {
             overallScore -= 20;
-            isElite = false;
+            hardCapLimit = Math.min(hardCapLimit, 95);
         }
 
-        // 2. Tags lock (at least 3 if enough exist)
-        let tagMatchCount = 0;
-        const allTagsText = (tags || []).join(' ').toLowerCase();
-        lockedTerms.forEach(t => {
-            if (allTagsText.includes(t)) tagMatchCount++;
-        });
-        if (tagMatchCount < 3 && lockedTerms.length >= 3) {
-            weaknesses.push(`IDENTITY VIOLATION: Tags missing locked identity terms. Found ${tagMatchCount}. Must include at least 3 of: ${lockedTerms.join(', ')}`);
-            overallScore -= 20;
-            isElite = false;
+        // Missing "junk journal pages" (-15pts)
+        if (!hasJunkJournalCore && !allTagsText.includes("junk journal pages")) {
+            overallScore -= 15;
+            hardCapLimit = Math.min(hardCapLimit, 95);
+            weaknesses.push("IDENTITY VIOLATION: 'junk journal pages' phrase missing entirely.");
         }
 
-        // 3. Description functional attributes
-        const lowerDesc = (description || "").toLowerCase();
-        const descFuncMatches = funcAttrs.filter(a => lowerDesc.includes(a));
-        if (descFuncMatches.length === 0 && funcAttrs.length > 0) {
-            weaknesses.push(`IDENTITY VIOLATION: Description stripped of core functional attributes. Must include at least one of: ${funcAttrs.join(', ')}`);
+        // Google Drive Delivery Not Explained (-15pts)
+        if (missingGoogleDrive) {
+            overallScore -= 15;
+            hardCapLimit = Math.min(hardCapLimit, 95);
+        }
+
+        // Missing Commercial Use (-10pts)
+        if (missingCommercialUseState) {
             overallScore -= 10;
+            hardCapLimit = Math.min(hardCapLimit, 95);
         }
 
-        // 4. Motif hallucination check (If GPT invents motifs)
-        const specific = calculateSpecificityScore(title || "");
-        const noMotif = !identityContract.design_motif || identityContract.design_motif.toLowerCase() === "none" || identityContract.design_motif.toLowerCase().includes("none specified");
-        if (noMotif && specific.matches.length > 0) {
-            weaknesses.push(`IDENTITY VIOLATION: Hallucinated aesthetic motif detected (${specific.matches.join(', ')}). The original product has no specific design motif.`);
-            overallScore -= 30; // Severe penalty
-            isElite = false;
-            titleCap = Math.min(titleCap, 50); // Hard reject limit
+        // Contradictory Theme Detected (-20pts & Hard Cap at 50)
+        if (hasContradictoryTheme) {
+            overallScore -= 20;
+            hardCapLimit = Math.min(hardCapLimit, 50);
+            weaknesses.push("IDENTITY VIOLATION: Contradictory motif hallucinated by AI.");
+        }
+
+        // Theme Absence Violation (-20pts)
+        if (identityContract.primary_theme !== "unthemed") {
+            const themeTags = lowerTags.filter(t => t.includes(identityContract.primary_theme.toLowerCase()));
+            if (!lowerTitle.includes(identityContract.primary_theme.toLowerCase()) && themeTags.length < 2) {
+                overallScore -= 20;
+                hardCapLimit = Math.min(hardCapLimit, 95);
+                weaknesses.push("IDENTITY VIOLATION: Product theme was stripped out, becoming generic.");
+            }
+        }
+
+        // Missing Functional Specs (-10pts)
+        if (missingSpecs) {
+            overallScore -= 10;
+            hardCapLimit = Math.min(hardCapLimit, 95);
+            weaknesses.push("IDENTITY VIOLATION: Required technical specs (160+ pages, JPG, etc.) are missing.");
         }
     }
 
-    const fillerRatio = calculateFillerDensity(title || "");
-    const intent = calculateIntentDensity(title || "");
-    const specific = calculateSpecificityScore(title || "");
-    const analysis = analyzeTagBalance(tags || []);
-    const lowerTitle = (title || "").toLowerCase();
-    const first50 = lowerTitle.substring(0, 50);
-    const hasCoreInFirst50 = intent.matches.some(noun => first50.includes(noun));
-    const containment = analyzeTagContainment(tags || []);
+    // ELITE 100 CONDITIONS CHECK
+    if (fillerRatio >= 0.1) hardCapLimit = Math.min(hardCapLimit, 95);
+    if (!hasJunkJournalInFirst40) hardCapLimit = Math.min(hardCapLimit, 95);
+    if (singleWordTags > 4) hardCapLimit = Math.min(hardCapLimit, 95);
 
-    if (fillerRatio >= 0.1) isElite = false;
-    if (intent.density < 2) isElite = false;
-    if (specific.matches.length === 0) isElite = false;
-    if (analysis.vague / Math.max(tags?.length || 1, 1) >= 0.1) isElite = false;
-    if (analysis.transactional < 6) isElite = false;
-    if (containment.formatViolations.length > 0) isElite = false;
-    if (niche.matchedAesthetics.length >= 4) isElite = false;
-    if (!hasCoreInFirst50) isElite = false;
-
-    if (!isElite && overallScore > 95) {
-        overallScore = 95; // Anything missing -> 95 max
-    }
-
-    if (overallScore > titleCap) {
-        overallScore = titleCap;
-    }
-
-    overallScore = Math.max(0, Math.min(100, Math.round(overallScore)));
+    overallScore = Math.max(0, Math.min(overallScore, hardCapLimit));
 
     return {
         overallScore,
@@ -319,7 +348,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         },
         strengths,
         weaknesses,
-        ctrRiskScore: ctrData.riskScore,
+        ctrRiskScore: ctrScore,
         ctrRiskReasons
     };
 }
