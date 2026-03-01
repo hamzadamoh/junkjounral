@@ -1,6 +1,5 @@
 const CORE_PRODUCT_NOUNS = [
     "junk journal",
-    "journal kit",
     "ephemera",
     "printable",
     "scrapbook",
@@ -24,7 +23,10 @@ const FORMAT_VIOLATIONS = [
     "macrame",
     "furniture",
     "clothing",
-    "apparel"
+    "apparel",
+    "kit",
+    "pockets",
+    "tags"
 ];
 
 const ALLOWED_AUDIENCE_TERMS = [

@@ -187,6 +187,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         tagsScore += 2;
         weaknesses.push("Tags must ideally contain both 'commercial use' and 'digital download/printable'.");
     } else {
+        tagsScore -= 5;
         weaknesses.push("Tags missing critical 'commercial use' identifier.");
     }
 
@@ -198,6 +199,12 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     }
 
     tagsScore = Math.max(0, Math.min(25, tagsScore));
+
+    // Word Order Sanity Check
+    if (allTagsText.includes("journal junk") || allTagsText.includes("notebook junk")) {
+        tagsScore -= 5;
+        weaknesses.push("Malformed tag detected: Use 'junk journal' instead of reversed 'journal junk' or 'notebook junk'.");
+    }
 
     // --- PILLAR 3: DESCRIPTION PERFORMANCE (Max 20) ---
     let descScore = 0;

@@ -887,6 +887,13 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                     ) : null}
                                 </div>
 
+                                {optimizedData.score && optimizedData.score.overallScore < 70 && (
+                                    <div className="p-3 bg-red-900/40 border border-red-500/50 rounded-lg text-red-400 text-xs font-bold flex items-start gap-2 animate-in slide-in-from-top-2 duration-300">
+                                        <span className="text-sm mt-0.5">⚠️</span>
+                                        <p>This listing could not reach the quality threshold. Review weaknesses manually.</p>
+                                    </div>
+                                )}
+
                                 {optimizedData.score && (
                                     <div className="space-y-2 mb-4">
                                         <div className="p-3 rounded-lg bg-slate-900/80 border border-emerald-900/50">
