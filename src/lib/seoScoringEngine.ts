@@ -21,8 +21,19 @@ export interface SEOScore {
     ctrRiskReasons: string[];
 }
 
-export function evaluateListingSEO(title: string, tags: string[], description: string): SEOScore {
+export interface ProductIdentity {
+    core_product_type: string;
+    format: string;
+    primary_use_case: string;
+    functional_attributes: string[];
+    design_motif: string;
+    target_audience: string;
+    locked_identity_terms: string[];
+}
+
+export function evaluateListingSEO(title: string, tags: string[], description: string, identityContract?: ProductIdentity): SEOScore {
     let strengths: string[] = [];
+
     let weaknesses: string[] = [];
     let ctrRiskReasons: string[] = [];
 
@@ -218,11 +229,57 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         weaknesses.push("Blended identity cluster (Too many aesthetics). Focus on ONE dominant pattern.");
     }
 
-    // CALCULATE FINAL SCORE
+    // CALCULATE BASE FINAL SCORE
     let overallScore = titleScore + tagsScore + descScore + ctrScore + clusterScore;
 
     // ELITE 100 CONDITIONS CHECK
     let isElite = true;
+
+    // IDENTITY LOCK VALIDATION (PHASE 4)
+    if (identityContract) {
+        const lockedTerms = identityContract.locked_identity_terms.map(t => t.toLowerCase());
+        const funcAttrs = identityContract.functional_attributes.map(t => t.toLowerCase());
+        const lowerTitle = (title || "").toLowerCase();
+
+        // 1. Title lock (at least 2 if enough exist)
+        const titleMatches = lockedTerms.filter(t => lowerTitle.includes(t));
+        if (titleMatches.length < 2 && lockedTerms.length >= 2) {
+            weaknesses.push(`IDENTITY VIOLATION: Title missing locked identity terms. Found ${titleMatches.length}. Must include at least 2 of: ${lockedTerms.join(', ')}`);
+            overallScore -= 20;
+            isElite = false;
+        }
+
+        // 2. Tags lock (at least 3 if enough exist)
+        let tagMatchCount = 0;
+        const allTagsText = (tags || []).join(' ').toLowerCase();
+        lockedTerms.forEach(t => {
+            if (allTagsText.includes(t)) tagMatchCount++;
+        });
+        if (tagMatchCount < 3 && lockedTerms.length >= 3) {
+            weaknesses.push(`IDENTITY VIOLATION: Tags missing locked identity terms. Found ${tagMatchCount}. Must include at least 3 of: ${lockedTerms.join(', ')}`);
+            overallScore -= 20;
+            isElite = false;
+        }
+
+        // 3. Description functional attributes
+        const lowerDesc = (description || "").toLowerCase();
+        const descFuncMatches = funcAttrs.filter(a => lowerDesc.includes(a));
+        if (descFuncMatches.length === 0 && funcAttrs.length > 0) {
+            weaknesses.push(`IDENTITY VIOLATION: Description stripped of core functional attributes. Must include at least one of: ${funcAttrs.join(', ')}`);
+            overallScore -= 10;
+        }
+
+        // 4. Motif hallucination check (If GPT invents motifs)
+        const specific = calculateSpecificityScore(title || "");
+        const noMotif = !identityContract.design_motif || identityContract.design_motif.toLowerCase() === "none" || identityContract.design_motif.toLowerCase().includes("none specified");
+        if (noMotif && specific.matches.length > 0) {
+            weaknesses.push(`IDENTITY VIOLATION: Hallucinated aesthetic motif detected (${specific.matches.join(', ')}). The original product has no specific design motif.`);
+            overallScore -= 30; // Severe penalty
+            isElite = false;
+            titleCap = Math.min(titleCap, 50); // Hard reject limit
+        }
+    }
+
     const fillerRatio = calculateFillerDensity(title || "");
     const intent = calculateIntentDensity(title || "");
     const specific = calculateSpecificityScore(title || "");

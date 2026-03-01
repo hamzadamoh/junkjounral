@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
-import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
+import { evaluateListingSEO, ProductIdentity } from '../src/lib/seoScoringEngine';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
 import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
 import { analyzeTagContainment } from '../src/lib/productBoundaryGuard';
@@ -51,12 +51,14 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapedDetails | null>(null);
     const [optimizedData, setOptimizedData] = useState<OptimizedDetails | null>(null);
+    const [extractedIdentity, setExtractedIdentity] = useState<ProductIdentity | null>(null);
+    const [isAnalyzingProduct, setIsAnalyzingProduct] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [copiedField, setCopiedField] = useState<string | null>(null);
 
-    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }): Promise<SEOScore> => {
+    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }, identityContract?: ProductIdentity): Promise<SEOScore> => {
         // Now using purely deterministic TS analysis instead of LLM token burn
-        return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description));
+        return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description, identityContract));
     };
 
     const handleScrape = async () => {
@@ -66,6 +68,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         setError(null);
         setScrapedData(null);
         setOptimizedData(null);
+        setExtractedIdentity(null);
 
         try {
             const response = await fetch('/api/etsy', {
@@ -107,11 +110,91 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const handleOptimize = async () => {
         if (!scrapedData) return;
 
-        setIsOptimizing(true);
         setError(null);
+
+        // --- PHASE 1: IDENTITY EXTRACTION ---
+        let currentIdentity = extractedIdentity;
+        if (!currentIdentity) {
+            setIsAnalyzingProduct(true);
+            try {
+                const analysisPrompt = `You are not optimizing.
+Your task is to understand the product strictly from the provided listing data.
+
+Extract:
+1. Core Product Type (what it fundamentally is)
+2. Format (digital, physical, printable, etc.)
+3. Primary Use Case
+4. Functional Attributes (blank, lined, decorative, etc.)
+5. Design Motif (if any, e.g., floral, none)
+6. Target Audience
+7. Non-Negotiable Identity Terms (words that define the product and cannot be removed)
+
+Return exactly this JSON structure ONLY:
+{
+  "core_product_type": "string",
+  "format": "string",
+  "primary_use_case": "string",
+  "functional_attributes": ["string"],
+  "design_motif": "string",
+  "target_audience": "string",
+  "locked_identity_terms": ["string"]
+}
+
+Do not invent motifs. Do not add aesthetics not present. Only extract what is explicitly implied.
+
+=== ORIGINAL LISTING ===
+Title: ${scrapedData.title}
+Tags: ${scrapedData.tags.join(', ')}
+Description: ${scrapedData.description.substring(0, 2000)}`;
+
+                const analysisRes = await fetch('/api/openai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            { role: 'system', content: 'You are an objective product identity extractor.' },
+                            { role: 'user', content: analysisPrompt }
+                        ],
+                        response_format: { type: 'json_object' },
+                        temperature: 0.2
+                    }),
+                });
+
+                if (!analysisRes.ok) throw new Error('Failed to analyze product identity');
+                const analysisData = await analysisRes.json();
+                let analysisContent = analysisData.choices[0].message.content;
+                if (analysisContent.includes('```')) {
+                    analysisContent = analysisContent.replace(/```json|```/g, '').trim();
+                }
+                currentIdentity = JSON.parse(analysisContent) as ProductIdentity;
+                setExtractedIdentity(currentIdentity);
+            } catch (err: any) {
+                setError('Identity extraction failed: ' + err.message);
+                setIsAnalyzingProduct(false);
+                return;
+            } finally {
+                setIsAnalyzingProduct(false);
+            }
+        }
+
+        setIsOptimizing(true);
 
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
+            '',
+            '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
+            'You MUST preserve the following product identity in your generated output:',
+            `Core Product Type: ${currentIdentity.core_product_type}`,
+            `Format: ${currentIdentity.format}`,
+            `Functional Attributes: ${currentIdentity.functional_attributes.join(', ')}`,
+            `Locked Identity Terms: ${currentIdentity.locked_identity_terms.join(', ')}`,
+            '',
+            'Rules:',
+            '- Do NOT change the product type.',
+            '- Do NOT introduce new motifs unless explicitly stated.',
+            '- Do NOT remove the functional attributes.',
+            '- SEO optimize within this identity ONLY.',
             '',
             'Your goal is to optimize for:',
             '- Search match relevance',
@@ -122,13 +205,6 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             '',
             'Priority formula: Relevance x Click Appeal x Buyer Intent x Conversion Clarity',
             'NOT keyword stuffing.',
-            '',
-            '=== 0. PRODUCT COMPREHENSION (MANDATORY FIRST STEP) ===',
-            'Before generating any SEO elements, you MUST read the original Title and Description to accurately identify the base product.',
-            '- What is the specific product being sold?',
-            '- What are its true aesthetic motifs, colors, themes, or styles as described in the original text?',
-            '- DO NOT invent or hallucinate aesthetics (like "sacred", "cathedral", "sakura", "lavender") unless they are genuinely present in the original input.',
-            'Base all your optimizations ONLY on the actual product attributes provided.',
             '',
             '=== 1. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
             '',
@@ -386,7 +462,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     title: aiResponse.title,
                     description: aiResponse.description,
                     tags: aiResponse.tags
-                });
+                }, currentIdentity || undefined);
                 setIsEvaluatingOptimized(false);
 
                 if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
@@ -434,6 +510,19 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
+            '',
+            '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
+            'You MUST preserve the following product identity in your generated output:',
+            `Core Product Type: ${extractedIdentity?.core_product_type || "N/A"}`,
+            `Format: ${extractedIdentity?.format || "N/A"}`,
+            `Functional Attributes: ${(extractedIdentity?.functional_attributes || []).join(', ')}`,
+            `Locked Identity Terms: ${(extractedIdentity?.locked_identity_terms || []).join(', ')}`,
+            '',
+            'Rules:',
+            '- Do NOT change the product type.',
+            '- Do NOT introduce new motifs unless explicitly stated.',
+            '- Do NOT remove the functional attributes.',
+            '- SEO optimize within this identity ONLY.',
             '',
             'You previously optimized this listing, but our internal grader found the following weaknesses:',
             ...optimizedData.score.weaknesses.map((w: string) => `- ${w}`),
@@ -520,7 +609,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     title: aiResponse.title,
                     description: aiResponse.description,
                     tags: aiResponse.tags
-                });
+                }, extractedIdentity || undefined);
                 setIsEvaluatingOptimized(false);
 
                 if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
