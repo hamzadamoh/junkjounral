@@ -30,7 +30,8 @@ const FORMAT_VIOLATIONS = [
     "scrapbooking set",
     "journal set",
     "tag set",
-    "kit set"
+    "kit set",
+    "journal kit"
 ];
 
 const ALLOWED_AUDIENCE_TERMS = [
@@ -48,7 +49,10 @@ export function tagHasProductAttachment(tag: string): boolean {
 
 export function violatesFormatContainment(text: string): boolean {
     const lowerText = text.toLowerCase();
-    return FORMAT_VIOLATIONS.some(term => lowerText.includes(term));
+    return FORMAT_VIOLATIONS.some(term => {
+        const regex = new RegExp(`\\b${term}\\b`, 'i');
+        return regex.test(lowerText);
+    });
 }
 
 export function getFormatViolations(title: string, tags: string[] = []): string[] {
@@ -56,7 +60,8 @@ export function getFormatViolations(title: string, tags: string[] = []): string[
     const lowerTitle = title.toLowerCase();
 
     FORMAT_VIOLATIONS.forEach(term => {
-        if (lowerTitle.includes(term)) {
+        const regex = new RegExp(`\\b${term}\\b`, 'i');
+        if (regex.test(lowerTitle)) {
             violations.add(term);
         }
     });
@@ -64,8 +69,8 @@ export function getFormatViolations(title: string, tags: string[] = []): string[
     tags.forEach(tag => {
         const lowerTag = tag.toLowerCase();
         FORMAT_VIOLATIONS.forEach(term => {
-            if (lowerTag.includes(term)) {
-                violations.add(lowerTag);
+            const regex = new RegExp(`\\b${term}\\b`, 'i');
+            if (regex.test(lowerTag)) {
                 violations.add(term);
             }
         });
