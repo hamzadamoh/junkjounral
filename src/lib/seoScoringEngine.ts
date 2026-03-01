@@ -176,24 +176,10 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         tagsScore += 5;
     }
 
-    // Commercial Use Tag (5 pts)
-    const hasCommercial = allTagsText.includes("commercial use") || allTagsText.includes("commercial license");
-    const hasDigital = allTagsText.includes("digital download") || allTagsText.includes("printable");
-
-    if (hasCommercial && hasDigital) {
-        tagsScore += 5;
-        strengths.push("Tags contain commercial use and digital identifiers.");
-    } else if (hasCommercial || hasDigital) {
-        tagsScore += 2;
-        weaknesses.push("Tags must ideally contain both 'commercial use' and 'digital download/printable'.");
-    } else {
-        tagsScore -= 5;
-        weaknesses.push("Tags missing critical 'commercial use' identifier.");
-    }
-
-    // Delivery Clarity Tag (5 pts)
+    // Delivery Clarity Tag (10 pts)
     if (allTagsText.includes("instant download") || allTagsText.includes("digital journal") || allTagsText.includes("google drive")) {
-        tagsScore += 5;
+        tagsScore += 10;
+        strengths.push("Excellent delivery clarity in tags.");
     } else {
         weaknesses.push("Missing delivery clarity tag (e.g., 'instant download').");
     }
@@ -244,7 +230,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     // Commercial Use Statement (4 pts)
     let missingCommercialUseState = false;
-    if (lowerDesc.includes("commercial use") || lowerDesc.includes("commercial license")) {
+    if (lowerDesc.includes("commercial use allowed") || lowerDesc.includes("commercial use is allowed") || lowerDesc.includes("for commercial use") || lowerDesc.includes("commercial use license")) {
         descScore += 4;
     } else {
         missingCommercialUseState = true;
