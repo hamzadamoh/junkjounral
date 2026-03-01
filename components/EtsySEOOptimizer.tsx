@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
+import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
+import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
+import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
 
 interface SEOScore {
     overallScore: number;
@@ -43,97 +46,8 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [copiedField, setCopiedField] = useState<string | null>(null);
 
     const evaluateListing = async (listing: { title: string, description: string, tags: string[] }): Promise<SEOScore> => {
-        const promptLines = [
-            'As an elite Etsy SEO Evaluator, grade this listing based on these strict 2026 search model constraints.',
-            '',
-            '=== TITLE SCORING SYSTEM (WEIGHTED COMPONENTS) ===',
-            'Instead of a flat score, calculate the Title Score using these four weighted factors:',
-            '',
-            '1. Buyer Intent Strength (30% weight):',
-            '- Does the dominant product phrase (from the original listing) remain intact?',
-            '- Is it high purchase intent?',
-            '- Is it clearly positioned within the first 60 characters?',
-            '',
-            '2. Differentiation Strength (25% weight):',
-            '- Is there at least one niche/aesthetic modifier constraint?',
-            '- Does it narrow the stylistic identity?',
-            '- Is it highly specific (not generic)?',
-            '',
-            '3. Title Efficiency Index (TEI) (25% weight):',
-            '- Identify "filler words": extremely broad category words (creative crafting), redundant format clarifiers (instant access), non-transactional craft language.',
-            '- Calculate Filler Density % = (Number of low-efficiency filler words / Total words)',
-            '- If Filler Density > 25%, apply a moderate penalty to this section.',
-            '- If Filler Density > 40%, apply a HEAVY penalty to this section.',
-            '- REWARD titles that use dense, transactional language.',
-            '',
-            '4. Structural Clarity (20% weight):',
-            '- Is it readable as a natural product name?',
-            '- Is there only ONE dominant phrase? (No keyword stacking)',
-            '- No cut off or partial words at the end.',
-            '',
-            '=== TAG SCORING SYSTEM (TAG INTENT INDEX) ===',
-            'Classify every single tag into one of three categories:',
-            '1. Transactional: High-intent product terms (e.g., "journal kit", "printable ephemera").',
-            '2. Thematic: Specific aesthetic or motif identifiers (e.g., "sakura art", "gothic lace").',
-            '3. Vague/Filler: Broad, low-intent phrases (e.g., "creative art", "digital set", "vintage aesthetics", "crafting supplies").',
-            '',
-            'Tag Scoring Penalty:',
-            '- If more than 30% of the tags (4 or more tags) are classified as "Vague/Filler", heavily reduce the Tag Score.',
-            '- Reward exact adherence to the Product + Theme + Use Case formula.',
-            '',
-            '=== DESCRIPTION SCORING ===',
-            '- Length: Must be 800+ characters.',
-            '- Hook: Opening paragraph must be emotionally positioned and sensory.',
-            '- Differentiator: Must clearly state what makes the product unique.',
-            '- Formatting: Must use proper line breaks and sections.',
-            '',
-            '=== INPUT ===',
-            'Title: ' + listing.title,
-            'Tags: ' + (listing.tags?.join(', ') || 'None'),
-            'Description:',
-            listing.description.substring(0, 2000),
-            '',
-            '=== INSTRUCTIONS ===',
-            '1. Analyze the input against the criteria above.',
-            '2. Calculate objective scores from 0 to 100 for Title, Tags, and Description.',
-            '3. Calculate an Overall Score (average of the three).',
-            '4. Identify 2-3 specific Strengths.',
-            '5. Identify 2-3 specific Weaknesses.',
-            '6. Output ONLY a valid JSON object matching the schema below.',
-        ].join('\n');
-
-        const systemPrompt = `You are an expert SEO grader. You must respond ONLY with a valid JSON object representing the score. Do not provide any conversational text.
-
-{
-  "overallScore": number (0-100),
-  "titleScore": number (0-100),
-  "tagsScore": number (0-100),
-  "descriptionScore": number (0-100),
-  "strengths": ["string", "string"],
-  "weaknesses": ["string", "string"]
-}`;
-
-        const response = await fetch('/api/openai/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: promptLines }
-                ],
-                response_format: { type: 'json_object' },
-                temperature: 0.1 // Make it highly deterministic
-            }),
-        });
-
-        if (!response.ok) throw new Error('Evaluation failed');
-        const result = await response.json();
-        let content = result.choices[0].message.content;
-        if (content.includes('```')) {
-            content = content.replace(/```json|```/g, '').trim();
-        }
-        return JSON.parse(content) as SEOScore;
+        // Now using purely deterministic TS analysis instead of LLM token burn
+        return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description));
     };
 
     const handleScrape = async () => {
@@ -431,16 +345,33 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 
             let aiResponse = JSON.parse(content);
 
-            // Safety net: if title is very short (<90), retry with context
-            if (aiResponse.title && aiResponse.title.length < 110) {
+            const titleStr = aiResponse.title || "";
+            const tagsArr = aiResponse.tags || [];
+
+            const fillerDensity = calculateFillerDensity(titleStr);
+            const vagueTagCount = tagsArr.filter((t: string) => classifyTag(t) === 'vague').length;
+            const vagueTagRatio = tagsArr.length > 0 ? vagueTagCount / tagsArr.length : 0;
+
+            if (fillerDensity > 0.3 || vagueTagRatio > 0.3 || titleStr.length < 110) {
                 const retryLines = [
-                    'Your title is only ' + aiResponse.title.length + ' characters: "' + aiResponse.title + '"',
+                    'Your previous output contains low-efficiency phrases, low character count, or vague tags.',
                     '',
-                    'Extend this title naturally to around 125-135 characters. Add ONE highly relevant aesthetic or format modifier.',
-                    'Follow the Pro Seller structure: [Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier].',
-                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus and strong buyer intent.',
+                    'Rewrite ONLY:',
+                    '- The title tail section',
+                    '- Tags classified as vague',
                     '',
-                    'Return JSON only: { "title": "extended title here" }',
+                    'Keep:',
+                    '- Dominant buyer phrase intact.',
+                    '- Niche differentiation intact.',
+                    '',
+                    'Remove:',
+                    '- Generic format phrases',
+                    '- Broad craft terms',
+                    '- Low purchase-intent tags',
+                    '',
+                    'Do not shorten below 120 characters.',
+                    '',
+                    'Return JSON only matching the schema: { "title": "...", "description": "...", "tags": [...] }',
                 ].join('\n');
 
                 const retryResponse = await fetch('/api/openai/chat', {
@@ -464,8 +395,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                         retryContent = retryContent.replace(/```json|```/g, '').trim();
                     }
                     const retryData = JSON.parse(retryContent);
-                    if (retryData.title && retryData.title.length > aiResponse.title.length) {
-                        aiResponse.title = retryData.title.substring(0, 140);
+                    if (retryData.title && retryData.title.length > titleStr.length) {
+                        aiResponse.title = retryData.title;
+                    }
+                    if (retryData.tags && retryData.tags.length > 0) {
+                        aiResponse.tags = retryData.tags;
                     }
                 }
             }
@@ -585,16 +519,33 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 
             let aiResponse = JSON.parse(content);
 
-            // Safety net: if title is very short (<90), retry with context
-            if (aiResponse.title && aiResponse.title.length < 110) {
+            const titleStr = aiResponse.title || "";
+            const tagsArr = aiResponse.tags || [];
+
+            const fillerDensity = calculateFillerDensity(titleStr);
+            const vagueTagCount = tagsArr.filter((t: string) => classifyTag(t) === 'vague').length;
+            const vagueTagRatio = tagsArr.length > 0 ? vagueTagCount / tagsArr.length : 0;
+
+            if (fillerDensity > 0.3 || vagueTagRatio > 0.3 || titleStr.length < 110) {
                 const retryLines = [
-                    'Your title is only ' + aiResponse.title.length + ' characters: "' + aiResponse.title + '"',
+                    'Your previous output contains low-efficiency phrases, low character count, or vague tags.',
                     '',
-                    'Extend this title naturally to around 125-135 characters. Add ONE highly relevant aesthetic or format modifier.',
-                    'Follow the Pro Seller structure: [Primary Buyer Phrase], [Secondary Niche Angle] [Supporting Descriptor] [Format Clarifier].',
-                    'CRITICAL: Do NOT add generic filler like "DIY Craft Supplies". Maintain sharp niche focus and strong buyer intent.',
+                    'Rewrite ONLY:',
+                    '- The title tail section',
+                    '- Tags classified as vague',
                     '',
-                    'Return JSON only: { "title": "extended title here" }',
+                    'Keep:',
+                    '- Dominant buyer phrase intact.',
+                    '- Niche differentiation intact.',
+                    '',
+                    'Remove:',
+                    '- Generic format phrases',
+                    '- Broad craft terms',
+                    '- Low purchase-intent tags',
+                    '',
+                    'Do not shorten below 120 characters.',
+                    '',
+                    'Return JSON only matching the schema: { "title": "...", "description": "...", "tags": [...] }',
                 ].join('\n');
 
                 const retryResponse = await fetch('/api/openai/chat', {
@@ -618,8 +569,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                         retryContent = retryContent.replace(/```json|```/g, '').trim();
                     }
                     const retryData = JSON.parse(retryContent);
-                    if (retryData.title && retryData.title.length > aiResponse.title.length) {
-                        aiResponse.title = retryData.title.substring(0, 140);
+                    if (retryData.title && retryData.title.length > titleStr.length) {
+                        aiResponse.title = retryData.title;
+                    }
+                    if (retryData.tags && retryData.tags.length > 0) {
+                        aiResponse.tags = retryData.tags;
                     }
                 }
             }
