@@ -27,8 +27,10 @@ const FORMAT_VIOLATIONS = [
     "kit",
     "pockets",
     "tags",
-    "set",
-    "scrapbooking set"
+    "scrapbooking set",
+    "journal set",
+    "tag set",
+    "kit set"
 ];
 
 const ALLOWED_AUDIENCE_TERMS = [

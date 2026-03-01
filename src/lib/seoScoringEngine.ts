@@ -5,7 +5,6 @@ export interface SEOPillarScores {
     tags: number;
     description: number;
     ctrRisk: number;
-    clusterPositioning: number;
 }
 
 export interface SEOScore {
@@ -75,38 +74,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         }
         titleScore += Math.min(4, complementaryCount * 2);
 
-        // Subcultural keyword mapping to catch cross-cluster hallucination
-        const clusterKeywords: Record<ThemeCluster, string[]> = {
-            vintage_antique: ["vintage", "antique", "retro", "old"],
-            cottagecore_botanical: ["cottagecore", "botanical", "mushroom", "forest"],
-            gothic_dark: ["gothic", "dark", "creepy", "macabre", "vampire", "witch"],
-            coastal_beach: ["coastal", "beach", "ocean", "sea", "nautical"],
-            christmas_winter: ["christmas", "winter", "snow", "holiday", "festive"],
-            halloween_spooky: ["halloween", "spooky", "scary", "ghost", "pumpkin"],
-            floral_romantic: ["floral", "romantic", "rose", "lace", "pink", "love"],
-            masculine_industrial: ["masculine", "industrial", "steampunk", "gears", "metal"],
-            mixed_eclectic: ["mixed media", "eclectic", "junk", "collage"],
-            unthemed: [],
-            other: []
-        };
-
-        for (const [cluster, keywords] of Object.entries(clusterKeywords)) {
-            if (cluster === identityContract.theme_cluster || cluster === "unthemed" || cluster === "other") continue;
-            if (validComplements.includes(cluster as ThemeCluster)) continue;
-
-            for (const kw of keywords) {
-                // To avoid accidental matches inside words, we can just check bounds but simple includes is fine for demo
-                const paddedKw = ` ${kw} `;
-                const paddedTitle = ` ${lowerTitle} `;
-
-                if (paddedTitle.includes(paddedKw)) {
-                    hasContradictoryTheme = true;
-                    weaknesses.push(`Contradictory theme detected: '${kw}' conflicts with ${identityContract.theme_cluster}.`);
-                    titleScore -= 4; // Deduction for title pillar
-                    break;
-                }
-            }
-        }
+        // Removed cluster cross-pollination penalty to allow up to 4 compatible themes without deduction.
     } else {
         // Unthemed logic
         titleScore += 8; // Auto-award anchor if no theme is strictly required
@@ -132,10 +100,10 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     titleScore = Math.max(0, Math.min(30, titleScore));
 
-    // --- PILLAR 2: TAG INTELLIGENCE (Max 25) ---
+    // --- PILLAR 2: TAG INTELLIGENCE (Max 35) ---
     let tagsScore = 0;
 
-    // Buyer Intent Tag Ratio (10 pts)
+    // Buyer Intent Tag Ratio (15 pts)
     let multiWordTags = 0;
     let singleWordTags = 0;
     lowerTags.forEach(tag => {
@@ -144,20 +112,20 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     });
 
     if (multiWordTags >= 9) {
-        tagsScore += 10;
+        tagsScore += 15;
         strengths.push("Excellent buyer intent multi-word tag ratio.");
     } else if (multiWordTags >= 5) {
-        tagsScore += 5;
+        tagsScore += 8;
         weaknesses.push(`Only ${multiWordTags} multi-word tags. Shift to phrase-based tags.`);
     } else {
         weaknesses.push(`Too many single-word tags (${singleWordTags}). Needs 'theme + product' structure.`);
     }
 
-    // Theme Coverage (5 pts)
+    // Theme Coverage (10 pts)
     if (identityContract && identityContract.primary_theme !== "unthemed") {
         const themeTags = lowerTags.filter(t => t.includes(identityContract.primary_theme.toLowerCase()));
         if (themeTags.length >= 3) {
-            tagsScore += 3;
+            tagsScore += 5;
         } else {
             weaknesses.push(`Missing theme coverage in tags. Need at least 3 tags containing '${identityContract.primary_theme}'.`);
         }
@@ -165,15 +133,15 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         if (identityContract.secondary_themes.length > 0) {
             const hasSecondary = identityContract.secondary_themes.some(st => allTagsText.includes(st.toLowerCase()));
             if (hasSecondary) {
-                tagsScore += 2;
+                tagsScore += 5;
             } else {
                 weaknesses.push("Missing secondary theme coverage in tags.");
             }
         } else {
-            tagsScore += 2; // Auto-award if no secondary themes requested
+            tagsScore += 5; // Auto-award if no secondary themes requested
         }
     } else {
-        tagsScore += 5;
+        tagsScore += 10;
     }
 
     // Delivery Clarity Tag (10 pts)
@@ -184,7 +152,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         weaknesses.push("Missing delivery clarity tag (e.g., 'instant download').");
     }
 
-    tagsScore = Math.max(0, Math.min(25, tagsScore));
+    tagsScore = Math.max(0, Math.min(35, tagsScore));
 
     // Word Order Sanity Check
     if (allTagsText.includes("journal junk") || allTagsText.includes("notebook junk")) {
@@ -253,7 +221,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     descScore = Math.max(0, Math.min(20, descScore));
 
-    // --- PILLAR 4 & 5 ---
+    // --- PILLAR 4 ---
     let ctrScore = 15;
     if (title.length > 140) {
         ctrScore -= 5;
@@ -264,10 +232,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         ctrRiskReasons.push("Spammy capitalization detected.");
     }
 
-    let clusterScore = 10;
-    if (hasContradictoryTheme) clusterScore -= 3;
-
-    let overallScore = titleScore + tagsScore + descScore + ctrScore + clusterScore;
+    let overallScore = titleScore + tagsScore + descScore + ctrScore;
 
     // --- IDENTITY VIOLATION PENALTIES (JUNK JOURNAL PAGES MODE) ---
     let hardCapLimit = 100;
@@ -336,8 +301,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
             title: titleScore,
             tags: tagsScore,
             description: descScore,
-            ctrRisk: ctrScore,
-            clusterPositioning: clusterScore
+            ctrRisk: ctrScore
         },
         strengths,
         weaknesses,

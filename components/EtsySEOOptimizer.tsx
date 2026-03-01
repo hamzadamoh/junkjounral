@@ -13,7 +13,6 @@ interface SEOPillarScores {
     tags: number;
     description: number;
     ctrRisk: number;
-    clusterPositioning: number;
 }
 
 interface SEOScore {
@@ -756,7 +755,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 </div>
 
                 {error && (
-                    <div className="p-4 bg-red-900/20 border border-red-900/50 rounded-lg text-red-400 text-sm">
+                    <div className="p-4 bg-red-900/20 border border-red-900/50 rounded-lg text-red-400 text-sm break-words whitespace-pre-wrap">
                         {error}
                     </div>
                 )}
@@ -806,7 +805,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                 <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 flex flex-col gap-2 text-xs text-slate-400">
                                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                         <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Title Core</strong> <span className={scrapedData.score.pillars.title >= 25 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.title}/30</span></div>
-                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={scrapedData.score.pillars.tags >= 20 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.tags}/25</span></div>
+                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={scrapedData.score.pillars.tags >= 28 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.tags}/35</span></div>
                                         <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Description</strong> <span className={scrapedData.score.pillars.description >= 15 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.description}/20</span></div>
                                         <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">CTR Safety</strong> <span className={scrapedData.score.pillars.ctrRisk >= 10 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.ctrRisk}/15</span></div>
                                         <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Positioning</strong> <span className={scrapedData.score.pillars.clusterPositioning >= 8 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.clusterPositioning}/10</span></div>
@@ -947,12 +946,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                             </ul>
                                         </div>
                                         <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 flex flex-col gap-2 text-xs text-slate-400">
-                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Title Core</strong> <span className={optimizedData.score.pillars.title >= 25 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.title}/30</span></div>
-                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={optimizedData.score.pillars.tags >= 20 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.tags}/25</span></div>
+                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={optimizedData.score.pillars.tags >= 28 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.tags}/35</span></div>
                                                 <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Description</strong> <span className={optimizedData.score.pillars.description >= 15 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.description}/20</span></div>
                                                 <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">CTR Safety</strong> <span className={optimizedData.score.pillars.ctrRisk >= 10 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.ctrRisk}/15</span></div>
-                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Positioning</strong> <span className={optimizedData.score.pillars.clusterPositioning >= 8 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.clusterPositioning}/10</span></div>
                                             </div>
                                             {optimizedData.score.ctrRiskReasons && optimizedData.score.ctrRiskReasons.length > 0 && (
                                                 <div className="mt-2 pt-2 border-t border-slate-700/50">
