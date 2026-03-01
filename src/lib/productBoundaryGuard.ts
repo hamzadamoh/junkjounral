@@ -52,6 +52,11 @@ export function violatesFormatContainment(text: string): boolean {
     return FORMAT_VIOLATIONS.some(term => lowerText.includes(term));
 }
 
+export function getFormatViolations(text: string): string[] {
+    const lowerText = text.toLowerCase();
+    return FORMAT_VIOLATIONS.filter(term => lowerText.includes(term));
+}
+
 export function analyzeTagContainment(tags: string[]): {
     isValid: boolean;
     productAttachedCount: number;

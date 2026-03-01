@@ -6,7 +6,7 @@ import { buildIdentityLockPrompt } from '../src/lib/buildIdentityLockPrompt';
 import { buildViolationReport } from '../src/lib/buildViolationReport';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
 import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
-import { analyzeTagContainment, violatesFormatContainment } from '../src/lib/productBoundaryGuard';
+import { analyzeTagContainment, violatesFormatContainment, getFormatViolations } from '../src/lib/productBoundaryGuard';
 
 interface SEOPillarScores {
     title: number;
@@ -204,9 +204,19 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
         setIsOptimizing(true);
 
+        const originalViolationsSet = new Set<string>();
+        getFormatViolations(scrapedData.title).forEach(v => originalViolationsSet.add(v));
+        scrapedData.tags.forEach(tag => getFormatViolations(tag).forEach(v => originalViolationsSet.add(v)));
+        const originalViolations = Array.from(originalViolationsSet);
+
+        const dynamicWarning = originalViolations.length > 0
+            ? `CRITICAL: The original listing contains these terms which are BANNED from your output: [${originalViolations.join(', ')}]. Do NOT use these words under any circumstances. They are factually wrong for this product.\n`
+            : '';
+
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
+            dynamicWarning,
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
             buildIdentityLockPrompt(currentIdentity!),
             '',
@@ -555,9 +565,19 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
         setIsRefining(true);
         setError(null);
 
+        const originalViolationsSet = new Set<string>();
+        getFormatViolations(scrapedData.title).forEach(v => originalViolationsSet.add(v));
+        scrapedData.tags.forEach(tag => getFormatViolations(tag).forEach(v => originalViolationsSet.add(v)));
+        const originalViolations = Array.from(originalViolationsSet);
+
+        const dynamicWarning = originalViolations.length > 0
+            ? `CRITICAL: The original listing contains these terms which are BANNED from your output: [${originalViolations.join(', ')}]. Do NOT use these words under any circumstances. They are factually wrong for this product.\n`
+            : '';
+
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
+            dynamicWarning,
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
             buildIdentityLockPrompt(extractedIdentity!),
             '',
