@@ -210,7 +210,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
         const originalViolations = Array.from(originalViolationsSet);
 
         const dynamicWarning = originalViolations.length > 0
-            ? `CRITICAL: The original listing contains these terms which are BANNED from your output: [${originalViolations.join(', ')}]. Do NOT use these words under any circumstances. They are factually wrong for this product.\n`
+            ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
             : '';
 
         const promptLines = [
@@ -495,12 +495,12 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 // BOUNDARY GUARD INTERCEPT
                 const tagBoundary = analyzeTagContainment(aiResponse.tags || []);
-                const titleFormatViolation = aiResponse.title ? violatesFormatContainment(aiResponse.title) : false;
+                const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
+                const titleFormatViolation = titleViolations.length > 0;
 
                 if (!tagBoundary.isValid || titleFormatViolation) {
-                    console.warn(`Attempt ${attempt} blocked by format boundary guard.`);
-                    const violations = [...tagBoundary.formatViolations];
-                    if (titleFormatViolation) violations.push("Title contains format violation.");
+                    const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
+                    console.warn(`Attempt ${attempt} blocked by format boundary guard. Caught violations:`, violations);
 
                     if (attempt < 3) {
                         currentPromptLines.push(
@@ -571,7 +571,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
         const originalViolations = Array.from(originalViolationsSet);
 
         const dynamicWarning = originalViolations.length > 0
-            ? `CRITICAL: The original listing contains these terms which are BANNED from your output: [${originalViolations.join(', ')}]. Do NOT use these words under any circumstances. They are factually wrong for this product.\n`
+            ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
             : '';
 
         const promptLines = [
@@ -664,12 +664,12 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 // BOUNDARY GUARD INTERCEPT
                 const tagBoundary = analyzeTagContainment(aiResponse.tags || []);
-                const titleFormatViolation = aiResponse.title ? violatesFormatContainment(aiResponse.title) : false;
+                const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
+                const titleFormatViolation = titleViolations.length > 0;
 
                 if (!tagBoundary.isValid || titleFormatViolation) {
-                    console.warn(`Refinement attempt ${attempt} blocked by format boundary guard.`);
-                    const violations = [...tagBoundary.formatViolations];
-                    if (titleFormatViolation) violations.push("Title contains format violation.");
+                    const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
+                    console.warn(`Refinement attempt ${attempt} blocked by format boundary guard. Caught violations:`, violations);
 
                     if (attempt < 3) {
                         currentPromptLines.push(
