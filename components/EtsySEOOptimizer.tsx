@@ -204,10 +204,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
         setIsOptimizing(true);
 
-        const originalViolationsSet = new Set<string>();
-        getFormatViolations(scrapedData.title).forEach(v => originalViolationsSet.add(v));
-        scrapedData.tags.forEach(tag => getFormatViolations(tag).forEach(v => originalViolationsSet.add(v)));
-        const originalViolations = Array.from(originalViolationsSet);
+        const originalViolations = getFormatViolations(scrapedData.title, scrapedData.tags);
 
         const dynamicWarning = originalViolations.length > 0
             ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
@@ -565,10 +562,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
         setIsRefining(true);
         setError(null);
 
-        const originalViolationsSet = new Set<string>();
-        getFormatViolations(scrapedData.title).forEach(v => originalViolationsSet.add(v));
-        scrapedData.tags.forEach(tag => getFormatViolations(tag).forEach(v => originalViolationsSet.add(v)));
-        const originalViolations = Array.from(originalViolationsSet);
+        const originalViolations = getFormatViolations(scrapedData.title, scrapedData.tags);
 
         const dynamicWarning = originalViolations.length > 0
             ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`

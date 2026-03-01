@@ -1,6 +1,5 @@
 const CORE_PRODUCT_NOUNS = [
     "junk journal",
-    "ephemera",
     "printable",
     "scrapbook",
     "paper pack",
@@ -12,6 +11,7 @@ const CORE_PRODUCT_NOUNS = [
 ];
 
 const FORMAT_VIOLATIONS = [
+    "ephemera",
     "wall art",
     "poster",
     "canvas",
@@ -38,8 +38,7 @@ const ALLOWED_AUDIENCE_TERMS = [
     "scrapbook",
     "craft",
     "paper",
-    "planner",
-    "ephemera"
+    "planner"
 ];
 
 export function tagHasProductAttachment(tag: string): boolean {
@@ -52,9 +51,27 @@ export function violatesFormatContainment(text: string): boolean {
     return FORMAT_VIOLATIONS.some(term => lowerText.includes(term));
 }
 
-export function getFormatViolations(text: string): string[] {
-    const lowerText = text.toLowerCase();
-    return FORMAT_VIOLATIONS.filter(term => lowerText.includes(term));
+export function getFormatViolations(title: string, tags: string[] = []): string[] {
+    const violations = new Set<string>();
+    const lowerTitle = title.toLowerCase();
+
+    FORMAT_VIOLATIONS.forEach(term => {
+        if (lowerTitle.includes(term)) {
+            violations.add(term);
+        }
+    });
+
+    tags.forEach(tag => {
+        const lowerTag = tag.toLowerCase();
+        FORMAT_VIOLATIONS.forEach(term => {
+            if (lowerTag.includes(term)) {
+                violations.add(lowerTag);
+                violations.add(term);
+            }
+        });
+    });
+
+    return Array.from(violations);
 }
 
 export function analyzeTagContainment(tags: string[]): {
