@@ -500,19 +500,28 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
                 const titleFormatViolation = titleViolations.length > 0;
 
-                if (!tagBoundary.isValid || titleFormatViolation) {
+                const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
+                const insufficientTags = tagBoundary.productAttachedCount < 6;
+
+                if (hasFormatViolations || insufficientTags) {
                     const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Attempt ${attempt} blocked by format boundary guard. Caught violations:`, violations);
+                    console.warn(`Attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/6`);
 
                     if (attempt < 3) {
-                        currentPromptLines.push(
-                            `=== CRITICAL BOUNDARY VIOLATION ===`,
-                            `Your previous attempt included banned terms: ${violations.join(', ')}.`,
-                            `You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`
-                        );
+                        currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
+                        if (hasFormatViolations) {
+                            currentPromptLines.push(`Your previous attempt included banned terms: ${violations.join(', ')}.`);
+                            currentPromptLines.push(`You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`);
+                        }
+                        if (insufficientTags) {
+                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 6 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
+                        }
                         continue; // Force regenerate immediately without scoring
                     } else {
-                        throw new Error(`AI failed to generate results free of banned terms after 3 attempts. Banned terms detected: ${violations.length > 0 ? violations.join(', ') : 'unknown terms'}`);
+                        let errorMsg = `AI failed to generate valid results after 3 attempts.`;
+                        if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
+                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/6).`;
+                        throw new Error(errorMsg);
                     }
                 }
 
@@ -671,19 +680,28 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
                 const titleFormatViolation = titleViolations.length > 0;
 
-                if (!tagBoundary.isValid || titleFormatViolation) {
+                const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
+                const insufficientTags = tagBoundary.productAttachedCount < 6;
+
+                if (hasFormatViolations || insufficientTags) {
                     const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Refinement attempt ${attempt} blocked by format boundary guard. Caught violations:`, violations);
+                    console.warn(`Refinement attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/6`);
 
                     if (attempt < 3) {
-                        currentPromptLines.push(
-                            `=== CRITICAL BOUNDARY VIOLATION ===`,
-                            `Your previous attempt included banned terms: ${violations.join(', ')}.`,
-                            `You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`
-                        );
+                        currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
+                        if (hasFormatViolations) {
+                            currentPromptLines.push(`Your previous attempt included banned terms: ${violations.join(', ')}.`);
+                            currentPromptLines.push(`You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`);
+                        }
+                        if (insufficientTags) {
+                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 6 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
+                        }
                         continue; // Force regenerate immediately without scoring
                     } else {
-                        throw new Error(`AI failed to refine results free of banned terms after 3 attempts. Banned terms detected: ${violations.length > 0 ? violations.join(', ') : 'unknown terms'}`);
+                        let errorMsg = `AI failed to refine results after 3 attempts.`;
+                        if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
+                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/6).`;
+                        throw new Error(errorMsg);
                     }
                 }
 
