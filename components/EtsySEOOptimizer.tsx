@@ -3,14 +3,23 @@ import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileT
 import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
 import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
+import { analyzeTagContainment } from '../src/lib/productBoundaryGuard';
+
+interface SEOPillarScores {
+    title: number;
+    tags: number;
+    description: number;
+    ctrRisk: number;
+    clusterPositioning: number;
+}
 
 interface SEOScore {
     overallScore: number;
-    titleScore: number;
-    tagsScore: number;
-    descriptionScore: number;
+    pillars: SEOPillarScores;
     strengths: string[];
     weaknesses: string[];
+    ctrRiskScore: number;
+    ctrRiskReasons: string[];
 }
 
 interface ScrapedDetails {
@@ -320,139 +329,98 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         ].join('\n');
 
         try {
-            const response = await fetch('/api/openai/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gpt-4o',
-                    messages: [
-                        { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". Optimize for Relevance x Click Appeal x Buyer Intent x Conversion Clarity. CRITICAL: In the description field, use \n (actual newline characters) to preserve line breaks, section headers, spacing, bullets, and paragraph structure. Do NOT return the description as one flat paragraph.' },
-                        { role: 'user', content: promptLines }
-                    ],
-                    response_format: { type: 'json_object' },
-                    temperature: 0.7
-                }),
-            });
+            let bestOptimizedData: OptimizedDetails | null = null;
+            let bestScoreObj: SEOScore | null = null;
+            let currentPromptLines = [...promptLines];
 
-            if (!response.ok) throw new Error('Failed to optimize with AI');
-            const result = await response.json();
-            let content = result.choices[0].message.content;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                console.log(`Optimization Attempt ${attempt}/3...`);
 
-            // Clean markdown code blocks if present
-            if (content.includes('```')) {
-                content = content.replace(/```json|```/g, '').trim();
-            }
-
-            let aiResponse = JSON.parse(content);
-
-            const titleStr = aiResponse.title || "";
-            const tagsArr = aiResponse.tags || [];
-
-            const fillerDensity = calculateFillerDensity(titleStr);
-            const vagueTagCount = tagsArr.filter((t: string) => classifyTag(t) === 'vague').length;
-            const vagueTagRatio = tagsArr.length > 0 ? vagueTagCount / tagsArr.length : 0;
-
-            if (fillerDensity > 0.3 || vagueTagRatio > 0.3 || titleStr.length < 110) {
-                const retryLines = [
-                    'Your previous output contains low-efficiency phrases, low character count, or vague tags.',
-                    '',
-                    'Rewrite ONLY:',
-                    '- The title tail section',
-                    '- Tags classified as vague',
-                    '',
-                    'Keep:',
-                    '- Dominant buyer phrase intact.',
-                    '- Niche differentiation intact.',
-                    '',
-                    'Remove:',
-                    '- Generic format phrases',
-                    '- Broad craft terms',
-                    '- Low purchase-intent tags',
-                    '',
-                    'Do not shorten below 120 characters.',
-                    '',
-                    'Return JSON only matching the schema: { "title": "...", "description": "...", "tags": [...] }',
-                ].join('\n');
-
-                const retryResponse = await fetch('/api/openai/chat', {
+                const response = await fetch('/api/openai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: 'gpt-4o',
                         messages: [
-                            { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON.' },
-                            { role: 'user', content: retryLines }
+                            { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". Optimize for Relevance x Click Appeal x Buyer Intent x Conversion Clarity. CRITICAL: In the description field, use \\n (actual newline characters) to preserve line breaks, section headers, spacing, bullets, and paragraph structure. Do NOT return the description as one flat paragraph.' },
+                            { role: 'user', content: currentPromptLines.join('\n') }
                         ],
                         response_format: { type: 'json_object' },
-                        temperature: 0.7
+                        temperature: attempt === 1 ? 0.7 : Math.min(0.9, 0.7 + (attempt * 0.1))
                     }),
                 });
 
-                if (retryResponse.ok) {
-                    const retryResult = await retryResponse.json();
-                    let retryContent = retryResult.choices[0].message.content;
-                    if (retryContent.includes('```')) {
-                        retryContent = retryContent.replace(/```json|```/g, '').trim();
-                    }
-                    const retryData = JSON.parse(retryContent);
-                    if (retryData.title && retryData.title.length > titleStr.length) {
-                        aiResponse.title = retryData.title;
-                    }
-                    if (retryData.tags && retryData.tags.length > 0) {
-                        aiResponse.tags = retryData.tags;
-                    }
-                }
-            }
+                if (!response.ok) throw new Error(`Failed to optimize with AI on attempt ${attempt}`);
+                const result = await response.json();
+                let content = result.choices[0].message.content;
 
-            // Enforce clean 140 char hard cap — strictly cut at the last complete word boundary
-            if (aiResponse.title && aiResponse.title.length > 140) {
-                let text = aiResponse.title.substring(0, 140);
-
-                // If the 141st character is not a space, we sliced a word.
-                // We must backtrack to the last space to avoid cut-off words like "Statio"
-                if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
-                    const lastSpaceIndex = text.lastIndexOf(' ');
-                    if (lastSpaceIndex > 0) {
-                        text = text.substring(0, lastSpaceIndex);
-                    }
+                if (content.includes('```')) {
+                    content = content.replace(/```json|```/g, '').trim();
                 }
 
-                // Clean up trailing commas or punctuation
-                aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
-            }
+                let aiResponse = JSON.parse(content);
 
-            // Enforce 20 char tag limit — truncate at last complete word
-            if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
-                aiResponse.tags = aiResponse.tags.map((tag: string) => {
-                    if (tag.length <= 20) return tag;
-                    let truncated = tag.substring(0, 20);
-                    const lastSpace = truncated.lastIndexOf(' ');
-                    if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
-                    return truncated.trim();
-                });
-            }
+                if (aiResponse.title && aiResponse.title.length > 140) {
+                    let text = aiResponse.title.substring(0, 140);
+                    if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
+                        const lastSpaceIndex = text.lastIndexOf(' ');
+                        if (lastSpaceIndex > 0) text = text.substring(0, lastSpaceIndex);
+                    }
+                    aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
+                }
 
-            setOptimizedData(aiResponse);
+                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
+                    aiResponse.tags = aiResponse.tags.map((tag: string) => {
+                        if (tag.length <= 20) return tag;
+                        let truncated = tag.substring(0, 20);
+                        const lastSpace = truncated.lastIndexOf(' ');
+                        if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
+                        return truncated.trim();
+                    });
+                }
 
-            // Kick off optimized listing evaluation
-            setIsEvaluatingOptimized(true);
-            try {
-                const score = await evaluateListing({
+                setIsEvaluatingOptimized(true);
+                const evalScore = await evaluateListing({
                     title: aiResponse.title,
                     description: aiResponse.description,
                     tags: aiResponse.tags
                 });
-                setOptimizedData(prev => prev ? { ...prev, score } : null);
-            } catch (evalErr) {
-                console.error("Failed to evaluate optimized listing:", evalErr);
-            } finally {
                 setIsEvaluatingOptimized(false);
+
+                if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
+                    bestScoreObj = evalScore;
+                    bestOptimizedData = { ...aiResponse, score: evalScore };
+                }
+
+                if (evalScore.overallScore >= 100) {
+                    break;
+                }
+
+                if (attempt < 3 && evalScore.weaknesses.length > 0) {
+                    currentPromptLines = [
+                        'You are a Pro Seller Level Etsy SEO expert.',
+                        `Your previous optimization attempt scored ${evalScore.overallScore}/100.`,
+                        `Our rigid deterministic testing engine flagged these EXACT weaknesses that MUST be fixed:`,
+                        ...evalScore.weaknesses.map((w: string) => `- ${w}`),
+                        '',
+                        'REWRITE the output to EXPLICITLY resolve these weaknesses WITHOUT breaking the core constraints (length limits, product intent, format).',
+                        '',
+                        '=== PREVIOUS OUTPUT SO YOU KNOW WHAT FAILED ===',
+                        'Title: ' + aiResponse.title,
+                        'Tags: ' + (aiResponse.tags || []).join(', '),
+                        '',
+                        ...promptLines
+                    ];
+                }
             }
+
+            setOptimizedData(bestOptimizedData);
 
         } catch (err: any) {
             setError('AI Optimization failed: ' + err.message);
         } finally {
             setIsOptimizing(false);
+            setIsEvaluatingOptimized(false);
         }
     };
 
@@ -495,130 +463,98 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         ].join('\n');
 
         try {
-            const response = await fetch('/api/openai/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: 'gpt-4o',
-                    messages: [
-                        { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". CRITICAL: In the description field, use \\n (actual newline characters) to preserve formatting.' },
-                        { role: 'user', content: promptLines }
-                    ],
-                    response_format: { type: 'json_object' },
-                    temperature: 0.7
-                }),
-            });
+            let bestOptimizedData: OptimizedDetails | null = null;
+            let bestScoreObj: SEOScore | null = null;
+            let currentPromptLines = [...promptLines];
 
-            if (!response.ok) throw new Error('Failed to refine with AI');
-            const result = await response.json();
-            let content = result.choices[0].message.content;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                console.log(`Refinement Attempt ${attempt}/3...`);
 
-            if (content.includes('```')) {
-                content = content.replace(/```json|```/g, '').trim();
-            }
-
-            let aiResponse = JSON.parse(content);
-
-            const titleStr = aiResponse.title || "";
-            const tagsArr = aiResponse.tags || [];
-
-            const fillerDensity = calculateFillerDensity(titleStr);
-            const vagueTagCount = tagsArr.filter((t: string) => classifyTag(t) === 'vague').length;
-            const vagueTagRatio = tagsArr.length > 0 ? vagueTagCount / tagsArr.length : 0;
-
-            if (fillerDensity > 0.3 || vagueTagRatio > 0.3 || titleStr.length < 110) {
-                const retryLines = [
-                    'Your previous output contains low-efficiency phrases, low character count, or vague tags.',
-                    '',
-                    'Rewrite ONLY:',
-                    '- The title tail section',
-                    '- Tags classified as vague',
-                    '',
-                    'Keep:',
-                    '- Dominant buyer phrase intact.',
-                    '- Niche differentiation intact.',
-                    '',
-                    'Remove:',
-                    '- Generic format phrases',
-                    '- Broad craft terms',
-                    '- Low purchase-intent tags',
-                    '',
-                    'Do not shorten below 120 characters.',
-                    '',
-                    'Return JSON only matching the schema: { "title": "...", "description": "...", "tags": [...] }',
-                ].join('\n');
-
-                const retryResponse = await fetch('/api/openai/chat', {
+                const response = await fetch('/api/openai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         model: 'gpt-4o',
                         messages: [
-                            { role: 'system', content: 'You are an Etsy SEO expert. Respond only with valid JSON.' },
-                            { role: 'user', content: retryLines }
+                            { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". CRITICAL: In the description field, use \\n (actual newline characters) to preserve formatting.' },
+                            { role: 'user', content: currentPromptLines.join('\n') }
                         ],
                         response_format: { type: 'json_object' },
-                        temperature: 0.7
+                        temperature: attempt === 1 ? 0.7 : Math.min(0.9, 0.7 + (attempt * 0.1))
                     }),
                 });
 
-                if (retryResponse.ok) {
-                    const retryResult = await retryResponse.json();
-                    let retryContent = retryResult.choices[0].message.content;
-                    if (retryContent.includes('```')) {
-                        retryContent = retryContent.replace(/```json|```/g, '').trim();
-                    }
-                    const retryData = JSON.parse(retryContent);
-                    if (retryData.title && retryData.title.length > titleStr.length) {
-                        aiResponse.title = retryData.title;
-                    }
-                    if (retryData.tags && retryData.tags.length > 0) {
-                        aiResponse.tags = retryData.tags;
-                    }
+                if (!response.ok) throw new Error(`Failed to refine with AI on attempt ${attempt}`);
+                const result = await response.json();
+                let content = result.choices[0].message.content;
+
+                if (content.includes('```')) {
+                    content = content.replace(/```json|```/g, '').trim();
                 }
-            }
 
-            // Enforce character caps defensively
-            if (aiResponse.title && aiResponse.title.length > 140) {
-                let text = aiResponse.title.substring(0, 140);
-                if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
-                    const lastSpaceIndex = text.lastIndexOf(' ');
-                    if (lastSpaceIndex > 0) text = text.substring(0, lastSpaceIndex);
+                let aiResponse = JSON.parse(content);
+
+                if (aiResponse.title && aiResponse.title.length > 140) {
+                    let text = aiResponse.title.substring(0, 140);
+                    if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
+                        const lastSpaceIndex = text.lastIndexOf(' ');
+                        if (lastSpaceIndex > 0) text = text.substring(0, lastSpaceIndex);
+                    }
+                    aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
                 }
-                aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
-            }
 
-            if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
-                aiResponse.tags = aiResponse.tags.map((tag: string) => {
-                    if (tag.length <= 20) return tag;
-                    let truncated = tag.substring(0, 20);
-                    const lastSpace = truncated.lastIndexOf(' ');
-                    if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
-                    return truncated.trim();
-                });
-            }
+                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
+                    aiResponse.tags = aiResponse.tags.map((tag: string) => {
+                        if (tag.length <= 20) return tag;
+                        let truncated = tag.substring(0, 20);
+                        const lastSpace = truncated.lastIndexOf(' ');
+                        if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
+                        return truncated.trim();
+                    });
+                }
 
-            setOptimizedData(aiResponse as OptimizedDetails);
-
-            // Re-evaluate the new refinement
-            setIsEvaluatingOptimized(true);
-            try {
-                const score = await evaluateListing({
+                setIsEvaluatingOptimized(true);
+                const evalScore = await evaluateListing({
                     title: aiResponse.title,
                     description: aiResponse.description,
                     tags: aiResponse.tags
                 });
-                setOptimizedData(prev => prev ? { ...prev, score } : null);
-            } catch (err) {
-                console.error("Evaluation failed on refinement:", err);
-            } finally {
                 setIsEvaluatingOptimized(false);
+
+                if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
+                    bestScoreObj = evalScore;
+                    bestOptimizedData = { ...aiResponse, score: evalScore };
+                }
+
+                if (evalScore.overallScore >= 100) {
+                    break;
+                }
+
+                if (attempt < 3 && evalScore.weaknesses.length > 0) {
+                    currentPromptLines = [
+                        'You are a Pro Seller Level Etsy SEO expert.',
+                        `Your previous refinement attempt scored ${evalScore.overallScore}/100.`,
+                        `Our strict testing engine flagged these EXACT weaknesses that MUST be fixed:`,
+                        ...evalScore.weaknesses.map((w: string) => `- ${w}`),
+                        '',
+                        'REWRITE the output to EXPLICITLY resolve these weaknesses WITHOUT breaking the core constraints (length limits, product intent, format).',
+                        '',
+                        '=== PREVIOUS OUTPUT ===',
+                        'Title: ' + aiResponse.title,
+                        'Tags: ' + (aiResponse.tags || []).join(', '),
+                        '',
+                        ...promptLines
+                    ];
+                }
             }
+
+            setOptimizedData(bestOptimizedData);
 
         } catch (err: any) {
             setError('AI Refinement failed: ' + err.message);
         } finally {
             setIsRefining(false);
+            setIsEvaluatingOptimized(false);
         }
     };
 
@@ -716,10 +652,22 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                         </ul>
                                     </div>
                                 </div>
-                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 flex justify-between text-xs text-slate-400">
-                                    <span><strong className="text-slate-500">TITLE </strong> <span className={scrapedData.score.titleScore < 60 ? 'text-red-400' : scrapedData.score.titleScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}>{scrapedData.score.titleScore}/100</span></span>
-                                    <span><strong className="text-slate-500">TAGS </strong> <span className={scrapedData.score.tagsScore < 60 ? 'text-red-400' : scrapedData.score.tagsScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}>{scrapedData.score.tagsScore}/100</span></span>
-                                    <span><strong className="text-slate-500">DESC </strong> <span className={scrapedData.score.descriptionScore < 60 ? 'text-red-400' : scrapedData.score.descriptionScore >= 80 ? 'text-emerald-400' : 'text-amber-400'}>{scrapedData.score.descriptionScore}/100</span></span>
+                                <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 flex flex-col gap-2 text-xs text-slate-400">
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Title Core</strong> <span className={scrapedData.score.pillars.title >= 25 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.title}/30</span></div>
+                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={scrapedData.score.pillars.tags >= 20 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.tags}/25</span></div>
+                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Description</strong> <span className={scrapedData.score.pillars.description >= 15 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.description}/20</span></div>
+                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">CTR Safety</strong> <span className={scrapedData.score.pillars.ctrRisk >= 10 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.ctrRisk}/15</span></div>
+                                        <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Positioning</strong> <span className={scrapedData.score.pillars.clusterPositioning >= 8 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{scrapedData.score.pillars.clusterPositioning}/10</span></div>
+                                    </div>
+                                    {scrapedData.score.ctrRiskReasons && scrapedData.score.ctrRiskReasons.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                            <strong className="text-slate-500 uppercase text-[10px] block mb-1">CTR Risk Factors detected:</strong>
+                                            <ul className="space-y-1 text-[10px] text-slate-400">
+                                                {scrapedData.score.ctrRiskReasons.map((r, i) => <li key={i}>• {r}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -794,10 +742,22 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                                                 ))}
                                             </ul>
                                         </div>
-                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 flex justify-between text-xs text-slate-400">
-                                            <span><strong className="text-slate-500">TITLE </strong> <span className={optimizedData.score.titleScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.titleScore}/100</span></span>
-                                            <span><strong className="text-slate-500">TAGS </strong> <span className={optimizedData.score.tagsScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.tagsScore}/100</span></span>
-                                            <span><strong className="text-slate-500">DESC </strong> <span className={optimizedData.score.descriptionScore >= 90 ? 'text-emerald-400' : ''}>{optimizedData.score.descriptionScore}/100</span></span>
+                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 flex flex-col gap-2 text-xs text-slate-400">
+                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Title Core</strong> <span className={optimizedData.score.pillars.title >= 25 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.title}/30</span></div>
+                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={optimizedData.score.pillars.tags >= 20 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.tags}/25</span></div>
+                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Description</strong> <span className={optimizedData.score.pillars.description >= 15 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.description}/20</span></div>
+                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">CTR Safety</strong> <span className={optimizedData.score.pillars.ctrRisk >= 10 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.ctrRisk}/15</span></div>
+                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Positioning</strong> <span className={optimizedData.score.pillars.clusterPositioning >= 8 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.clusterPositioning}/10</span></div>
+                                            </div>
+                                            {optimizedData.score.ctrRiskReasons && optimizedData.score.ctrRiskReasons.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                                    <strong className="text-slate-500 uppercase text-[10px] block mb-1">CTR Risk Factors detected:</strong>
+                                                    <ul className="space-y-1 text-[10px] text-slate-400">
+                                                        {optimizedData.score.ctrRiskReasons.map((r, i) => <li key={i}>• {r}</li>)}
+                                                    </ul>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -882,8 +842,9 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                         )}
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };
 

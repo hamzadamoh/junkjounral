@@ -1,151 +1,268 @@
-import { calculateFillerDensity, checkTailEfficiency, LOW_EFFICIENCY_TITLE_WORDS } from './seoEfficiencyRules';
-import { calculateTagIntentScore, classifyTag, analyzeTagBalance } from './tagIntentClassifier';
+import { calculateFillerDensity } from './seoEfficiencyRules';
+import { analyzeTagBalance } from './tagIntentClassifier';
 import { calculateSpecificityScore, calculateIntentDensity, checkNicheSharpness } from './semanticSpecificity';
+import { analyzeTagContainment } from './productBoundaryGuard';
+import { calculateCTRRisk } from './ctrRiskAnalyzer';
+
+export interface SEOPillarScores {
+    title: number;
+    tags: number;
+    description: number;
+    ctrRisk: number;
+    clusterPositioning: number;
+}
 
 export interface SEOScore {
     overallScore: number;
-    titleScore: number;
-    tagsScore: number;
-    descriptionScore: number;
+    pillars: SEOPillarScores;
     strengths: string[];
     weaknesses: string[];
+    ctrRiskScore: number;
+    ctrRiskReasons: string[];
 }
 
 export function evaluateListingSEO(title: string, tags: string[], description: string): SEOScore {
     let strengths: string[] = [];
     let weaknesses: string[] = [];
+    let ctrRiskReasons: string[] = [];
 
-    // TITLE EVALUATION
-    let titleScore = 100;
+    // PILLAR 1: TITLE ENGINEERING (Max 30)
+    let titleScore = 0;
+    let titleCap = 100;
+
     if (!title) {
-        titleScore = 0;
         weaknesses.push("Title is missing.");
     } else {
-        // 1. Core Filler check
-        const fillerDensity = calculateFillerDensity(title);
-        if (fillerDensity > 0.4) {
-            titleScore -= 25;
-            weaknesses.push(`High filler density (${Math.round(fillerDensity * 100)}%). Remove broad terms.`);
-        } else if (fillerDensity > 0.25) {
-            titleScore -= 15;
-            weaknesses.push(`Moderate filler density (${Math.round(fillerDensity * 100)}%). Make phrasing more specific.`);
-        }
+        const lowerTitle = title.toLowerCase();
 
-        // 2. Tail efficiency
-        if (checkTailEfficiency(title)) {
-            titleScore -= 10;
-            weaknesses.push("Weak tail detected. Remove trailing category phrases.");
-        }
-
-        // 3. Semantic Specificity Reward
-        const specificity = calculateSpecificityScore(title);
-        if (specificity.score > 0) {
-            titleScore += specificity.score;
-            strengths.push(`High specificity phrasing detected: ${specificity.matches.join(', ')}`);
-        }
-
-        // 4. Intent Density Enforcement
+        // 1. Buyer Intent Core (10 pts)
+        const first60 = lowerTitle.substring(0, 60);
         const intent = calculateIntentDensity(title);
-        if (intent.density < 2) {
-            titleScore -= 15;
-            weaknesses.push("Low intent density. Needs at least 2 core product nouns (e.g., 'junk journal', 'ephemera').");
+        const hasCoreInFirst60 = intent.matches.some(noun => first60.includes(noun));
+
+        if (hasCoreInFirst60) {
+            titleScore += 10;
         } else {
-            strengths.push(`High intent density (${intent.density} core nouns).`);
+            titleCap = 20;
+            weaknesses.push("Missing core product noun in the first 60 characters.");
         }
 
-        // 5. Niche Sharpness
+        // 2. Intent Density (5 pts)
+        const specific = calculateSpecificityScore(title);
         const niche = checkNicheSharpness(title);
-        if (niche.isDiluted) {
-            titleScore -= 10;
-            weaknesses.push(`Aesthetic saturation warning. Too many themes (${niche.matchedAesthetics.length}). Focus the niche.`);
+        const hasThemeModifier = niche.matchedAesthetics.length > 0 || specific.matches.length > 0;
+
+        if (intent.density >= 2 && hasThemeModifier) {
+            titleScore += 5;
+            strengths.push(`High intent density (${intent.density} core nouns) with thematic modifiers.`);
+        } else if (intent.density === 1 && hasThemeModifier) {
+            titleScore += 3;
+            weaknesses.push("Only 1 core product noun detected (need 2+ for max density).");
+        } else {
+            weaknesses.push("aesthetic-only title detected or missing noun density (0 points).");
         }
 
-        // 6. Competitive Length Optimization
-        const isHighlyOptimized = fillerDensity < 0.15 && specificity.score >= 10 && intent.density >= 2;
-
-        if (title.length < 110) {
-            titleScore -= 10;
-            weaknesses.push("Title is too short. Use more secondary modifiers.");
-        } else if (title.length <= 125 && isHighlyOptimized) {
-            strengths.push("Competitive shortened title length allowed due to extreme density density.");
-        } else if (title.length >= 110 && title.length <= 140) {
-            strengths.push("Excellent title length (110-140 chars).");
+        // 3. Specificity Index (5 pts)
+        if (specific.matches.length >= 2) {
+            titleScore += 5;
+            strengths.push(`High specificity motif density: ${specific.matches.join(', ')}`);
+        } else if (specific.matches.length === 1) {
+            titleScore += 3;
+            strengths.push(`Specificity motif detected: ${specific.matches[0]}`);
+        } else {
+            weaknesses.push("Missing high-specific motif (e.g. lavender, sakura, cathedral).");
         }
 
-        if (title.length > 145) {
-            titleScore -= 10;
-            weaknesses.push("Title exceeds padding limits.");
+        // 4. Filler Density (5 pts)
+        const fillerRatio = calculateFillerDensity(title);
+        if (fillerRatio < 0.1) {
+            titleScore += 5;
+            strengths.push(`Excellent filler density (${Math.round(fillerRatio * 100)}%).`);
+        } else if (fillerRatio <= 0.2) {
+            titleScore += 3;
+        } else if (fillerRatio <= 0.3) {
+            titleScore += 1;
+            weaknesses.push(`High filler density (${Math.round(fillerRatio * 100)}%).`);
+        } else {
+            weaknesses.push(`Severe filler density (${Math.round(fillerRatio * 100)}%).`);
+        }
+
+        // 5. Niche Sharpness (5 pts)
+        const aestheticCount = niche.matchedAesthetics.length;
+        if (aestheticCount <= 3) {
+            titleScore += 5;
+        } else if (aestheticCount === 4) {
+            titleScore += 2; // -3 from 5
+            weaknesses.push(`Aesthetic saturation warning (4 themes). Focus the niche.`);
+        } else {
+            weaknesses.push(`Aesthetic overload (${aestheticCount} themes). Severely dilutes niche.`);
         }
     }
-    titleScore = Math.min(100, Math.max(titleScore, 0));
 
-    // TAGS EVALUATION
+    // PILLAR 2: TAG INTELLIGENCE (Max 25)
     let tagsScore = 0;
     if (!tags || tags.length === 0) {
         weaknesses.push("Missing tags.");
     } else {
-        tagsScore = calculateTagIntentScore(tags);
         const analysis = analyzeTagBalance(tags);
+        const containment = analyzeTagContainment(tags);
 
-        if (tagsScore < 70) {
-            weaknesses.push("High ratio of vague tags. Use stricter product+aesthetic terms.");
-        }
-
-        if (analysis.transactional >= 5 && analysis.thematic >= 3 && analysis.vague <= 3) {
-            strengths.push(`Perfectly balanced tag ecosystem (${analysis.transactional}T/${analysis.thematic}M/${analysis.vague}V).`);
+        // 1. Transactional Tag Ratio (10 pts)
+        if (analysis.transactional >= 9) {
+            tagsScore += 10;
+        } else if (analysis.transactional >= 6) {
+            tagsScore += 7;
         } else {
-            if (analysis.transactional < 5) weaknesses.push(`Low transactional tags (${analysis.transactional}/13). Need 5 minimum.`);
-            if (analysis.thematic < 3) weaknesses.push(`Low thematic tags (${analysis.thematic}/13). Need 3 minimum.`);
-            if (analysis.vague > 3) weaknesses.push(`Too many vague tags (${analysis.vague}/13). Maximum 3 allowed.`);
+            weaknesses.push(`Low transactional tags (${analysis.transactional}/13). Need 6+ containing core product nouns.`);
         }
 
-        if (tags.length < 13) {
-            weaknesses.push(`Only ${tags.length}/13 tags used.`);
+        // 2. Thematic Spread (5 pts)
+        if (analysis.thematic >= 3) {
+            tagsScore += 5;
+        } else if (analysis.thematic === 0 && analysis.transactional > 0) {
+            tagsScore += 2; // 5 - 3
+            weaknesses.push("All tags are product-only. Missing thematic spread.");
+        } else {
+            tagsScore += 3;
+            weaknesses.push(`Low thematic tags (${analysis.thematic}/13). Need 3 minimum.`);
+        }
+
+        // 3. Vague Tag Ratio (5 pts)
+        const vagueRatio = tags.length > 0 ? analysis.vague / tags.length : 1;
+        if (vagueRatio < 0.1) {
+            tagsScore += 5;
+        } else if (vagueRatio <= 0.25) {
+            tagsScore += 3;
+        } else {
+            weaknesses.push(`Too many vague tags (${Math.round(vagueRatio * 100)}%). Reduce generic phrases.`);
+        }
+
+        // 4. Containment Compliance (5 pts)
+        if (containment.isValid && containment.formatViolations.length === 0) {
+            tagsScore += 5;
+        } else {
+            titleCap = Math.min(titleCap, 85); // Auto cap at 85
+            weaknesses.push(`CRITICAL: Format containment violation detected (${containment.formatViolations.join(', ')}). Auto-capping score at 85.`);
         }
     }
 
-    // DESCRIPTION EVALUATION
-    let descriptionScore = 100;
+    // PILLAR 3: DESCRIPTION PERFORMANCE (Max 20)
+    let descScore = 0;
     if (!description) {
-        descriptionScore = 0;
         weaknesses.push("Missing description.");
     } else {
-        if (description.length < 800) {
-            descriptionScore -= 20;
-            weaknesses.push("Description is too short (< 800 chars).");
+        const firstParagraph = description.split('\n\n')[0] || description.substring(0, 300);
+        const lowerDesc = description.toLowerCase();
+
+        // 1. Emotional Hook (5 pts)
+        const sensoryWords = ["soft", "delicate", "moody", "dreamy", "aged", "textured", "faded", "hand-painted", "romantic", "whimsical", "vintage", "enchanted", "gothic", "aesthetic"];
+        const audienceTerms = ["for crafting", "journalers", "enthusiast", "maker", "creator", "artist", "scrapbooker", "diy", "you"];
+        const hasSensory = sensoryWords.some(w => firstParagraph.toLowerCase().includes(w));
+        const hasAudience = audienceTerms.some(w => firstParagraph.toLowerCase().includes(w));
+
+        let missingHooks = 0;
+        if (!hasSensory) missingHooks++;
+        if (!hasAudience) missingHooks++;
+
+        if (missingHooks === 0) {
+            descScore += 5;
+            strengths.push("Strong emotional hook and audience indicator in description.");
+        } else if (missingHooks === 1) {
+            descScore += 3;
         } else {
-            strengths.push("Detailed, ample description length.");
+            weaknesses.push("Missing sensory/emotional hook and audience indicator in description opening.");
         }
 
-        const firstParagraph = description.split('\n\n')[0] || description.substring(0, 300);
-        const sensoryWords = ["soft", "delicate", "moody", "dreamy", "aged", "textured", "faded", "hand-painted", "romantic", "whimsical", "vintage", "enchanted", "gothic", "aesthetic"];
-
-        const hasEmotion = sensoryWords.some(word =>
-            firstParagraph.toLowerCase().includes(word)
-        );
-
-        if (!hasEmotion) {
-            descriptionScore -= 10;
-            weaknesses.push("Missing sensory or emotional hook in the opening paragraph.");
+        // 2. Differentiation Signal (5 pts)
+        const specific = calculateSpecificityScore(description);
+        if (specific.matches.length > 0) {
+            descScore += 5;
         } else {
-            strengths.push("Strong sensory phrasing and emotional mood detected in description.");
+            weaknesses.push("Generic description template without unique differentiation motifs.");
+        }
+
+        // 3. Format Clarity (5 pts)
+        const hasDigital = lowerDesc.includes("digital");
+        const hasPrintable = lowerDesc.includes("printable") || lowerDesc.includes("print");
+        const hasNoPhysical = lowerDesc.includes("no physical") || lowerDesc.includes("physical item");
+        const hasFormat = lowerDesc.includes("pdf") || lowerDesc.includes("jpg") || lowerDesc.includes("png") || lowerDesc.includes("zip");
+
+        if (hasDigital && hasPrintable && hasNoPhysical && hasFormat) {
+            descScore += 5;
+        } else {
+            descScore += 2; // -3 from 5
+            weaknesses.push("Ambiguous format clarity. Missing clear 'no physical item' or file format indicators.");
+        }
+
+        // 4. Structure & Length (5 pts)
+        if (description.length > 800 && description.includes("-")) {
+            descScore += 5;
+        } else if (description.length >= 600) {
+            descScore += 3;
+        } else {
+            weaknesses.push(`Description is too short (${description.length} chars). Clean formatting and depth needed.`);
         }
     }
-    descriptionScore = Math.max(descriptionScore, 0);
 
-    // OVERALL
-    const overallScore = Math.round(
-        titleScore * 0.4 +
-        tagsScore * 0.3 +
-        descriptionScore * 0.3
-    );
+    // PILLAR 4: CTR RISK PROFILE (Max 15)
+    // Start at 15. Subtract risk.
+    const ctrData = calculateCTRRisk(title, description);
+    ctrRiskReasons.push(...ctrData.reasons);
+    let ctrScore = ctrData.riskScore;
+
+    // PILLAR 5: CLUSTER POSITIONING (Max 10)
+    let clusterScore = 10;
+    const niche = checkNicheSharpness(title || "");
+    if (niche.matchedAesthetics.length > 2) {
+        clusterScore -= 3;
+        weaknesses.push("Blended identity cluster (Too many aesthetics). Focus on ONE dominant pattern.");
+    }
+
+    // CALCULATE FINAL SCORE
+    let overallScore = titleScore + tagsScore + descScore + ctrScore + clusterScore;
+
+    // ELITE 100 CONDITIONS CHECK
+    let isElite = true;
+    const fillerRatio = calculateFillerDensity(title || "");
+    const intent = calculateIntentDensity(title || "");
+    const specific = calculateSpecificityScore(title || "");
+    const analysis = analyzeTagBalance(tags || []);
+    const lowerTitle = (title || "").toLowerCase();
+    const first50 = lowerTitle.substring(0, 50);
+    const hasCoreInFirst50 = intent.matches.some(noun => first50.includes(noun));
+    const containment = analyzeTagContainment(tags || []);
+
+    if (fillerRatio >= 0.1) isElite = false;
+    if (intent.density < 2) isElite = false;
+    if (specific.matches.length === 0) isElite = false;
+    if (analysis.vague / Math.max(tags?.length || 1, 1) >= 0.1) isElite = false;
+    if (analysis.transactional < 6) isElite = false;
+    if (containment.formatViolations.length > 0) isElite = false;
+    if (niche.matchedAesthetics.length >= 4) isElite = false;
+    if (!hasCoreInFirst50) isElite = false;
+
+    if (!isElite && overallScore > 95) {
+        overallScore = 95; // Anything missing -> 95 max
+    }
+
+    if (overallScore > titleCap) {
+        overallScore = titleCap;
+    }
+
+    overallScore = Math.max(0, Math.min(100, Math.round(overallScore)));
 
     return {
         overallScore,
-        titleScore,
-        tagsScore,
-        descriptionScore,
+        pillars: {
+            title: titleScore,
+            tags: tagsScore,
+            description: descScore,
+            ctrRisk: ctrScore,
+            clusterPositioning: clusterScore
+        },
         strengths,
-        weaknesses
+        weaknesses,
+        ctrRiskScore: ctrData.riskScore,
+        ctrRiskReasons
     };
 }
