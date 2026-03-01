@@ -26,7 +26,9 @@ const FORMAT_VIOLATIONS = [
     "apparel",
     "kit",
     "pockets",
-    "tags"
+    "tags",
+    "set",
+    "scrapbooking set"
 ];
 
 const ALLOWED_AUDIENCE_TERMS = [

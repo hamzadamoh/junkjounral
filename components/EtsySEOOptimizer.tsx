@@ -6,7 +6,7 @@ import { buildIdentityLockPrompt } from '../src/lib/buildIdentityLockPrompt';
 import { buildViolationReport } from '../src/lib/buildViolationReport';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
 import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
-import { analyzeTagContainment } from '../src/lib/productBoundaryGuard';
+import { analyzeTagContainment, violatesFormatContainment } from '../src/lib/productBoundaryGuard';
 
 interface SEOPillarScores {
     title: number;
@@ -484,6 +484,27 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     });
                 }
 
+                // BOUNDARY GUARD INTERCEPT
+                const tagBoundary = analyzeTagContainment(aiResponse.tags || []);
+                const titleFormatViolation = aiResponse.title ? violatesFormatContainment(aiResponse.title) : false;
+
+                if (!tagBoundary.isValid || titleFormatViolation) {
+                    console.warn(`Attempt ${attempt} blocked by format boundary guard.`);
+                    const violations = [...tagBoundary.formatViolations];
+                    if (titleFormatViolation) violations.push("Title contains format violation.");
+
+                    if (attempt < 3) {
+                        currentPromptLines.push(
+                            `=== CRITICAL BOUNDARY VIOLATION ===`,
+                            `Your previous attempt included banned terms: ${violations.join(', ')}.`,
+                            `You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`
+                        );
+                        continue; // Force regenerate immediately without scoring
+                    } else {
+                        throw new Error(`AI failed to generate results free of banned terms after 3 attempts. Banned terms detected: ${violations.join(', ')}`);
+                    }
+                }
+
                 setIsEvaluatingOptimized(true);
                 const evalScore = await evaluateListing({
                     title: aiResponse.title,
@@ -620,6 +641,27 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                         if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
                         return truncated.trim();
                     });
+                }
+
+                // BOUNDARY GUARD INTERCEPT
+                const tagBoundary = analyzeTagContainment(aiResponse.tags || []);
+                const titleFormatViolation = aiResponse.title ? violatesFormatContainment(aiResponse.title) : false;
+
+                if (!tagBoundary.isValid || titleFormatViolation) {
+                    console.warn(`Refinement attempt ${attempt} blocked by format boundary guard.`);
+                    const violations = [...tagBoundary.formatViolations];
+                    if (titleFormatViolation) violations.push("Title contains format violation.");
+
+                    if (attempt < 3) {
+                        currentPromptLines.push(
+                            `=== CRITICAL BOUNDARY VIOLATION ===`,
+                            `Your previous attempt included banned terms: ${violations.join(', ')}.`,
+                            `You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`
+                        );
+                        continue; // Force regenerate immediately without scoring
+                    } else {
+                        throw new Error(`AI failed to refine results free of banned terms after 3 attempts. Banned terms detected: ${violations.join(', ')}`);
+                    }
                 }
 
                 setIsEvaluatingOptimized(true);
