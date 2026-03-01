@@ -437,6 +437,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '  "description": "first line\\n\\nsecond section\\n- bullet 1\\n- bullet 2",',
             '  "tags": ["13 tags each MUST be 1-20 characters, no exceptions"]',
             '}',
+            '',
+            'FINAL REMINDER BEFORE YOU OUTPUT:',
+            'Do not write "kit". Write "pages" instead.',
+            'Do not write "ephemera". Write "pages" instead.',
+            'Check your output one final time before returning it.'
         ].join('\n');
 
         try {
@@ -507,7 +512,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                         );
                         continue; // Force regenerate immediately without scoring
                     } else {
-                        throw new Error(`AI failed to generate results free of banned terms after 3 attempts. Banned terms detected: ${violations.join(', ')}`);
+                        throw new Error(`AI failed to generate results free of banned terms after 3 attempts. Banned terms detected: ${violations.length > 0 ? violations.join(', ') : 'unknown terms'}`);
                     }
                 }
 
@@ -603,6 +608,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '',
             '=== OUTPUT (JSON ONLY) ===',
             'Respond ONLY with a valid JSON object matching the exact structure previously requested: {"title": "", "description": "", "tags": []}.',
+            '',
+            'FINAL REMINDER BEFORE YOU OUTPUT:',
+            'Do not write "kit". Write "pages" instead.',
+            'Do not write "ephemera". Write "pages" instead.',
+            'Check your output one final time before returning it.'
         ].join('\n');
 
         try {
@@ -673,7 +683,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                         );
                         continue; // Force regenerate immediately without scoring
                     } else {
-                        throw new Error(`AI failed to refine results free of banned terms after 3 attempts. Banned terms detected: ${violations.join(', ')}`);
+                        throw new Error(`AI failed to refine results free of banned terms after 3 attempts. Banned terms detected: ${violations.length > 0 ? violations.join(', ') : 'unknown terms'}`);
                     }
                 }
 
