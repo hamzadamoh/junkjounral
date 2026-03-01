@@ -70,7 +70,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
             titleScore += 3;
             strengths.push(`Specificity motif detected: ${specific.matches[0]}`);
         } else {
-            weaknesses.push("Missing high-specific motif (e.g. lavender, sakura, cathedral).");
+            weaknesses.push("Missing a highly specific aesthetic motif or visual differentiation marker.");
         }
 
         // 4. Filler Density (5 pts)
