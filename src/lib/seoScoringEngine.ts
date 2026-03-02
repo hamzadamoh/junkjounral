@@ -174,12 +174,24 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         const themeWords = identityContract.primary_theme.toLowerCase().split(/\s+/).filter(w => w.length > 2);
         const stemmedThemeWords = themeWords.map(stemWord);
 
-        const themeTags = lowerTags.filter(t => {
-            const tagWords = t.split(/\s+/).map(stemWord);
-            return stemmedThemeWords.some(sw => tagWords.some(tw => tw.includes(sw) || sw.includes(tw)));
+        // Synonym map: expand theme words to include related terms
+        const synonymMap: Record<string, string[]> = {
+            'cat': ['feline', 'kitten', 'kitty', 'kitties'],
+            'dog': ['canine', 'puppy', 'puppies', 'pup'],
+        };
+        const expandedThemeWords = new Set<string>(stemmedThemeWords);
+        stemmedThemeWords.forEach(sw => {
+            if (synonymMap[sw]) {
+                synonymMap[sw].forEach(syn => expandedThemeWords.add(stemWord(syn)));
+            }
         });
 
-        console.log(`[Theme Coverage Debug] primary_theme="${identityContract.primary_theme}" | stemmed=[${stemmedThemeWords.join(', ')}] | matching tags (${themeTags.length}):`, themeTags, '| non-matching:', lowerTags.filter(t => !themeTags.includes(t)));
+        const themeTags = lowerTags.filter(t => {
+            const tagWords = t.split(/\s+/).map(stemWord);
+            return Array.from(expandedThemeWords).some(sw => tagWords.some(tw => tw.includes(sw) || sw.includes(tw)));
+        });
+
+        console.log(`[Theme Coverage Debug] primary_theme="${identityContract.primary_theme}" | expanded=[${Array.from(expandedThemeWords).join(', ')}] | matching tags (${themeTags.length}):`, themeTags, '| non-matching:', lowerTags.filter(t => !themeTags.includes(t)));
 
         if (themeTags.length >= 3) {
             themeCoverageScore += 5;
