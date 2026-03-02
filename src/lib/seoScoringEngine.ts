@@ -170,12 +170,21 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     // Theme Coverage (10 pts)
     if (identityContract && identityContract.primary_theme !== "unthemed") {
+        const stemWord = (w: string) => w.replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
         const themeWords = identityContract.primary_theme.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-        const themeTags = lowerTags.filter(t => themeWords.some(w => t.includes(w)));
+        const stemmedThemeWords = themeWords.map(stemWord);
+
+        const themeTags = lowerTags.filter(t => {
+            const tagWords = t.split(/\s+/).map(stemWord);
+            return stemmedThemeWords.some(sw => tagWords.some(tw => tw.includes(sw) || sw.includes(tw)));
+        });
+
+        console.log(`[Theme Coverage Debug] primary_theme="${identityContract.primary_theme}" | stemmed=[${stemmedThemeWords.join(', ')}] | matching tags (${themeTags.length}):`, themeTags, '| non-matching:', lowerTags.filter(t => !themeTags.includes(t)));
+
         if (themeTags.length >= 3) {
             themeCoverageScore += 5;
         } else {
-            weaknesses.push(`Missing theme coverage in tags. Need at least 3 tags containing '${identityContract.primary_theme}'.`);
+            weaknesses.push(`Missing theme coverage in tags. Need at least 3 tags containing '${identityContract.primary_theme}' (found ${themeTags.length}).`);
         }
 
         if (identityContract.secondary_themes.length > 0) {
