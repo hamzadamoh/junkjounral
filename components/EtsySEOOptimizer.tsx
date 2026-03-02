@@ -419,7 +419,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 '=== 1. COMPETITOR INTELLIGENCE (TRUSTED REFERENCE TITLES) ===',
                 'These titles are from verified high-performing shops in your niche.',
                 'They have proven sales data and are ranking organically.',
-                'Use their structural patterns as inspiration only — do not copy directly.',
+                'You MUST use at least 3 keyword phrases that appear across multiple reference shop titles. Identify the most repeated phrases across all reference titles and prioritize those in your generated title. Generic phrases like "Digital Papers" and "Nostalgic Printables" that do not appear in any reference title should be replaced with specific phrases that do appear.',
                 '',
                 ...insights.referenceTitles.map(rs =>
                     `${rs.shopId}:\n${rs.titles.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
@@ -437,7 +437,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             competitorPrompt = [
                 '=== 1. COMPETITOR INTELLIGENCE (TOP RANKING TITLES) ===',
                 'These are the current top organically ranking listings for this theme.',
-                'Use their structural patterns as inspiration only — do not copy directly.',
+                'You MUST use at least 3 keyword phrases that appear across multiple reference shop titles. Identify the most repeated phrases across all reference titles and prioritize those in your generated title. Generic phrases like "Digital Papers" and "Nostalgic Printables" that do not appear in any reference title should be replaced with specific phrases that do appear.',
                 '',
                 ...insights.topTitles.map((t, i) => `${i + 1}. ${t}`),
                 '',
