@@ -13,7 +13,9 @@ const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality
 const applyReplacements = (text: string): string => {
     if (!text) return "";
     let newText = text.replace(/\bwall art\b/gi, "pages")
-        .replace(/\bhome decor\b/gi, "pages");
+        .replace(/\bhome decor\b/gi, "pages")
+        .replace(/\bcommercial use license\b/gi, "")
+        .replace(/\bpdf download\b/gi, "");
     let cleanText = ` ${newText} `;
     for (const filler of FILLER_WORDS) {
         cleanText = cleanText.replace(new RegExp(`\\b${filler}\\b`, 'gi'), '');
@@ -38,9 +40,29 @@ const removeTitleDuplicates = (title: string): string => {
         .trim();
 };
 
+const truncateTo140 = (title: string): string => {
+    if (!title) return "";
+    let t = title.trim();
+    if (t.length <= 140) return t;
+
+    let truncated = t.substring(0, 140);
+    const lastSpace = truncated.lastIndexOf(' ');
+    const lastComma = truncated.lastIndexOf(',');
+    const cutPos = Math.max(lastSpace, lastComma);
+
+    if (cutPos > 100) {
+        truncated = truncated.substring(0, cutPos);
+    }
+
+    return truncated.replace(/[,-\s]+$/, '').trim();
+};
+
 const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): string => {
     if (!title) return "";
     let finalTitle = title.trim();
+
+    // Ensure it's truncated first so we don't start padding over the limit
+    finalTitle = truncateTo140(finalTitle);
 
     if (finalTitle.length >= 130) return finalTitle;
 
@@ -74,7 +96,7 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
         loopCount++;
     }
 
-    return finalTitle;
+    return truncateTo140(finalTitle);
 };
 
 
@@ -575,6 +597,7 @@ Return ONLY a JSON object:
             '- "Ephemera" must appear at least once in the title.',
             '- Last segment should be a delivery/format signal: "Digital Download", "Printable", "Digital Papers".',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
+            '- BANNED PHRASES: "Commercial Use License", "PDF Download". Do NOT include these anywhere in the title.',
             "- Strong title example from top-performing shop: 'Cozy Winter Junk Journal Pages, Digital Scrapbook Paper Kit, Snow Printable, Cottage Collage Sheet, Vintage Ephemera, Christmas Download' — 138 chars, 6 segments, theme in every segment.",
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
@@ -787,6 +810,7 @@ Return ONLY a JSON object:
                 // SILENT POST-PROCESSING
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
+                aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
@@ -957,6 +981,7 @@ Return ONLY a JSON object:
                 // SILENT POST-PROCESSING
                 aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
+                aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
