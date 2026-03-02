@@ -275,6 +275,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '- NEVER add generic trailing filler (e.g., "DIY Scrapbook Ephemera", "Printable Stationery", "Craft Supplies").',
             '- NEVER dump disconnected specs at the end of the title (e.g. ", 160+ Pages Printable"). Integrate them smoothly.',
             '- STRICTLY BAN ChatGPT-isms: "Creative Souls", "Crafting Delight", "Elevate", "Whimsical Journey", "Unleash your creativity". Titles are product names, not poetry.',
+            '- NEVER include "Commercial Use" or license language in the title. The title is for search discovery only.',
             '- Your hard cap is 140 characters. DO NOT cut off mid-word.',
             '',
             '=== H. EMOTIONAL DISTINCTION LAYER (HIGH-COMPETITION MODE) ===',
@@ -312,8 +313,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '5. Broader entry keywords',
             '6. Adjacent audience types',
             '',
-            'Example good angles: "botanical journal kit", "garden scrapbook", "cottagecore ephemera", "floral printable pages", "digital paper pack", "shabby chic art", "vintage craft kit"',
-            'Example BAD (too repetitive): "junk journal kit", "junk journal printable", "junk journal pages"',
+            'Example good angles: "botanical journal pages", "garden scrapbook", "cottagecore printable", "floral printable pages", "digital paper pack", "shabby chic papers", "vintage craft papers"',
+            'Example BAD (too repetitive): "junk journal pages", "junk journal printable", "junk journal papers"',
             '',
             'C. Reinforcement Rule (Advanced):',
             'You MAY lightly reinforce part of the main title phrase using a variation in ONE tag.',
@@ -322,7 +323,9 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '',
             'D. Buyer Intent Filter (MANDATORY):',
             'Tags are entry doors. They must be hyper-specific things buyers type to purchase.',
-            'MANDATORY FORMULA: Product + Theme + Format/Use Case (e.g., "[Theme] journal kit", "[Emotion] [Theme] junk", "[Color] [Theme] ephemera").',
+            'MANDATORY FORMULA: Product + Theme + Format/Use Case (e.g., "[Theme] journal pages", "[Emotion] [Theme] papers", "[Color] [Theme] printable").',
+            'Never end a tag with a noun that has no product signal. "art journaling", "creative journaling", "cat art" are BANNED tag patterns.',
+            'Every tag MUST contain one of: pages, journal, printable, papers, download.',
             'BANNED TAGS: "digital download", "instant download", "printable art", "digital paper pack", "botanical crafting", "shabby chic art", "creative journaling", "vintage aesthetics".',
             'Do NOT use vague aesthetic labels alone or broad category terms. EVERY tag must sound like a physical or digital product people query.',
             '',
@@ -442,6 +445,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'FINAL REMINDER BEFORE YOU OUTPUT:',
             'Do not write "kit". Write "pages" instead.',
             'Do not write "ephemera". Write "pages" instead.',
+            'Do not put "Commercial Use" in the title.',
+            'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Check your output one final time before returning it.'
         ].join('\n');
 
@@ -497,7 +502,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
 
                 // BOUNDARY GUARD INTERCEPT
-                const tagBoundary = analyzeTagContainment(aiResponse.tags || []);
+                const tagBoundary = analyzeTagContainment(aiResponse.tags || [], extractedIdentity?.primary_theme);
                 const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
                 const titleFormatViolation = titleViolations.length > 0;
 
@@ -608,6 +613,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '- NEVER remove strong secondary angles just to make the title short. Keep it competitive and dense with buyer intent.',
             '- BAN poetic filler ("Creative Souls", "Delight", "Elevate").',
             '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. CRITICAL: At least 5 tags MUST contain a core product noun (e.g. "junk journal", "scrapbook", "paper pack", "journal pages"). Formula: Product + Theme + Use Case.',
+            '- TAG RULE: Never end a tag with a noun that has no product signal. "art journaling", "creative journaling", "cat art" are BANNED patterns. Every tag MUST contain one of: pages, journal, printable, papers, download.',
+            '- TITLE RULE: NEVER include "Commercial Use" or license language in the title. The title is for search discovery only.',
             '- Description: OVER 800 chars. Pick ONE dominant market cluster. MUST USE \\n for line breaks to preserve formatting.',
             '',
             '=== TAIL EFFICIENCY & SEMANTIC AUDIT (CRITICAL) ===',
@@ -622,6 +629,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'FINAL REMINDER BEFORE YOU OUTPUT:',
             'Do not write "kit". Write "pages" instead.',
             'Do not write "ephemera". Write "pages" instead.',
+            'Do not put "Commercial Use" in the title.',
+            'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Check your output one final time before returning it.'
         ].join('\n');
 
@@ -677,7 +686,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
 
                 // BOUNDARY GUARD INTERCEPT
-                const tagBoundary = analyzeTagContainment(aiResponse.tags || []);
+                const tagBoundary = analyzeTagContainment(aiResponse.tags || [], extractedIdentity?.primary_theme);
                 const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
                 const titleFormatViolation = titleViolations.length > 0;
 

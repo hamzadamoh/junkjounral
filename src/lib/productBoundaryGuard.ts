@@ -46,7 +46,7 @@ const ALLOWED_AUDIENCE_TERMS = [
     "planner"
 ];
 
-export function tagHasProductAttachment(tag: string): boolean {
+export function tagHasProductAttachment(tag: string, primaryTheme?: string): boolean {
     const lowerTag = tag.trim().toLowerCase();
 
     // Fast path: if the tag directly contains a core product noun, it passes
@@ -54,15 +54,28 @@ export function tagHasProductAttachment(tag: string): boolean {
         return true;
     }
 
-    // Slow path: check for secondary product nouns with quality filters
+    // Slow path: check for secondary product/craft nouns with quality filters
     const words = lowerTag.split(/\s+/);
     if (words.length < 2) return false;
 
     const lastWord = words[words.length - 1];
     if (["for", "with", "of", "to", "in"].includes(lastWord)) return false;
 
-    const productNouns = ["journal", "pages", "printable", "paper", "download"];
-    return productNouns.some(noun => lowerTag.includes(noun));
+    const productAndCraftNouns = ["journal", "pages", "printable", "paper", "download", "craft", "collage", "planner", "stickers", "decoupage", "scrapbook"];
+    if (productAndCraftNouns.some(noun => lowerTag.includes(noun))) {
+        return true;
+    }
+
+    // Theme-aware path: if the tag contains the listing's primary theme + any audience term, give credit
+    if (primaryTheme) {
+        const lowerTheme = primaryTheme.toLowerCase();
+        if (lowerTag.includes(lowerTheme)) {
+            const audienceMatch = ALLOWED_AUDIENCE_TERMS.some(term => lowerTag.includes(term));
+            if (audienceMatch) return true;
+        }
+    }
+
+    return false;
 }
 
 export function violatesFormatContainment(text: string): boolean {
@@ -97,7 +110,7 @@ export function getFormatViolations(title: string, tags: string[] = []): string[
     return Array.from(violations);
 }
 
-export function analyzeTagContainment(tags: string[]): {
+export function analyzeTagContainment(tags: string[], primaryTheme?: string): {
     isValid: boolean;
     productAttachedCount: number;
     formatViolations: string[];
@@ -106,7 +119,7 @@ export function analyzeTagContainment(tags: string[]): {
     const formatViolations: string[] = [];
 
     tags.forEach(tag => {
-        if (tagHasProductAttachment(tag)) {
+        if (tagHasProductAttachment(tag, primaryTheme)) {
             productAttachedCount++;
         }
         if (violatesFormatContainment(tag)) {
