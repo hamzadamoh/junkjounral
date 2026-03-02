@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
 import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
 import { JunkJournalPagesIdentity } from '../src/types/productIdentity';
+import { enforceTags, enforceTitle } from '../src/lib/deterministicEnforcer';
 import { buildIdentityLockPrompt } from '../src/lib/buildIdentityLockPrompt';
 import { buildViolationReport } from '../src/lib/buildViolationReport';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
@@ -540,38 +541,18 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     });
                 }
 
-                // BOUNDARY GUARD INTERCEPT
-                const tagBoundary = analyzeTagContainment(aiResponse.tags || [], extractedIdentity?.primary_theme);
-                const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
-                const titleFormatViolation = titleViolations.length > 0;
-
-                const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
-                const insufficientTags = tagBoundary.productAttachedCount < 5;
-                const hasDuplicates = tagBoundary.duplicateTags.length > 0;
-
-                if (hasFormatViolations || insufficientTags || hasDuplicates) {
-                    const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5, Duplicates: ${tagBoundary.duplicateTags.length}`);
-
+                // DETERMINISTIC ENFORCEMENT INTERCEPT
+                try {
+                    aiResponse.title = enforceTitle(aiResponse.title || "", currentIdentity!);
+                    aiResponse.tags = enforceTags(aiResponse.tags || [], currentIdentity!);
+                } catch (err: any) {
+                    console.warn(`Attempt ${attempt} blocked by fallback enforcer limit: ${err.message}`);
                     if (attempt < 3) {
-                        currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
-                        if (hasFormatViolations) {
-                            currentPromptLines.push(`Your previous attempt included banned terms: ${violations.join(', ')}.`);
-                            currentPromptLines.push(`You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`);
-                        }
-                        if (insufficientTags) {
-                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 5 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
-                        }
-                        if (hasDuplicates) {
-                            currentPromptLines.push(`Your previous attempt contained DUPLICATE tags: ${tagBoundary.duplicateTags.join(', ')}. Every tag must be unique.`);
-                        }
+                        currentPromptLines.push(`=== CRITICAL STRUCTURAL FAILURE ===`);
+                        currentPromptLines.push(`Your previous attempt produced completely unusable tags. Please generate tags that strictly include the primary theme "${currentIdentity?.primary_theme}".`);
                         continue; // Force regenerate immediately without scoring
                     } else {
-                        let errorMsg = `AI failed to generate valid results after 3 attempts.`;
-                        if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
-                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/5).`;
-                        if (hasDuplicates) errorMsg += ` Duplicate tags: ${tagBoundary.duplicateTags.join(', ')}.`;
-                        throw new Error(errorMsg);
+                        throw new Error(`AI failed to generate valid results after 3 attempts. Error: ${err.message}`);
                     }
                 }
 
@@ -739,38 +720,18 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     });
                 }
 
-                // BOUNDARY GUARD INTERCEPT
-                const tagBoundary = analyzeTagContainment(aiResponse.tags || [], extractedIdentity?.primary_theme);
-                const titleViolations = aiResponse.title ? getFormatViolations(aiResponse.title) : [];
-                const titleFormatViolation = titleViolations.length > 0;
-
-                const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
-                const insufficientTags = tagBoundary.productAttachedCount < 5;
-                const hasDuplicates = tagBoundary.duplicateTags.length > 0;
-
-                if (hasFormatViolations || insufficientTags || hasDuplicates) {
-                    const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Refinement attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5, Duplicates: ${tagBoundary.duplicateTags.length}`);
-
+                // DETERMINISTIC ENFORCEMENT INTERCEPT
+                try {
+                    aiResponse.title = enforceTitle(aiResponse.title || "", extractedIdentity!);
+                    aiResponse.tags = enforceTags(aiResponse.tags || [], extractedIdentity!);
+                } catch (err: any) {
+                    console.warn(`Refinement attempt ${attempt} blocked by fallback enforcer limit: ${err.message}`);
                     if (attempt < 3) {
-                        currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
-                        if (hasFormatViolations) {
-                            currentPromptLines.push(`Your previous attempt included banned terms: ${violations.join(', ')}.`);
-                            currentPromptLines.push(`You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`);
-                        }
-                        if (insufficientTags) {
-                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 5 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
-                        }
-                        if (hasDuplicates) {
-                            currentPromptLines.push(`Your previous attempt contained DUPLICATE tags: ${tagBoundary.duplicateTags.join(', ')}. Every tag must be unique.`);
-                        }
+                        currentPromptLines.push(`=== CRITICAL STRUCTURAL FAILURE ===`);
+                        currentPromptLines.push(`Your previous attempt produced completely unusable tags. Please generate tags that strictly include the primary theme "${extractedIdentity?.primary_theme}".`);
                         continue; // Force regenerate immediately without scoring
                     } else {
-                        let errorMsg = `AI failed to refine results after 3 attempts.`;
-                        if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
-                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/5).`;
-                        if (hasDuplicates) errorMsg += ` Duplicate tags: ${tagBoundary.duplicateTags.join(', ')}.`;
-                        throw new Error(errorMsg);
+                        throw new Error(`AI failed to refine results after 3 attempts. Error: ${err.message}`);
                     }
                 }
 
