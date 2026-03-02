@@ -170,7 +170,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     // Theme Coverage (10 pts)
     if (identityContract && identityContract.primary_theme !== "unthemed") {
-        const themeTags = lowerTags.filter(t => t.includes(identityContract.primary_theme.toLowerCase()));
+        const themeWords = identityContract.primary_theme.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        const themeTags = lowerTags.filter(t => themeWords.some(w => t.includes(w)));
         if (themeTags.length >= 3) {
             themeCoverageScore += 5;
         } else {
@@ -217,8 +218,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         commercialUseScore = 5;
         strengths.push("Strong commercial use tag pattern used ('commercial use license' or 'included').");
     } else if (hasWeakCommercialTag) {
-        commercialUseScore = 2;
-        weaknesses.push("'commercial use' as a standalone tag is weak. Use 'commercial use license' or 'commercial use included'.");
+        commercialUseScore = 3;
+        weaknesses.push("'commercial use' standalone scores 3/5. Use 'commercial use license' or 'commercial use included' for full credit.");
     } else {
         commercialUseScore = 0;
         weaknesses.push("Missing commercial use tag (e.g., 'commercial use license').");
