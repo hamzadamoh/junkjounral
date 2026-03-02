@@ -121,12 +121,7 @@ export interface CompetitorInsights {
     topTitles: string[];
     referenceTitles: { shopId: string, titles: string[] }[];
     extractedPattern?: {
-        slot1: string;
-        slot2: string;
-        slot3: string;
-        slot4: string;
-        topPhrases: string[];
-        avoidPhrases: string[];
+        themePhrases: string[];
     };
 }
 
@@ -431,7 +426,10 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             const hasData = insights.themeTitles.length > 0 || insights.referenceTitles.length > 0 || insights.topTitles.length > 0;
 
             if (hasData) {
-                const patternPrompt = `You are analyzing top-performing Etsy junk journal listing titles.
+                const patternPrompt = `Analyze these competitor titles. 
+For each title identify the THEME-SPECIFIC phrases only — 
+ignore generic terms like "Digital Download", "Printable Pages", 
+"Junk Journal Kit" since those appear everywhere.
 
 [THEME-SPECIFIC TITLES] (What works for THIS exact theme):
 ${insights.themeTitles.length > 0 ? insights.themeTitles.map(t => `- ${t}`).join('\n') : 'None found.'}
@@ -439,22 +437,14 @@ ${insights.themeTitles.length > 0 ? insights.themeTitles.map(t => `- ${t}`).join
 [CATEGORY-WIDE TITLES] (What structure works across ALL themes):
 ${[...insights.referenceTitles.flatMap(r => r.titles), ...insights.topTitles].map(t => `- ${t}`).join('\n')}
 
-Extract the following:
-1. SLOT 1 PATTERN: What appears in position 1 (before first comma) across most titles? Format: [Theme] + [what product noun]
-2. SLOT 2 PATTERN: What appears in position 2 across most titles?
-3. SLOT 3 PATTERN: What appears in position 3 across most titles?
-4. SLOT 4 PATTERN: What appears in position 4 if present?
-5. TOP PHRASES: List the 10 most repeated specific phrases across all titles (exact phrases, not single words)
-6. AVOIDED PHRASES: What phrases appear in weak/short titles that strong titles avoid?
+Extract only the phrases that are UNIQUE to successful titles:
+- What specific product descriptors do top titles use?
+- What niche-specific nouns appear repeatedly?
+- What combinations of theme + product noun appear most?
 
 Return ONLY a JSON object:
 {
-  "slot1": "[Theme] Junk Journal [Kit/Pages/Supplies]",
-  "slot2": "[Theme] [Ephemera/Scrapbook/Collage] [Pages/Sheets/Papers]",
-  "slot3": "[Theme] [Printable/Digital] [Pages/Download]",
-  "slot4": "[Theme] [Related niche term]",
-  "topPhrases": ["phrase1", "phrase2"],
-  "avoidPhrases": ["weak1", "weak2"]
+  "themePhrases": ["phrase1", "phrase2", "phrase3", "phrase4", "phrase5"]
 }`;
 
                 try {
@@ -507,22 +497,12 @@ Return ONLY a JSON object:
         let competitorPrompt = '';
         if (insights.extractedPattern) {
             competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (EXTRACTED BENCHMARK PATTERNS) ===',
-                'COMPETITOR PATTERN (extracted from top-selling shops):',
-                `Slot 1 must follow: ${insights.extractedPattern.slot1}`,
-                `Slot 2 must follow: ${insights.extractedPattern.slot2}`,
-                `Slot 3 must follow: ${insights.extractedPattern.slot3}`,
-                `Slot 4 must follow: ${insights.extractedPattern.slot4}`,
-                '',
-                'TOP PHRASES TO USE (appear most in winning titles — use at least 3):',
-                ...insights.extractedPattern.topPhrases.map(p => `- ${p}`),
-                '',
-                'PHRASES TO AVOID (appear in weak titles):',
-                ...insights.extractedPattern.avoidPhrases.map(p => `- ${p}`),
+                '=== 1. COMPETITOR INTELLIGENCE (EXTRACTED THEME PHRASES) ===',
+                'TOP THEME-SPECIFIC PHRASES TO USE:',
+                ...insights.extractedPattern.themePhrases.map(p => `- ${p}`),
                 '',
                 `Your primary theme is: ${currentIdentity!.primary_theme || ''}`,
-                'Replace [Theme] in every slot with your primary theme.',
-                'Generate a title that follows this exact slot structure.',
+                'Generate a title that follows the strict slot structure defined below using these extracted phrases.',
                 ''
             ].join('\n');
         } else if (insights.referenceTitles.length > 0) {
@@ -585,9 +565,12 @@ Return ONLY a JSON object:
             '=== 2. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
             '',
             'TITLE RULES:',
-            '- Title must be 130-140 characters — nearly max out the available field.',
-            '- Structure rule: [Theme] Junk Journal Pages, [Theme/Style] [Product Type], [Theme] [Format], [Theme] [Related Term], [Theme] Ephemera, [Delivery Term]',
-            '- Slot 1 must be "[Theme] Junk Journal Pages" OR "[Theme] Junk Journal Kit".',
+            '- Generate a title using this exact structure:',
+            `  - Slot 1: ${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Kit OR Pages`,
+            '  - Slot 2: Most common theme-specific phrase from analysis',
+            '  - Slot 3: Second most common theme-specific phrase',
+            '  - Slot 4: Third theme-specific phrase',
+            '- Fill to 135+ characters',
             '- Every comma-separated segment must contain either the theme word OR a high-value niche noun: ephemera, scrapbook, collage sheet, digital papers, printable, kit.',
             '- "Ephemera" must appear at least once in the title.',
             '- Last segment should be a delivery/format signal: "Digital Download", "Printable", "Digital Papers".',
@@ -1323,24 +1306,13 @@ Return ONLY a JSON object:
                                 <div className="space-y-4">
                                     {competitorInsights.extractedPattern && (
                                         <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg space-y-3">
-                                            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide">AI Extracted Structure</h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="space-y-1 text-xs text-slate-300">
-                                                    <div className="font-semibold text-slate-400">Position Matrix:</div>
-                                                    <div><span className="text-slate-500">1:</span> <span className="text-white">{competitorInsights.extractedPattern.slot1}</span></div>
-                                                    <div><span className="text-slate-500">2:</span> <span className="text-white">{competitorInsights.extractedPattern.slot2}</span></div>
-                                                    <div><span className="text-slate-500">3:</span> <span className="text-white">{competitorInsights.extractedPattern.slot3}</span></div>
-                                                    {competitorInsights.extractedPattern.slot4 && <div><span className="text-slate-500">4:</span> <span className="text-white">{competitorInsights.extractedPattern.slot4}</span></div>}
-                                                </div>
-                                                <div className="space-y-2 text-xs">
-                                                    <div>
-                                                        <span className="font-semibold text-slate-400 block mb-1">Top Phrases to Duplicate:</span>
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {competitorInsights.extractedPattern.topPhrases.slice(0, 5).map((p, i) => (
-                                                                <span key={i} className="px-1.5 py-0.5 bg-emerald-900/50 border border-emerald-700/50 rounded text-emerald-300">{p}</span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
+                                            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide">AI Extracted Keyword Phrasing</h4>
+                                            <div className="space-y-1 text-xs text-slate-300">
+                                                <span className="font-semibold text-slate-400 block mb-1">Unique Theme Phrases:</span>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(competitorInsights.extractedPattern.themePhrases || []).map((p, i) => (
+                                                        <span key={i} className="px-1.5 py-0.5 bg-emerald-900/50 border border-emerald-700/50 rounded text-emerald-300">{p}</span>
+                                                    ))}
                                                 </div>
                                             </div>
                                         </div>
