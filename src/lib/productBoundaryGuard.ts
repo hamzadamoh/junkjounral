@@ -43,7 +43,18 @@ const ALLOWED_AUDIENCE_TERMS = [
 ];
 
 export function tagHasProductAttachment(tag: string): boolean {
-    const lowerTag = tag.toLowerCase();
+    const lowerTag = tag.trim().toLowerCase();
+
+    const words = lowerTag.split(/\s+/);
+    if (words.length < 2) return false;
+
+    const lastWord = words[words.length - 1];
+    if (["for", "with", "of", "to", "in"].includes(lastWord)) return false;
+
+    const productNouns = ["journal", "pages", "printable", "paper", "download"];
+    const hasProductNoun = productNouns.some(noun => lowerTag.includes(noun));
+    if (!hasProductNoun) return false;
+
     return CORE_PRODUCT_NOUNS.some(noun => lowerTag.includes(noun));
 }
 

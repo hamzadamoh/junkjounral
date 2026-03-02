@@ -98,6 +98,37 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         weaknesses.push("Missing format signal ('printable' or 'digital download') in title.");
     }
 
+    // Redundancy Detector
+    let redundantPairs: string[] = [];
+    if (lowerTitle.includes("printable") && (lowerTitle.includes("digital download") || lowerTitle.includes("digital file"))) {
+        redundantPairs.push("'printable' + 'digital download/file'");
+    }
+    if (lowerTitle.includes("vintage") && lowerTitle.includes("antique")) {
+        redundantPairs.push("'vintage' + 'antique'");
+    }
+
+    const titleWordCounts = new Map<string, number>();
+    const ignoreWords = new Set(["for", "and", "with", "the", "junk", "journal", "pages", "printable", "digital", "download", "paper", "pack", "craft", "supplies", "art", "designs", "design", "illustration", "decor", "print", "files", "kit", "set"]);
+
+    words.forEach(w => {
+        const cleanWord = w.replace(/[^a-z]/g, '');
+        if (cleanWord.length > 2 && !ignoreWords.has(cleanWord)) {
+            titleWordCounts.set(cleanWord, (titleWordCounts.get(cleanWord) || 0) + 1);
+        }
+    });
+
+    for (const [word, count] of titleWordCounts.entries()) {
+        if (count >= 3) {
+            redundantPairs.push(`motif repetition (${count} '${word}' signals)`);
+        }
+    }
+
+    if (redundantPairs.length > 0) {
+        const deduction = Math.min(6, redundantPairs.length * 2);
+        titleScore -= deduction;
+        weaknesses.push(`Redundancy detected (-${deduction}pts): ${redundantPairs.join(', ')}`);
+    }
+
     titleScore = Math.max(0, Math.min(30, titleScore));
 
     // --- PILLAR 2: TAG INTELLIGENCE (Max 35) ---
@@ -144,12 +175,33 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         tagsScore += 10;
     }
 
-    // Delivery Clarity Tag (10 pts)
+    // Delivery Clarity Tag (5 pts)
     if (allTagsText.includes("instant download") || allTagsText.includes("digital journal") || allTagsText.includes("google drive")) {
-        tagsScore += 10;
+        tagsScore += 5;
         strengths.push("Excellent delivery clarity in tags.");
     } else {
         weaknesses.push("Missing delivery clarity tag (e.g., 'instant download').");
+    }
+
+    // Commercial Use Tag Preference (5 pts)
+    let hasStrongCommercialTag = false;
+    let hasWeakCommercialTag = false;
+    lowerTags.forEach(tag => {
+        if (tag.includes("commercial use license") || tag.includes("commercial use included")) {
+            hasStrongCommercialTag = true;
+        } else if (tag === "commercial use" || tag.includes("commercial use")) {
+            hasWeakCommercialTag = true;
+        }
+    });
+
+    if (hasStrongCommercialTag) {
+        tagsScore += 5;
+        strengths.push("Strong commercial use tag pattern used ('commercial use license' or 'included').");
+    } else if (hasWeakCommercialTag) {
+        tagsScore += 2;
+        weaknesses.push("'commercial use' as a standalone tag is weak. Use 'commercial use license' or 'commercial use included'.");
+    } else {
+        weaknesses.push("Missing commercial use tag (e.g., 'commercial use license').");
     }
 
     tagsScore = Math.max(0, Math.min(35, tagsScore));
