@@ -34,6 +34,34 @@ const removeDuplicatePagesInTitle = (title: string): string => {
     return title;
 };
 
+const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): string => {
+    if (!title) return "";
+    let finalTitle = title.trim();
+
+    if (finalTitle.length >= 100) return finalTitle;
+
+    const descriptors = [...(identity.secondary_themes || []), ...(identity.theme_synonyms || [])];
+    const uniqueDescriptors = Array.from(new Set(descriptors.map(d => d.trim().toLowerCase()))).filter(d => d.length > 0);
+    const baseTheme = identity.primary_theme && identity.primary_theme !== "unthemed"
+        ? identity.primary_theme.toLowerCase()
+        : "junk journal";
+
+    const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+    for (const desc of uniqueDescriptors) {
+        if (finalTitle.length >= 100) break;
+        finalTitle += `, ${capitalizeWords(desc)} ${capitalizeWords(baseTheme)} Printable Pages`;
+    }
+
+    if (finalTitle.length < 100) {
+        const pageCountStr = identity.page_count ? identity.page_count.toString() : "100";
+        finalTitle += `, Digital Download ${pageCountStr}+ Printable Pages`;
+    }
+
+    return finalTitle;
+};
+
+
 interface SEOPillarScores {
     title: number;
     tags: number;
@@ -509,6 +537,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
+                aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
@@ -678,6 +707,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
+                aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
