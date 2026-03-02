@@ -149,6 +149,61 @@ export default async function handler(req, res) {
         console.error('[Etsy API] Error:', err.message);
         return res.status(err.message.includes('Key') ? 401 : 500).json({ error: err.message });
       }
+    } else if (operation === 'search-listings') {
+      const keywords = queryParams.keywords || bodyParams.keywords;
+      const limit = queryParams.limit || bodyParams.limit || 10;
+      const sort_on = queryParams.sort_on || bodyParams.sort_on || 'created';
+
+      if (!keywords) return res.status(400).json({ error: 'Missing keywords' });
+      if (!apiKey) return res.status(401).json({ error: 'API key missing' });
+
+      try {
+        console.log(`[Etsy API] Searching active listings for: "${keywords}" (sort: ${sort_on})...`);
+        const searchRes = await fetch(`https://openapi.etsy.com/v3/application/listings/active?keywords=${encodeURIComponent(keywords)}&limit=${limit}&sort_on=${sort_on}&includes=Images`, {
+          headers: { 'x-api-key': apiKey }
+        });
+        if (!searchRes.ok) {
+          const errData = await searchRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Etsy API Error: ${searchRes.status}`);
+        }
+        const data = await searchRes.json();
+        return res.status(200).json(data);
+      } catch (err) {
+        console.error('[Etsy API] Search error:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
+
+    } else if (operation === 'shop-search') {
+      const shopName = queryParams.shopName || bodyParams.shopName;
+      const keywords = queryParams.keywords || bodyParams.keywords;
+      const limit = queryParams.limit || bodyParams.limit || 20;
+
+      if (!shopName || !keywords) return res.status(400).json({ error: 'Missing shopName or keywords' });
+      if (!apiKey) return res.status(401).json({ error: 'API key missing' });
+
+      try {
+        console.log(`[Etsy API] Searching shop "${shopName}" for "${keywords}"...`);
+        const shop = await fetchShopByName(shopName);
+        const shopId = shop.shop_id;
+
+        const searchRes = await fetch(`https://openapi.etsy.com/v3/application/shops/${shopId}/listings/active?limit=${limit}&sort_on=created&keywords=${encodeURIComponent(keywords)}&includes=Images`, {
+          headers: { 'x-api-key': apiKey }
+        });
+
+        if (!searchRes.ok) {
+          const errData = await searchRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Etsy API Error: ${searchRes.status}`);
+        }
+
+        const data = await searchRes.json();
+        return res.status(200).json({
+          shop: shop,
+          results: data.results || []
+        });
+      } catch (err) {
+        console.error('[Etsy API] Shop search error:', err.message);
+        return res.status(500).json({ error: err.message });
+      }
 
     } else if (operation === 'fetch-images' || (!operation && listingIds.length > 0)) {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });

@@ -16,25 +16,10 @@ const CORE_PRODUCT_NOUNS = [
 
 const FORMAT_VIOLATIONS = [
     "wall art",
-    "poster",
-    "canvas",
     "home decor",
-    "wall hanging",
-    "bedroom decor",
-    "nursery art",
-    "print for frame",
-    "macrame",
-    "furniture",
-    "clothing",
-    "apparel",
-    "kit",
     "pockets",
-    "tags",
-    "scrapbooking set",
-    "journal set",
-    "tag set",
-    "kit set",
-    "journal kit"
+    "physical item",
+    "printed and shipped"
 ];
 
 const ALLOWED_AUDIENCE_TERMS = [
@@ -80,9 +65,6 @@ export function tagHasProductAttachment(tag: string, primaryTheme?: string): boo
 export function violatesFormatContainment(text: string): boolean {
     const lowerText = text.toLowerCase();
 
-    // Hard substring match for all ephemera variations
-    if (lowerText.includes('ephemera')) return true;
-
     return FORMAT_VIOLATIONS.some(term => {
         const regex = new RegExp(`\\b${term}\\b`, 'i');
         return regex.test(lowerText);
@@ -93,9 +75,6 @@ export function getFormatViolations(title: string, tags: string[] = []): string[
     const violations = new Set<string>();
     const lowerTitle = title.toLowerCase();
 
-    // Check ephemera via substring first
-    if (lowerTitle.includes('ephemera')) violations.add('ephemera');
-
     FORMAT_VIOLATIONS.forEach(term => {
         const regex = new RegExp(`\\b${term}\\b`, 'i');
         if (regex.test(lowerTitle)) {
@@ -105,7 +84,6 @@ export function getFormatViolations(title: string, tags: string[] = []): string[
 
     tags.forEach(tag => {
         const lowerTag = tag.toLowerCase();
-        if (lowerTag.includes('ephemera')) violations.add('ephemera');
 
         FORMAT_VIOLATIONS.forEach(term => {
             const regex = new RegExp(`\\b${term}\\b`, 'i');

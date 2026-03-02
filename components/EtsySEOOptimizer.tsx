@@ -12,9 +12,8 @@ const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality
 
 const applyReplacements = (text: string): string => {
     if (!text) return "";
-    let newText = text.replace(/\bkit\b/gi, "pages")
-        .replace(/ephemera/gi, "pages")
-        .replace(/\bpaper(s)?\b/gi, "pages");
+    let newText = text.replace(/\bwall art\b/gi, "pages")
+        .replace(/\bhome decor\b/gi, "pages");
     let cleanText = ` ${newText} `;
     for (const filler of FILLER_WORDS) {
         cleanText = cleanText.replace(new RegExp(`\\b${filler}\\b`, 'gi'), '');
@@ -103,6 +102,23 @@ interface OptimizedDetails {
     score?: SEOScore;
 }
 
+export interface ReferenceShop {
+    shopId: string;
+    verified: boolean;
+}
+
+export interface CompetitorInsights {
+    searchQuery: string;
+    topTitles: string[];
+    referenceTitles: { shopId: string, titles: string[] }[];
+}
+
+export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
+    { shopId: "BowArts", verified: false },
+    { shopId: "junkjournalartt", verified: false },
+    { shopId: "junkjournalprintable", verified: false }
+];
+
 interface EtsySEOOptimizerProps {
     onClose?: () => void;
 }
@@ -123,6 +139,32 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [rejectedSynonyms, setRejectedSynonyms] = useState<string[]>([]);
     const [synonymInput, setSynonymInput] = useState('');
+
+    // Competitor Insights State
+    const [referenceShops, setReferenceShops] = useState<ReferenceShop[]>(DEFAULT_REFERENCE_SHOPS);
+    const [competitorInsights, setCompetitorInsights] = useState<CompetitorInsights | null>(null);
+    const [isFetchingInsights, setIsFetchingInsights] = useState(false);
+    const [showReferenceSettings, setShowReferenceSettings] = useState(false);
+    const [newShopInput, setNewShopInput] = useState('');
+
+    // Load reference shops from localStorage on mount
+    React.useEffect(() => {
+        const stored = localStorage.getItem('etsyReferenceShops');
+        if (stored) {
+            try {
+                setReferenceShops(JSON.parse(stored));
+            } catch (e) {
+                console.error("Failed to parse stored reference shops.");
+            }
+        }
+    }, []);
+
+    // Save reference shops whenever they change
+    React.useEffect(() => {
+        if (referenceShops !== DEFAULT_REFERENCE_SHOPS) {
+            localStorage.setItem('etsyReferenceShops', JSON.stringify(referenceShops));
+        }
+    }, [referenceShops]);
 
     // Reusable synonym sanitizer
     const sanitizeSynonyms = (raw: any[]): { valid: string[]; rejected: string[] } => {
@@ -294,6 +336,71 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             }
         }
 
+        // --- PHASE 1.5: COMPETITOR INTELLIGENCE (REFERENCE SHOPS + ETSY SEARCH) ---
+        setIsFetchingInsights(true);
+        let insights: CompetitorInsights = {
+            searchQuery: currentIdentity!.primary_theme,
+            topTitles: [],
+            referenceTitles: []
+        };
+
+        try {
+            const query = `${currentIdentity!.primary_theme} junk journal`;
+
+            // 1. Fetch from Reference Shops
+            for (const shop of referenceShops) {
+                try {
+                    const shopRes = await fetch('/api/etsy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ operation: 'shop-search', shopName: shop.shopId, keywords: query, limit: 15 }),
+                    });
+                    if (shopRes.ok) {
+                        const shopData = await shopRes.json();
+
+                        if (shopData.shop && shopData.shop.transaction_sold_count >= 1000) {
+                            setReferenceShops(prev => prev.map(s => s.shopId === shop.shopId ? { ...s, verified: true } : s));
+                        }
+
+                        // Filter for 10+ favorites
+                        const verifiedListings = (shopData.results || []).filter((l: any) => (l.num_favorers || 0) >= 10);
+                        if (verifiedListings.length > 0) {
+                            insights.referenceTitles.push({
+                                shopId: shop.shopId,
+                                titles: verifiedListings.slice(0, 5).map((l: any) => l.title)
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch from reference shop", shop.shopId);
+                }
+            }
+
+            // 2. If no reference shops returned results, fallback to general search
+            if (insights.referenceTitles.length === 0) {
+                try {
+                    const searchRes = await fetch('/api/etsy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ operation: 'search-listings', keywords: query, limit: 15, sort_on: 'score' }),
+                    });
+                    if (searchRes.ok) {
+                        const searchData = await searchRes.json();
+                        insights.topTitles = (searchData.results || []).slice(0, 10).map((l: any) => l.title);
+                    }
+                } catch (e) {
+                    console.error("Failed general competitor search");
+                }
+            }
+
+            setCompetitorInsights(insights);
+
+        } catch (err) {
+            console.error("Competitor intelligence phase failed silently", err);
+        } finally {
+            setIsFetchingInsights(false);
+        }
+
         setIsOptimizing(true);
 
         const originalViolations = getFormatViolations(scrapedData.title, scrapedData.tags);
@@ -306,6 +413,44 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             ? 'This product contains colorful swatch and paint chip style pages. The correct search terms are "swatchbook journal pages", "color swatch printable", "paint chip journal pages" — NOT ephemera.\n'
             : '';
 
+        let competitorPrompt = '';
+        if (insights.referenceTitles.length > 0) {
+            competitorPrompt = [
+                '=== 1. COMPETITOR INTELLIGENCE (TRUSTED REFERENCE TITLES) ===',
+                'These titles are from verified high-performing shops in your niche.',
+                'They have proven sales data and are ranking organically.',
+                'Use their structural patterns as inspiration only — do not copy directly.',
+                '',
+                ...insights.referenceTitles.map(rs =>
+                    `${rs.shopId}:\n${rs.titles.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
+                ),
+                '',
+                'PATTERN ANALYSIS INSTRUCTIONS:',
+                '- Position 1: Match the most common opening phrase pattern.',
+                '- Position 2: Match the most common middle phrase pattern.',
+                '- Position 3: Match the most common closing phrase pattern.',
+                '- Length: Target the average length of these titles.',
+                '- IMPORTANT: When analyzing reference titles, identify which keywords appear in the FIRST 50 characters across the majority of top titles. These are the highest-priority keywords and must appear in the first 50 characters of my generated title. Keywords that appear later in reference titles are secondary and should fill the remaining characters.',
+                ''
+            ].join('\n');
+        } else if (insights.topTitles.length > 0) {
+            competitorPrompt = [
+                '=== 1. COMPETITOR INTELLIGENCE (TOP RANKING TITLES) ===',
+                'These are the current top organically ranking listings for this theme.',
+                'Use their structural patterns as inspiration only — do not copy directly.',
+                '',
+                ...insights.topTitles.map((t, i) => `${i + 1}. ${t}`),
+                '',
+                'PATTERN ANALYSIS INSTRUCTIONS:',
+                '- Position 1: Match the most common opening phrase pattern.',
+                '- Position 2: Match the most common middle phrase pattern.',
+                '- Position 3: Match the most common closing phrase pattern.',
+                '- Length: Target the average length of these titles.',
+                '- IMPORTANT: When analyzing reference titles, identify which keywords appear in the FIRST 50 characters across the majority of top titles. These are the highest-priority keywords and must appear in the first 50 characters of my generated title. Keywords that appear later in reference titles are secondary and should fill the remaining characters.',
+                ''
+            ].join('\n');
+        }
+
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
@@ -314,6 +459,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
             buildIdentityLockPrompt(currentIdentity!),
             '',
+            competitorPrompt,
             '',
             'Your goal is to optimize for:',
             '- Search match relevance',
@@ -325,7 +471,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Priority formula: Relevance x Click Appeal x Buyer Intent x Conversion Clarity',
             'NOT keyword stuffing.',
             '',
-            '=== 1. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
+            '=== 2. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
             '',
             'TITLE RULES:',
             '- Title must be between 100-140 characters. Use all available space.',
@@ -338,7 +484,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '- Example of a weak title to avoid:',
             '  "Vintage Junk Journal Pages, 160 Digital Printable Collage, 8.5x11 JPGs, Commercial Use Included"',
             '',
-            '=== 2. TAG STRATEGY (EXPANSION MODEL) ===',
+            '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
             'Output exactly 13 tags.',
             '',
@@ -813,6 +959,64 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     </button>
                 </div>
 
+                <div className="flex justify-between items-center mt-4">
+                    <button
+                        onClick={() => setShowReferenceSettings(!showReferenceSettings)}
+                        className="text-xs flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+                    >
+                        ⚙️ Reference Shops ({referenceShops.length})
+                    </button>
+                    {isFetchingInsights && (
+                        <div className="text-xs text-amber-400 flex items-center gap-2">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Fetching Competitor Intelligence...
+                        </div>
+                    )}
+                </div>
+
+                {showReferenceSettings && (
+                    <div className="p-4 bg-slate-900 border border-slate-700 rounded-lg space-y-3 mt-4">
+                        <div className="text-sm font-semibold text-slate-300">Trusted Reference Shops</div>
+                        <div className="flex flex-wrap gap-2">
+                            {referenceShops.map(shop => (
+                                <div key={shop.shopId} className="flex items-center gap-1 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 text-xs">
+                                    <span>{shop.shopId}</span>
+                                    {shop.verified && <span title="Verified 1000+ Sales" className="w-2 h-2 rounded-full bg-emerald-500"></span>}
+                                    <button
+                                        onClick={() => setReferenceShops(prev => prev.filter(s => s.shopId !== shop.shopId))}
+                                        className="ml-1 text-slate-500 hover:text-red-400"
+                                    >×</button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={newShopInput}
+                                onChange={e => setNewShopInput(e.target.value)}
+                                placeholder="Add shop ID..."
+                                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm outline-none focus:border-purple-500"
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && newShopInput.trim()) {
+                                        if (!referenceShops.some(s => s.shopId.toLowerCase() === newShopInput.trim().toLowerCase())) {
+                                            setReferenceShops(prev => [...prev, { shopId: newShopInput.trim(), verified: false }]);
+                                        }
+                                        setNewShopInput('');
+                                    }
+                                }}
+                            />
+                            <button
+                                onClick={() => {
+                                    if (newShopInput.trim() && !referenceShops.some(s => s.shopId.toLowerCase() === newShopInput.trim().toLowerCase())) {
+                                        setReferenceShops(prev => [...prev, { shopId: newShopInput.trim(), verified: false }]);
+                                    }
+                                    setNewShopInput('');
+                                }}
+                                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm transition-colors"
+                            >Add</button>
+                        </div>
+                    </div>
+                )}
+
                 {error && (
                     <div className="p-4 bg-red-900/20 border border-red-900/50 rounded-lg text-red-400 text-sm break-words whitespace-pre-wrap">
                         {error}
@@ -999,6 +1203,47 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                             >
                                 {isOptimizing || isAnalyzingProduct ? <Loader2 className="animate-spin w-5 h-5" /> : <><Wand2 className="w-5 h-5" /> Optimize for 2026 Model</>}
                             </button>
+                        )}
+
+                        {competitorInsights && (
+                            <div className="mt-6 pt-6 border-t border-slate-700 space-y-4 animate-in fade-in duration-500">
+                                <h3 className="text-sm font-bold flex items-center gap-2 text-amber-400 uppercase tracking-wider">
+                                    <Sparkles className="w-4 h-4" /> Competitor Intelligence
+                                </h3>
+                                <div className="space-y-4">
+                                    {competitorInsights.referenceTitles.length > 0 ? (
+                                        competitorInsights.referenceTitles.map((rt, i) => (
+                                            <div key={i} className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
+                                                <div className="text-xs text-slate-500 font-bold mb-2 flex items-center gap-2">
+                                                    Shop: {rt.shopId} <span className="w-2 h-2 rounded-full bg-emerald-500" title="Verified high sales"></span>
+                                                </div>
+                                                <ul className="space-y-1">
+                                                    {rt.titles.map((title, j) => (
+                                                        <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
+                                                            <span className="text-slate-600 shrink-0 mt-0.5">•</span>
+                                                            <span className="line-clamp-2">{title}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ))
+                                    ) : competitorInsights.topTitles.length > 0 ? (
+                                        <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
+                                            <div className="text-xs text-slate-500 font-bold mb-2">Likely Organic Matches ({competitorInsights.searchQuery})</div>
+                                            <ul className="space-y-1">
+                                                {competitorInsights.topTitles.map((title, j) => (
+                                                    <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
+                                                        <span className="text-slate-600 shrink-0 mt-0.5">•</span>
+                                                        <span className="line-clamp-2">{title}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-slate-500 italic">No strong competitor matches found.</div>
+                                    )}
+                                </div>
+                            </div>
                         )}
                     </div>
 
