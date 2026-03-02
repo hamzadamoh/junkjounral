@@ -42,7 +42,7 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
     if (!title) return "";
     let finalTitle = title.trim();
 
-    if (finalTitle.length >= 100) return finalTitle;
+    if (finalTitle.length >= 130) return finalTitle;
 
     const descriptors = [...(identity.secondary_themes || []), ...(identity.theme_synonyms || [])];
     const uniqueDescriptors = Array.from(new Set(descriptors.map(d => d.trim().toLowerCase()))).filter(d => d.length > 0);
@@ -54,16 +54,24 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
 
     const bannedTerms = ["ephemera", "kit", "set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent"];
 
-    for (const desc of uniqueDescriptors) {
-        if (finalTitle.length >= 100) break;
+    const fallbacks = ["Ephemera", "Scrapbook", "Collage Sheet", "Digital Papers", "Printable", "Journal Kit"];
+    const optionsToTry = [...uniqueDescriptors, ...fallbacks];
 
-        // Skip if synonym contains banned terms
-        if (bannedTerms.some(banned => desc.includes(banned))) continue;
+    let loopCount = 0;
+    while (finalTitle.length < 130 && loopCount < 10) {
+        for (const desc of optionsToTry) {
+            if (finalTitle.length >= 130) break;
 
-        // Skip if synonym already exists in the current title
-        if (finalTitle.toLowerCase().includes(desc)) continue;
+            if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
 
-        finalTitle += `, ${capitalizeWords(desc)} ${capitalizeWords(baseTheme)} Printable Pages`;
+            const segment = capitalizeWords(desc);
+            const addition = `, ${capitalizeWords(baseTheme)} ${segment}`;
+
+            if (!finalTitle.toLowerCase().includes(desc.toLowerCase())) {
+                finalTitle += addition;
+            }
+        }
+        loopCount++;
     }
 
     return finalTitle;
@@ -563,15 +571,14 @@ Return ONLY a JSON object:
             '=== 2. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
             '',
             'TITLE RULES:',
-            '- Title must be between 100-140 characters. Use all available space.',
-            '- Structure: [Primary Theme] Junk Journal Pages, [2-3 specific descriptors], [use-case signal]',
-            '- Use specific visual descriptors from the product: colors, styles, moods',
-            '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely',
-            '- Do NOT include page counts (e.g. 160 pages), file specs (e.g. 8.5x11, JPGs, 300 DPI), or license terms (e.g. Commercial Use). These belong ONLY in the description.',
-            '- Example of a strong 120-character title:',
-            '  "Vintage Junk Journal Pages, Color Swatch Printable, Paint Chip Digital Pages, Nostalgic Collage Printable"',
-            '- Example of a weak title to avoid:',
-            '  "Vintage Junk Journal Pages, 160 Digital Printable Collage, 8.5x11 JPGs, Commercial Use Included"',
+            '- Title must be 130-140 characters — nearly max out the available field.',
+            '- Structure rule: [Theme] Junk Journal Pages, [Theme/Style] [Product Type], [Theme] [Format], [Theme] [Related Term], [Theme] Ephemera, [Delivery Term]',
+            '- Slot 1 must be "[Theme] Junk Journal Pages" OR "[Theme] Junk Journal Kit".',
+            '- Every comma-separated segment must contain either the theme word OR a high-value niche noun: ephemera, scrapbook, collage sheet, digital papers, printable, kit.',
+            '- "Ephemera" must appear at least once in the title.',
+            '- Last segment should be a delivery/format signal: "Digital Download", "Printable", "Digital Papers".',
+            '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
+            "- Strong title example from top-performing shop: 'Cozy Winter Junk Journal Pages, Digital Scrapbook Paper Kit, Snow Printable, Cottage Collage Sheet, Vintage Ephemera, Christmas Download' — 138 chars, 6 segments, theme in every segment.",
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',

@@ -136,6 +136,32 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         redundantPairs.push("'printable pages' repeating 'pages'");
     }
 
+    // Stuffing Detector: Same [Theme + Product Noun] across multiple segments
+    if (identityContract && identityContract.primary_theme !== "unthemed") {
+        const primaryTheme = identityContract.primary_theme.toLowerCase();
+        const segments = lowerTitle.split(',').map(s => s.trim());
+        const productNouns = ["junk journal pages", "journal pages", "ephemera", "scrapbook", "collage sheet", "digital papers", "printable", "kit", "pages"];
+
+        const usedCombinations = new Set<string>();
+        let stuffingPenalty = 0;
+
+        for (const segment of segments) {
+            if (segment.includes(primaryTheme)) {
+                const matchingNoun = productNouns.find(n => segment.includes(n));
+                if (matchingNoun) {
+                    const combo = `${primaryTheme} ${matchingNoun}`;
+                    if (usedCombinations.has(combo)) {
+                        stuffingPenalty += 3;
+                        weaknesses.push(`Stuffing detected (-3pts): Repeated exact combination '${combo}'.`);
+                    } else {
+                        usedCombinations.add(combo);
+                    }
+                }
+            }
+        }
+        titleScore -= stuffingPenalty;
+    }
+
     if (redundantPairs.length > 0) {
         const deduction = Math.min(6, redundantPairs.length * 2);
         titleScore -= deduction;
