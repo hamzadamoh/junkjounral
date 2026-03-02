@@ -49,6 +49,12 @@ const ALLOWED_AUDIENCE_TERMS = [
 export function tagHasProductAttachment(tag: string): boolean {
     const lowerTag = tag.trim().toLowerCase();
 
+    // Fast path: if the tag directly contains a core product noun, it passes
+    if (CORE_PRODUCT_NOUNS.some(noun => lowerTag.includes(noun))) {
+        return true;
+    }
+
+    // Slow path: check for secondary product nouns with quality filters
     const words = lowerTag.split(/\s+/);
     if (words.length < 2) return false;
 
@@ -56,10 +62,7 @@ export function tagHasProductAttachment(tag: string): boolean {
     if (["for", "with", "of", "to", "in"].includes(lastWord)) return false;
 
     const productNouns = ["journal", "pages", "printable", "paper", "download"];
-    const hasProductNoun = productNouns.some(noun => lowerTag.includes(noun));
-    if (!hasProductNoun) return false;
-
-    return CORE_PRODUCT_NOUNS.some(noun => lowerTag.includes(noun));
+    return productNouns.some(noun => lowerTag.includes(noun));
 }
 
 export function violatesFormatContainment(text: string): boolean {
