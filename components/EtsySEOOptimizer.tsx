@@ -117,6 +117,7 @@ export interface ReferenceShop {
 
 export interface CompetitorInsights {
     searchQuery: string;
+    themeTitles: string[];
     topTitles: string[];
     referenceTitles: { shopId: string, titles: string[] }[];
     extractedPattern?: {
@@ -356,74 +357,87 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             }
         }
 
-        // --- PHASE 1.5: COMPETITOR INTELLIGENCE (REFERENCE SHOPS + ETSY SEARCH) ---
+        // --- PHASE 1.5: COMPETITOR INTELLIGENCE (PARALLEL SEARCH + PATTERN EXTRACTION) ---
         setIsFetchingInsights(true);
         let insights: CompetitorInsights = {
             searchQuery: currentIdentity!.primary_theme,
+            themeTitles: [],
             topTitles: [],
             referenceTitles: []
         };
 
         try {
-            const query = `${currentIdentity!.primary_theme} junk journal`;
+            const themeQuery = `${currentIdentity!.primary_theme} junk journal pages`;
+            const categoryQuery = `junk journal pages ephemera printable`;
 
-            // 1. Fetch from Reference Shops
-            for (const shop of referenceShops) {
-                try {
-                    const shopRes = await fetch('/api/etsy', {
+            // Execute searches in parallel:
+            // - Global Search for Theme Specific
+            // - Global Search for Category Wide
+            // - Reference Shops for Category Wide (adds verified shop authority)
+
+            const [themeSearchRes, categorySearchRes, ...shopSearchRes] = await Promise.all([
+                fetch('/api/etsy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operation: 'search-listings', keywords: themeQuery, limit: 10, sort_on: 'score' })
+                }),
+                fetch('/api/etsy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operation: 'search-listings', keywords: categoryQuery, limit: 10, sort_on: 'score' })
+                }),
+                ...referenceShops.map(shop =>
+                    fetch('/api/etsy', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ operation: 'shop-search', shopName: shop.shopId, keywords: query, limit: 15 }),
-                    });
-                    if (shopRes.ok) {
-                        const shopData = await shopRes.json();
+                        body: JSON.stringify({ operation: 'shop-search', shopName: shop.shopId, keywords: categoryQuery, limit: 5 })
+                    }).then(res => ({ shop, res }))
+                )
+            ]);
 
-                        if (shopData.shop && shopData.shop.transaction_sold_count >= 1000) {
-                            setReferenceShops(prev => prev.map(s => s.shopId === shop.shopId ? { ...s, verified: true } : s));
-                        }
+            // 1. Process Theme Specific Results (top 5)
+            if (themeSearchRes.ok) {
+                const themeData = await themeSearchRes.json();
+                insights.themeTitles = (themeData.results || []).slice(0, 5).map((l: any) => l.title);
+            }
 
-                        // Filter for 10+ favorites
-                        const verifiedListings = (shopData.results || []).filter((l: any) => (l.num_favorers || 0) >= 10);
-                        if (verifiedListings.length > 0) {
-                            insights.referenceTitles.push({
-                                shopId: shop.shopId,
-                                titles: verifiedListings.slice(0, 5).map((l: any) => l.title)
-                            });
-                        }
+            // 2. Process Reference Shops for Category Wide
+            let referenceTitleCount = 0;
+            for (const { shop, res } of shopSearchRes as { shop: typeof referenceShops[0], res: Response }[]) {
+                if (res.ok) {
+                    const shopData = await res.json();
+                    if (shopData.shop && shopData.shop.transaction_sold_count >= 1000) {
+                        setReferenceShops(prev => prev.map(s => s.shopId === shop.shopId ? { ...s, verified: true } : s));
                     }
-                } catch (e) {
-                    console.error("Failed to fetch from reference shop", shop.shopId);
+                    const verifiedListings = (shopData.results || []).filter((l: any) => (l.num_favorers || 0) >= 10);
+                    if (verifiedListings.length > 0) {
+                        const titles = verifiedListings.slice(0, 3).map((l: any) => l.title);
+                        insights.referenceTitles.push({ shopId: shop.shopId, titles });
+                        referenceTitleCount += titles.length;
+                    }
                 }
             }
 
-            // 2. If no reference shops returned results, fallback to general search
-            if (insights.referenceTitles.length === 0) {
-                try {
-                    const searchRes = await fetch('/api/etsy', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ operation: 'search-listings', keywords: query, limit: 15, sort_on: 'score' }),
-                    });
-                    if (searchRes.ok) {
-                        const searchData = await searchRes.json();
-                        insights.topTitles = (searchData.results || []).slice(0, 10).map((l: any) => l.title);
-                    }
-                } catch (e) {
-                    console.error("Failed general competitor search");
+            // 3. Process Global Category Wide Results (Targeting top 10 combined Category results)
+            if (categorySearchRes.ok) {
+                const categoryData = await categorySearchRes.json();
+                const neededCategoryTitles = Math.max(0, 10 - referenceTitleCount);
+                if (neededCategoryTitles > 0) {
+                    insights.topTitles = (categoryData.results || []).slice(0, neededCategoryTitles).map((l: any) => l.title);
                 }
             }
 
-            // 3. Extract Pattern Using AI
-            const allTitles = [
-                ...insights.referenceTitles.flatMap(r => r.titles),
-                ...insights.topTitles
-            ];
+            // 4. Extract Pattern Using AI
+            const hasData = insights.themeTitles.length > 0 || insights.referenceTitles.length > 0 || insights.topTitles.length > 0;
 
-            if (allTitles.length > 0) {
+            if (hasData) {
                 const patternPrompt = `You are analyzing top-performing Etsy junk journal listing titles.
-Here are the top titles from verified high-sales shops:
 
-${allTitles.map(t => `- ${t}`).join('\n')}
+[THEME-SPECIFIC TITLES] (What works for THIS exact theme):
+${insights.themeTitles.length > 0 ? insights.themeTitles.map(t => `- ${t}`).join('\n') : 'None found.'}
+
+[CATEGORY-WIDE TITLES] (What structure works across ALL themes):
+${[...insights.referenceTitles.flatMap(r => r.titles), ...insights.topTitles].map(t => `- ${t}`).join('\n')}
 
 Extract the following:
 1. SLOT 1 PATTERN: What appears in position 1 (before first comma) across most titles? Format: [Theme] + [what product noun]
@@ -1332,11 +1346,25 @@ Return ONLY a JSON object:
                                         </div>
                                     )}
 
-                                    {competitorInsights.referenceTitles.length > 0 ? (
+                                    {competitorInsights.themeTitles.length > 0 && (
+                                        <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
+                                            <div className="text-xs text-slate-500 font-bold mb-2">Theme Matches ({competitorInsights.searchQuery})</div>
+                                            <ul className="space-y-1">
+                                                {competitorInsights.themeTitles.map((title, j) => (
+                                                    <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
+                                                        <span className="text-slate-600 shrink-0 mt-0.5">•</span>
+                                                        <span className="line-clamp-2">{title}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {competitorInsights.referenceTitles.length > 0 && (
                                         competitorInsights.referenceTitles.map((rt, i) => (
                                             <div key={i} className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
                                                 <div className="text-xs text-slate-500 font-bold mb-2 flex items-center gap-2">
-                                                    Shop: {rt.shopId} <span className="w-2 h-2 rounded-full bg-emerald-500" title="Verified high sales"></span>
+                                                    Reference Shop Category Wide: {rt.shopId} <span className="w-2 h-2 rounded-full bg-emerald-500" title="Verified high sales"></span>
                                                 </div>
                                                 <ul className="space-y-1">
                                                     {rt.titles.map((title, j) => (
@@ -1348,9 +1376,11 @@ Return ONLY a JSON object:
                                                 </ul>
                                             </div>
                                         ))
-                                    ) : competitorInsights.topTitles.length > 0 ? (
+                                    )}
+
+                                    {competitorInsights.topTitles.length > 0 && (
                                         <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
-                                            <div className="text-xs text-slate-500 font-bold mb-2">Likely Organic Matches ({competitorInsights.searchQuery})</div>
+                                            <div className="text-xs text-slate-500 font-bold mb-2">Global Category Wide Matches</div>
                                             <ul className="space-y-1">
                                                 {competitorInsights.topTitles.map((title, j) => (
                                                     <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
@@ -1360,8 +1390,6 @@ Return ONLY a JSON object:
                                                 ))}
                                             </ul>
                                         </div>
-                                    ) : (
-                                        <div className="text-xs text-slate-500 italic">No strong competitor matches found.</div>
                                     )}
                                 </div>
                             </div>
