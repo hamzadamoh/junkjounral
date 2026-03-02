@@ -449,6 +449,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Do not put "Commercial Use" in the title.',
             'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
+            'Never repeat a tag concept. If you use "rustic greenhouse" as a tag, do not use "greenhouse pages", "rustic pages", or any other tag that shares a root word with a tag you already wrote. Treat each tag as a unique signal — no overlapping roots.',
             'Check your output one final time before returning it.'
         ].join('\n');
 
@@ -640,6 +641,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Do not put "Commercial Use" in the title.',
             'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
+            'Never repeat a tag concept. If you use "rustic greenhouse" as a tag, do not use "greenhouse pages", "rustic pages", or any other tag that shares a root word with a tag you already wrote. Treat each tag as a unique signal — no overlapping roots.',
             'Check your output one final time before returning it.'
         ].join('\n');
 
