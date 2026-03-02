@@ -5,6 +5,10 @@ const CORE_PRODUCT_NOUNS = [
     "paper pack",
     "journal pages",
     "digital pages",
+    "digital papers",
+    "digital download",
+    "craft papers",
+    "papers",
     "folio",
     "inserts",
     "fussy cut"
