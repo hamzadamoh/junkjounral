@@ -236,7 +236,7 @@ RULES:
 - If confidence is below 0.7, still return the JSON but flag it
 - Never add themes that are not explicitly supported by the original listing
 - The locked_identity_terms MUST include the primary theme noun and "junk journal pages"
-- For theme_synonyms: Only include synonyms that are actual common search terms buyers would type on Etsy. Do NOT include: aesthetic descriptions ('dreamy', 'beautiful'), format words ('printable', 'digital'), or invented compound words. Maximum 5 synonyms. If unsure, return fewer — an empty array is better than hallucinated terms.
+- For theme_synonyms, do not extract generic craft words like 'creative', 'artistic', 'vintage', 'antique'. Instead extract the specific buyer search phrases someone would type into Etsy when looking for THIS specific type of page. Think like a buyer, not a designer. For a swatchbook listing a buyer would search 'color swatch journal pages', 'paint chip printable', 'color palette pages' — not 'creative scrapbooking paper'. Do NOT include format words ('printable', 'digital') alone or invented compound words. Maximum 5 synonyms. If unsure, return fewer — an empty array is better than hallucinated terms.
 
 Do not invent motifs. Do not add aesthetics not present. Only extract what is explicitly implied.
 
