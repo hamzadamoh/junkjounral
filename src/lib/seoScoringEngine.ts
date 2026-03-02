@@ -174,24 +174,18 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         const themeWords = identityContract.primary_theme.toLowerCase().split(/\s+/).filter(w => w.length > 2);
         const stemmedThemeWords = themeWords.map(stemWord);
 
-        // Synonym map: expand theme words to include related terms
-        const synonymMap: Record<string, string[]> = {
-            'cat': ['feline', 'kitten', 'kitty', 'kitties'],
-            'dog': ['canine', 'puppy', 'puppies', 'pup'],
-        };
+        // Use GPT-extracted theme synonyms instead of hardcoded map
         const expandedThemeWords = new Set<string>(stemmedThemeWords);
-        stemmedThemeWords.forEach(sw => {
-            if (synonymMap[sw]) {
-                synonymMap[sw].forEach(syn => expandedThemeWords.add(stemWord(syn)));
-            }
-        });
+        if (identityContract.theme_synonyms && identityContract.theme_synonyms.length > 0) {
+            identityContract.theme_synonyms.forEach(syn => expandedThemeWords.add(stemWord(syn.toLowerCase())));
+        }
 
         const themeTags = lowerTags.filter(t => {
             const tagWords = t.split(/\s+/).map(stemWord);
             return Array.from(expandedThemeWords).some(sw => tagWords.some(tw => tw.includes(sw) || sw.includes(tw)));
         });
 
-        console.log(`[Theme Coverage Debug] primary_theme="${identityContract.primary_theme}" | expanded=[${Array.from(expandedThemeWords).join(', ')}] | matching tags (${themeTags.length}):`, themeTags, '| non-matching:', lowerTags.filter(t => !themeTags.includes(t)));
+        console.log(`[Theme Coverage Debug] primary_theme="${identityContract.primary_theme}" | synonyms=${JSON.stringify(identityContract.theme_synonyms || [])} | expanded=[${Array.from(expandedThemeWords).join(', ')}] | matching tags (${themeTags.length}):`, themeTags);
 
         if (themeTags.length >= 3) {
             themeCoverageScore += 5;

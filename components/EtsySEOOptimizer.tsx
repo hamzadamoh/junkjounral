@@ -143,6 +143,7 @@ Return a single JSON object matching this exact structure:
   "dpi": "300 DPI",
   "license_type": "commercial_use",
   "primary_theme": "string",
+  "theme_synonyms": ["3-5 words buyers use instead of the primary theme. E.g. if theme is 'vintage': ['antique', 'nostalgic', 'retro', 'classic']. If theme is 'cottagecore': ['cottage', 'rustic', 'farmhouse', 'botanical']. Extract based on the actual theme, not examples."],
   "secondary_themes": ["string"],
   "color_palette": ["string"],
   "mood": "string",
@@ -157,6 +158,7 @@ RULES:
 - If confidence is below 0.7, still return the JSON but flag it
 - Never add themes that are not explicitly supported by the original listing
 - The locked_identity_terms MUST include the primary theme noun and "junk journal pages"
+- For theme_synonyms: Only include synonyms that are actual common search terms buyers would type on Etsy. Do NOT include: aesthetic descriptions ('dreamy', 'beautiful'), format words ('printable', 'digital'), or invented compound words. Maximum 5 synonyms. If unsure, return fewer — an empty array is better than hallucinated terms.
 
 Do not invent motifs. Do not add aesthetics not present. Only extract what is explicitly implied.
 
@@ -186,6 +188,20 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     analysisContent = analysisContent.replace(/```json|```/g, '').trim();
                 }
                 currentIdentity = JSON.parse(analysisContent) as JunkJournalPagesIdentity;
+
+                // Sanitize theme_synonyms after extraction
+                const formatWords = ['printable', 'digital', 'download', 'pages', 'journal', 'paper', 'scrapbook'];
+                const bannedSynonyms = ['kit', 'set', 'ephemera', 'pockets', 'wall art', 'poster', 'canvas', 'decor', 'furniture', 'clothing', 'apparel'];
+                currentIdentity.theme_synonyms = (currentIdentity.theme_synonyms || [])
+                    .filter((s: any) =>
+                        typeof s === 'string' &&
+                        s.length > 2 &&
+                        s.length < 20 &&
+                        !bannedSynonyms.includes(s.toLowerCase()) &&
+                        !formatWords.includes(s.toLowerCase())
+                    )
+                    .slice(0, 5);
+
                 setExtractedIdentity(currentIdentity);
 
                 if (currentIdentity.confidence < 0.7) {

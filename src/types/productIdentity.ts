@@ -8,6 +8,7 @@ export interface JunkJournalPagesIdentity {
     dpi: string | null;               // e.g. "300 DPI"
     license_type: "commercial_use";
     primary_theme: string;            // e.g. "Victorian", "Cottagecore"
+    theme_synonyms: string[];         // Buyer search synonyms for primary theme
     secondary_themes: string[];       // Complementary themes only
     color_palette: string[];          // e.g. ["muted", "earthy", "sepia"]
     mood: string;                     // e.g. "romantic", "dark", "whimsical"
