@@ -116,7 +116,11 @@ export interface CompetitorInsights {
 export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
     { shopId: "BowArts", verified: false },
     { shopId: "junkjournalartt", verified: false },
-    { shopId: "junkjournalprintable", verified: false }
+    { shopId: "junkjournalprintable", verified: false },
+    { shopId: "SweetRevealCo", verified: false },
+    { shopId: "wrapito", verified: false },
+    { shopId: "BontikVintageDesigns", verified: false },
+    { shopId: "ArtemisJournals", verified: false }
 ];
 
 interface EtsySEOOptimizerProps {
