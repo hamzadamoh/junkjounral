@@ -119,15 +119,28 @@ export function analyzeTagContainment(tags: string[], primaryTheme?: string): {
     let productAttachedCount = 0;
     const formatViolations: string[] = [];
 
-    // Duplicate tag detection
+    // Duplicate & near-duplicate tag detection
     const seen = new Set<string>();
+    const stemmedSeen = new Set<string>();
     const duplicateTags: string[] = [];
+
+    const stemTag = (t: string): string => {
+        return t.split(/\s+/).map(w => w.replace(/(?:ies$)/, 'y').replace(/(?:es|s)$/, '')).join(' ');
+    };
+
     tags.forEach(tag => {
         const normalized = tag.trim().toLowerCase();
+        const stemmed = stemTag(normalized);
+
         if (seen.has(normalized)) {
+            // Exact duplicate
             if (!duplicateTags.includes(normalized)) duplicateTags.push(normalized);
+        } else if (stemmedSeen.has(stemmed)) {
+            // Near-duplicate (plural variant)
+            if (!duplicateTags.includes(normalized)) duplicateTags.push(`${normalized} (near-duplicate)`);
         } else {
             seen.add(normalized);
+            stemmedSeen.add(stemmed);
         }
     });
 

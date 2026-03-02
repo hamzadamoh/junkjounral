@@ -448,6 +448,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Do not write "ephemera". Write "pages" instead.',
             'Do not put "Commercial Use" in the title.',
             'Every tag must contain one of: pages, journal, printable, papers, download.',
+            'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
             'Check your output one final time before returning it.'
         ].join('\n');
 
@@ -638,6 +639,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Do not write "ephemera". Write "pages" instead.',
             'Do not put "Commercial Use" in the title.',
             'Every tag must contain one of: pages, journal, printable, papers, download.',
+            'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
             'Check your output one final time before returning it.'
         ].join('\n');
 
