@@ -58,6 +58,26 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [isAnalyzingProduct, setIsAnalyzingProduct] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [rejectedSynonyms, setRejectedSynonyms] = useState<string[]>([]);
+    const [synonymInput, setSynonymInput] = useState('');
+
+    // Reusable synonym sanitizer
+    const sanitizeSynonyms = (raw: any[]): { valid: string[]; rejected: string[] } => {
+        const formatWords = ['printable', 'digital', 'download', 'pages', 'journal', 'paper', 'scrapbook'];
+        const bannedSynonyms = ['kit', 'set', 'ephemera', 'pockets', 'wall art', 'poster', 'canvas', 'decor', 'furniture', 'clothing', 'apparel'];
+        const valid: string[] = [];
+        const rejected: string[] = [];
+        (raw || []).forEach((s: any) => {
+            if (typeof s === 'string' && s.length > 2 && s.length < 20 &&
+                !bannedSynonyms.includes(s.toLowerCase()) &&
+                !formatWords.includes(s.toLowerCase())) {
+                valid.push(s);
+            } else if (typeof s === 'string' && s.length > 0) {
+                rejected.push(s);
+            }
+        });
+        return { valid: valid.slice(0, 5), rejected };
+    };
 
     const evaluateListing = async (listing: { title: string, description: string, tags: string[] }, identityContract?: JunkJournalPagesIdentity): Promise<SEOScore> => {
         // Now using purely deterministic TS analysis instead of LLM token burn
@@ -189,18 +209,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
                 currentIdentity = JSON.parse(analysisContent) as JunkJournalPagesIdentity;
 
-                // Sanitize theme_synonyms after extraction
-                const formatWords = ['printable', 'digital', 'download', 'pages', 'journal', 'paper', 'scrapbook'];
-                const bannedSynonyms = ['kit', 'set', 'ephemera', 'pockets', 'wall art', 'poster', 'canvas', 'decor', 'furniture', 'clothing', 'apparel'];
-                currentIdentity.theme_synonyms = (currentIdentity.theme_synonyms || [])
-                    .filter((s: any) =>
-                        typeof s === 'string' &&
-                        s.length > 2 &&
-                        s.length < 20 &&
-                        !bannedSynonyms.includes(s.toLowerCase()) &&
-                        !formatWords.includes(s.toLowerCase())
-                    )
-                    .slice(0, 5);
+                // Sanitize theme_synonyms after extraction — track rejected
+                const { valid, rejected } = sanitizeSynonyms(currentIdentity.theme_synonyms || []);
+                currentIdentity.theme_synonyms = valid;
+                setRejectedSynonyms(rejected);
+                setSynonymInput(valid.join(', '));
 
                 setExtractedIdentity(currentIdentity);
 
@@ -972,6 +985,27 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                         />
                                     </div>
                                     <div>
+                                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Theme Synonyms (comma separated)</label>
+                                        {rejectedSynonyms.length > 0 && (
+                                            <div className="mb-2 p-2 bg-red-900/30 border border-red-500/40 rounded text-[11px] text-red-400">
+                                                ⚠️ These extracted synonyms were rejected (format words or invalid): [{rejectedSynonyms.map(s => `"${s}"`).join(', ')}] — not used in scoring
+                                            </div>
+                                        )}
+                                        {extractedIdentity.theme_synonyms.length === 0 && (
+                                            <div className="mb-2 p-2 bg-amber-900/30 border border-amber-500/40 rounded text-[11px] text-amber-400">
+                                                ⚠️ No valid theme synonyms extracted. Theme Coverage scoring may be reduced. Add synonyms manually below.
+                                            </div>
+                                        )}
+                                        <input
+                                            type="text"
+                                            value={synonymInput}
+                                            onChange={(e) => setSynonymInput(e.target.value)}
+                                            placeholder="e.g. kitten, kitty, feline, tabby"
+                                            className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+                                        />
+                                        <p className="text-[10px] text-slate-500 mt-1">Buyer search terms related to "{extractedIdentity.primary_theme}". Max 5.</p>
+                                    </div>
+                                    <div>
                                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Format Specs</label>
                                         <p className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50">
                                             {extractedIdentity.page_count}+ Pages • {extractedIdentity.file_types.join(', ')} • {extractedIdentity.print_size} • Commercial Use
@@ -980,6 +1014,13 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                 </div>
                                 <button
                                     onClick={() => {
+                                        // Re-sanitize manual synonym input on confirm
+                                        const manualSynonyms = synonymInput.split(',').map(s => s.trim()).filter(Boolean);
+                                        const { valid } = sanitizeSynonyms(manualSynonyms);
+                                        if (extractedIdentity) {
+                                            const updated = { ...extractedIdentity, theme_synonyms: valid };
+                                            setExtractedIdentity(updated);
+                                        }
                                         setShowIdentityConfirmation(false);
                                         handleOptimize();
                                     }}
