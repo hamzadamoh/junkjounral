@@ -276,6 +276,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '- NEVER dump disconnected specs at the end of the title (e.g. ", 160+ Pages Printable"). Integrate them smoothly.',
             '- STRICTLY BAN ChatGPT-isms: "Creative Souls", "Crafting Delight", "Elevate", "Whimsical Journey", "Unleash your creativity". Titles are product names, not poetry.',
             '- NEVER include "Commercial Use" or license language in the title. The title is for search discovery only.',
+            '- NEVER use filler adjectives like "quirky", "amazing", "beautiful", "stunning", "gorgeous" to modify format words like "download", "pages", or "printable". Every word must be a theme signal, format signal, or spec signal. If under 100 chars, fill with: DPI spec, page count, color palette, or secondary theme — not adjectives.',
             '- Your hard cap is 140 characters. DO NOT cut off mid-word.',
             '',
             '=== H. EMOTIONAL DISTINCTION LAYER (HIGH-COMPETITION MODE) ===',
@@ -450,6 +451,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
             'Never repeat a tag concept. If you use "rustic greenhouse" as a tag, do not use "greenhouse pages", "rustic pages", or any other tag that shares a root word with a tag you already wrote. Treat each tag as a unique signal — no overlapping roots.',
+            'Never use filler adjectives (quirky, amazing, beautiful, stunning, gorgeous) on format words. Fill remaining title space with specs or secondary themes.',
             'Check your output one final time before returning it.'
         ].join('\n');
 
@@ -642,6 +644,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
             'Never repeat a tag concept. If you use "rustic greenhouse" as a tag, do not use "greenhouse pages", "rustic pages", or any other tag that shares a root word with a tag you already wrote. Treat each tag as a unique signal — no overlapping roots.',
+            'Never use filler adjectives (quirky, amazing, beautiful, stunning, gorgeous) on format words. Fill remaining title space with specs or secondary themes.',
             'Check your output one final time before returning it.'
         ].join('\n');
 
