@@ -62,11 +62,6 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
         finalTitle += `, ${capitalizeWords(desc)} ${capitalizeWords(baseTheme)} Printable Pages`;
     }
 
-    if (finalTitle.length < 100) {
-        const pageCountStr = identity.page_count ? identity.page_count.toString() : "100";
-        finalTitle += `, Digital Download ${pageCountStr}+ Printable Pages`;
-    }
-
     return finalTitle;
 };
 
@@ -329,13 +324,14 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '',
             'TITLE RULES:',
             '- Title must be between 100-140 characters. Use all available space.',
-            '- Structure: [Primary Theme] Junk Journal Pages, [2-3 specific descriptors], [page count or format signal]',
+            '- Structure: [Primary Theme] Junk Journal Pages, [2-3 specific descriptors], [use-case signal]',
             '- Use specific visual descriptors from the product: colors, styles, moods',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely',
+            '- Do NOT include page counts (e.g. 160 pages), file specs (e.g. 8.5x11, JPGs, 300 DPI), or license terms (e.g. Commercial Use). These belong ONLY in the description.',
             '- Example of a strong 120-character title:',
-            '  "Vintage Swatchbook Junk Journal Pages, Color Swatch Printable, Paint Chip Digital Pages 168"',
+            '  "Vintage Junk Journal Pages, Color Swatch Printable, Paint Chip Digital Pages, Nostalgic Collage Printable"',
             '- Example of a weak title to avoid:',
-            '  "Vintage Junk Journal Pages, Printable Digital Download"',
+            '  "Vintage Junk Journal Pages, 160 Digital Printable Collage, 8.5x11 JPGs, Commercial Use Included"',
             '',
             '=== 2. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
