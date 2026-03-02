@@ -131,6 +131,11 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         }
     }
 
+    // Explicit check for "printable pages" when "journal pages" is present
+    if ((lowerTitle.includes("junk journal pages") || lowerTitle.includes("journal pages")) && lowerTitle.includes("printable pages")) {
+        redundantPairs.push("'printable pages' repeating 'pages'");
+    }
+
     if (redundantPairs.length > 0) {
         const deduction = Math.min(6, redundantPairs.length * 2);
         titleScore -= deduction;
