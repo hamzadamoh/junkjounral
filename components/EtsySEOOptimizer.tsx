@@ -239,10 +239,15 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
             : '';
 
+        const swatchbookWarning = (extractedIdentity?.primary_theme?.toLowerCase().includes('swatch') || extractedIdentity?.primary_theme?.toLowerCase().includes('swatchbook'))
+            ? 'This product contains colorful swatch and paint chip style pages. The correct search terms are "swatchbook journal pages", "color swatch printable", "paint chip journal pages" — NOT ephemera.\n'
+            : '';
+
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
             dynamicWarning,
+            swatchbookWarning,
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
             buildIdentityLockPrompt(currentIdentity!),
             '',
@@ -474,7 +479,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'FINAL REMINDER BEFORE YOU OUTPUT:',
             'Do not write "kit". Write "pages" instead.',
             'Do not write "journal kit". Write "journal pages" instead.',
-            'Do not write "ephemera". Do not write "ephemera collage". Write "journal pages" or "collage pages" instead.',
+            'Do not write "ephemera". Do not write "ephemera collage". Do not write "digital ephemera". Write "journal pages" or "collage pages" or "digital journal pages" instead.',
             'Do not put "Commercial Use" in the title.',
             'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
@@ -626,10 +631,15 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
             : '';
 
+        const swatchbookWarning = (extractedIdentity?.primary_theme?.toLowerCase().includes('swatch') || extractedIdentity?.primary_theme?.toLowerCase().includes('swatchbook'))
+            ? 'This product contains colorful swatch and paint chip style pages. The correct search terms are "swatchbook journal pages", "color swatch printable", "paint chip journal pages" — NOT ephemera.\n'
+            : '';
+
         const promptLines = [
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
             dynamicWarning,
+            swatchbookWarning,
             '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
             buildIdentityLockPrompt(extractedIdentity!),
             '',
@@ -667,7 +677,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             'FINAL REMINDER BEFORE YOU OUTPUT:',
             'Do not write "kit". Write "pages" instead.',
             'Do not write "journal kit". Write "journal pages" instead.',
-            'Do not write "ephemera". Do not write "ephemera collage". Write "journal pages" or "collage pages" instead.',
+            'Do not write "ephemera". Do not write "ephemera collage". Do not write "digital ephemera". Write "journal pages" or "collage pages" or "digital journal pages" instead.',
             'Do not put "Commercial Use" in the title.',
             'Every tag must contain one of: pages, journal, printable, papers, download.',
             'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',

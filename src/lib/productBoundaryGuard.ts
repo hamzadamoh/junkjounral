@@ -17,6 +17,7 @@ const CORE_PRODUCT_NOUNS = [
 const FORMAT_VIOLATIONS = [
     "ephemera",
     "ephemera collage",
+    "digital ephemera",
     "wall art",
     "poster",
     "canvas",
