@@ -48,8 +48,17 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
 
     const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
+    const bannedTerms = ["ephemera", "kit", "set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent"];
+
     for (const desc of uniqueDescriptors) {
         if (finalTitle.length >= 100) break;
+
+        // Skip if synonym contains banned terms
+        if (bannedTerms.some(banned => desc.includes(banned))) continue;
+
+        // Skip if synonym already exists in the current title
+        if (finalTitle.toLowerCase().includes(desc)) continue;
+
         finalTitle += `, ${capitalizeWords(desc)} ${capitalizeWords(baseTheme)} Printable Pages`;
     }
 
@@ -536,8 +545,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
 
                 // SILENT POST-PROCESSING
-                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!);
+                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
@@ -706,8 +715,8 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
 
                 // SILENT POST-PROCESSING
-                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
                 aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!);
+                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
