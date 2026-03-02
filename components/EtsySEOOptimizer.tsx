@@ -111,6 +111,14 @@ export interface CompetitorInsights {
     searchQuery: string;
     topTitles: string[];
     referenceTitles: { shopId: string, titles: string[] }[];
+    extractedPattern?: {
+        slot1: string;
+        slot2: string;
+        slot3: string;
+        slot4: string;
+        topPhrases: string[];
+        avoidPhrases: string[];
+    };
 }
 
 export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
@@ -397,6 +405,63 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
             }
 
+            // 3. Extract Pattern Using AI
+            const allTitles = [
+                ...insights.referenceTitles.flatMap(r => r.titles),
+                ...insights.topTitles
+            ];
+
+            if (allTitles.length > 0) {
+                const patternPrompt = `You are analyzing top-performing Etsy junk journal listing titles.
+Here are the top titles from verified high-sales shops:
+
+${allTitles.map(t => `- ${t}`).join('\n')}
+
+Extract the following:
+1. SLOT 1 PATTERN: What appears in position 1 (before first comma) across most titles? Format: [Theme] + [what product noun]
+2. SLOT 2 PATTERN: What appears in position 2 across most titles?
+3. SLOT 3 PATTERN: What appears in position 3 across most titles?
+4. SLOT 4 PATTERN: What appears in position 4 if present?
+5. TOP PHRASES: List the 10 most repeated specific phrases across all titles (exact phrases, not single words)
+6. AVOIDED PHRASES: What phrases appear in weak/short titles that strong titles avoid?
+
+Return ONLY a JSON object:
+{
+  "slot1": "[Theme] Junk Journal [Kit/Pages/Supplies]",
+  "slot2": "[Theme] [Ephemera/Scrapbook/Collage] [Pages/Sheets/Papers]",
+  "slot3": "[Theme] [Printable/Digital] [Pages/Download]",
+  "slot4": "[Theme] [Related niche term]",
+  "topPhrases": ["phrase1", "phrase2"],
+  "avoidPhrases": ["weak1", "weak2"]
+}`;
+
+                try {
+                    const patternRes = await fetch('/api/openai/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'gpt-4o',
+                            messages: [
+                                { role: 'user', content: patternPrompt }
+                            ],
+                            response_format: { type: 'json_object' },
+                            temperature: 0.1
+                        }),
+                    });
+
+                    if (patternRes.ok) {
+                        const patternData = await patternRes.json();
+                        let patternContent = patternData.choices[0].message.content;
+                        if (patternContent.includes('```')) {
+                            patternContent = patternContent.replace(/```json|```/g, '').trim();
+                        }
+                        insights.extractedPattern = JSON.parse(patternContent);
+                    }
+                } catch (e) {
+                    console.error("Pattern extraction failed", e);
+                }
+            }
+
             setCompetitorInsights(insights);
 
         } catch (err) {
@@ -418,7 +483,27 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             : '';
 
         let competitorPrompt = '';
-        if (insights.referenceTitles.length > 0) {
+        if (insights.extractedPattern) {
+            competitorPrompt = [
+                '=== 1. COMPETITOR INTELLIGENCE (EXTRACTED BENCHMARK PATTERNS) ===',
+                'COMPETITOR PATTERN (extracted from top-selling shops):',
+                `Slot 1 must follow: ${insights.extractedPattern.slot1}`,
+                `Slot 2 must follow: ${insights.extractedPattern.slot2}`,
+                `Slot 3 must follow: ${insights.extractedPattern.slot3}`,
+                `Slot 4 must follow: ${insights.extractedPattern.slot4}`,
+                '',
+                'TOP PHRASES TO USE (appear most in winning titles — use at least 3):',
+                ...insights.extractedPattern.topPhrases.map(p => `- ${p}`),
+                '',
+                'PHRASES TO AVOID (appear in weak titles):',
+                ...insights.extractedPattern.avoidPhrases.map(p => `- ${p}`),
+                '',
+                `Your primary theme is: ${currentIdentity!.primary_theme || ''}`,
+                'Replace [Theme] in every slot with your primary theme.',
+                'Generate a title that follows this exact slot structure.',
+                ''
+            ].join('\n');
+        } else if (insights.referenceTitles.length > 0) {
             competitorPrompt = [
                 '=== 1. COMPETITOR INTELLIGENCE (TRUSTED REFERENCE TITLES) ===',
                 'These titles are from verified high-performing shops in your niche.',
@@ -1215,6 +1300,31 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                     <Sparkles className="w-4 h-4" /> Competitor Intelligence
                                 </h3>
                                 <div className="space-y-4">
+                                    {competitorInsights.extractedPattern && (
+                                        <div className="p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-lg space-y-3">
+                                            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide">AI Extracted Structure</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-1 text-xs text-slate-300">
+                                                    <div className="font-semibold text-slate-400">Position Matrix:</div>
+                                                    <div><span className="text-slate-500">1:</span> <span className="text-white">{competitorInsights.extractedPattern.slot1}</span></div>
+                                                    <div><span className="text-slate-500">2:</span> <span className="text-white">{competitorInsights.extractedPattern.slot2}</span></div>
+                                                    <div><span className="text-slate-500">3:</span> <span className="text-white">{competitorInsights.extractedPattern.slot3}</span></div>
+                                                    {competitorInsights.extractedPattern.slot4 && <div><span className="text-slate-500">4:</span> <span className="text-white">{competitorInsights.extractedPattern.slot4}</span></div>}
+                                                </div>
+                                                <div className="space-y-2 text-xs">
+                                                    <div>
+                                                        <span className="font-semibold text-slate-400 block mb-1">Top Phrases to Duplicate:</span>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {competitorInsights.extractedPattern.topPhrases.slice(0, 5).map((p, i) => (
+                                                                <span key={i} className="px-1.5 py-0.5 bg-emerald-900/50 border border-emerald-700/50 rounded text-emerald-300">{p}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {competitorInsights.referenceTitles.length > 0 ? (
                                         competitorInsights.referenceTitles.map((rt, i) => (
                                             <div key={i} className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
