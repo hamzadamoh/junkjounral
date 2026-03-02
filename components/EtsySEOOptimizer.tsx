@@ -2,12 +2,37 @@ import React, { useState } from 'react';
 import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
 import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
 import { JunkJournalPagesIdentity } from '../src/types/productIdentity';
-import { enforceTags, enforceTitle } from '../src/lib/deterministicEnforcer';
 import { buildIdentityLockPrompt } from '../src/lib/buildIdentityLockPrompt';
 import { buildViolationReport } from '../src/lib/buildViolationReport';
 import { calculateFillerDensity } from '../src/lib/seoEfficiencyRules';
 import { calculateTagIntentScore, classifyTag } from '../src/lib/tagIntentClassifier';
 import { analyzeTagContainment, violatesFormatContainment, getFormatViolations } from '../src/lib/productBoundaryGuard';
+
+const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality"];
+
+const applyReplacements = (text: string): string => {
+    if (!text) return "";
+    let newText = text.replace(/\bkit\b/gi, "pages").replace(/ephemera/gi, "pages");
+    let cleanText = ` ${newText} `;
+    for (const filler of FILLER_WORDS) {
+        cleanText = cleanText.replace(new RegExp(`\\b${filler}\\b`, 'gi'), '');
+    }
+    return cleanText.replace(/\s+/g, ' ').trim();
+};
+
+const removeDuplicatePagesInTitle = (title: string): string => {
+    if (!title) return "";
+    const pagesMatches = title.match(/pages/gi);
+    if (pagesMatches && pagesMatches.length > 1) {
+        const firstIdx = title.toLowerCase().indexOf('pages');
+        if (firstIdx !== -1) {
+            const before = title.substring(0, firstIdx + 5);
+            const after = title.substring(firstIdx + 5).replace(/pages/gi, '');
+            return (before + after).replace(/\s+/g, ' ').trim();
+        }
+    }
+    return title;
+};
 
 interface SEOPillarScores {
     title: number;
@@ -482,19 +507,10 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     });
                 }
 
-                // DETERMINISTIC ENFORCEMENT INTERCEPT
-                try {
-                    aiResponse.title = enforceTitle(aiResponse.title || "", currentIdentity!);
-                    aiResponse.tags = enforceTags(aiResponse.tags || [], currentIdentity!);
-                } catch (err: any) {
-                    console.warn(`Attempt ${attempt} blocked by fallback enforcer limit: ${err.message}`);
-                    if (attempt < 3) {
-                        currentPromptLines.push(`=== CRITICAL STRUCTURAL FAILURE ===`);
-                        currentPromptLines.push(`Your previous attempt produced completely unusable tags. Please generate tags that strictly include the primary theme "${currentIdentity?.primary_theme}".`);
-                        continue; // Force regenerate immediately without scoring
-                    } else {
-                        throw new Error(`AI failed to generate valid results after 3 attempts. Error: ${err.message}`);
-                    }
+                // SILENT POST-PROCESSING
+                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
+                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
+                    aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
 
                 setIsEvaluatingOptimized(true);
@@ -660,19 +676,10 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     });
                 }
 
-                // DETERMINISTIC ENFORCEMENT INTERCEPT
-                try {
-                    aiResponse.title = enforceTitle(aiResponse.title || "", extractedIdentity!);
-                    aiResponse.tags = enforceTags(aiResponse.tags || [], extractedIdentity!);
-                } catch (err: any) {
-                    console.warn(`Refinement attempt ${attempt} blocked by fallback enforcer limit: ${err.message}`);
-                    if (attempt < 3) {
-                        currentPromptLines.push(`=== CRITICAL STRUCTURAL FAILURE ===`);
-                        currentPromptLines.push(`Your previous attempt produced completely unusable tags. Please generate tags that strictly include the primary theme "${extractedIdentity?.primary_theme}".`);
-                        continue; // Force regenerate immediately without scoring
-                    } else {
-                        throw new Error(`AI failed to refine results after 3 attempts. Error: ${err.message}`);
-                    }
+                // SILENT POST-PROCESSING
+                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
+                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
+                    aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
 
                 setIsEvaluatingOptimized(true);
