@@ -12,7 +12,9 @@ const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality
 
 const applyReplacements = (text: string): string => {
     if (!text) return "";
-    let newText = text.replace(/\bkit\b/gi, "pages").replace(/ephemera/gi, "pages");
+    let newText = text.replace(/\bkit\b/gi, "pages")
+        .replace(/ephemera/gi, "pages")
+        .replace(/\bpaper(s)?\b/gi, "pages");
     let cleanText = ` ${newText} `;
     for (const filler of FILLER_WORDS) {
         cleanText = cleanText.replace(new RegExp(`\\b${filler}\\b`, 'gi'), '');
@@ -20,18 +22,21 @@ const applyReplacements = (text: string): string => {
     return cleanText.replace(/\s+/g, ' ').trim();
 };
 
-const removeDuplicatePagesInTitle = (title: string): string => {
+const removeTitleDuplicates = (title: string): string => {
     if (!title) return "";
-    const pagesMatches = title.match(/pages/gi);
-    if (pagesMatches && pagesMatches.length > 1) {
-        const firstIdx = title.toLowerCase().indexOf('pages');
-        if (firstIdx !== -1) {
-            const before = title.substring(0, firstIdx + 5);
-            const after = title.substring(firstIdx + 5).replace(/pages/gi, '');
-            return (before + after).replace(/\s+/g, ' ').trim();
-        }
-    }
-    return title;
+    const seen = new Set<string>();
+    let newTitle = title.replace(/\b[A-Za-z0-9'-]+\b/g, (match) => {
+        const lower = match.toLowerCase();
+        if (seen.has(lower)) return "";
+        seen.add(lower);
+        return match;
+    });
+    return newTitle
+        .replace(/\s+/g, ' ')
+        .replace(/,\s*,/g, ',')
+        .replace(/\s+,/g, ',')
+        .replace(/(^,\s*)|(,\s*$)/g, '')
+        .trim();
 };
 
 const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): string => {
@@ -542,7 +547,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!);
-                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
+                aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
@@ -712,7 +717,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!);
-                aiResponse.title = removeDuplicatePagesInTitle(applyReplacements(aiResponse.title));
+                aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
                 }
