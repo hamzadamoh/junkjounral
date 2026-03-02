@@ -7,9 +7,17 @@ export interface SEOPillarScores {
     ctrRisk: number;
 }
 
+export interface TagSubPillarScores {
+    intentRatio: { score: number; max: number; label: string };
+    themeCoverage: { score: number; max: number; label: string };
+    deliveryClarity: { score: number; max: number; label: string };
+    commercialUse: { score: number; max: number; label: string };
+}
+
 export interface SEOScore {
     overallScore: number;
     pillars: SEOPillarScores;
+    tagSubPillars?: TagSubPillarScores;
     strengths: string[];
     weaknesses: string[];
     ctrRiskScore: number;
@@ -134,6 +142,12 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     // --- PILLAR 2: TAG INTELLIGENCE (Max 35) ---
     let tagsScore = 0;
 
+    // Sub-pillar tracking
+    let intentRatioScore = 0;
+    let themeCoverageScore = 0;
+    let deliveryClarityScore = 0;
+    let commercialUseScore = 0;
+
     // Buyer Intent Tag Ratio (15 pts)
     let multiWordTags = 0;
     let singleWordTags = 0;
@@ -143,20 +157,22 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     });
 
     if (multiWordTags >= 9) {
-        tagsScore += 15;
+        intentRatioScore = 15;
         strengths.push("Excellent buyer intent multi-word tag ratio.");
     } else if (multiWordTags >= 5) {
-        tagsScore += 8;
+        intentRatioScore = 8;
         weaknesses.push(`Only ${multiWordTags} multi-word tags. Shift to phrase-based tags.`);
     } else {
+        intentRatioScore = 0;
         weaknesses.push(`Too many single-word tags (${singleWordTags}). Needs 'theme + product' structure.`);
     }
+    tagsScore += intentRatioScore;
 
     // Theme Coverage (10 pts)
     if (identityContract && identityContract.primary_theme !== "unthemed") {
         const themeTags = lowerTags.filter(t => t.includes(identityContract.primary_theme.toLowerCase()));
         if (themeTags.length >= 3) {
-            tagsScore += 5;
+            themeCoverageScore += 5;
         } else {
             weaknesses.push(`Missing theme coverage in tags. Need at least 3 tags containing '${identityContract.primary_theme}'.`);
         }
@@ -164,24 +180,27 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         if (identityContract.secondary_themes.length > 0) {
             const hasSecondary = identityContract.secondary_themes.some(st => allTagsText.includes(st.toLowerCase()));
             if (hasSecondary) {
-                tagsScore += 5;
+                themeCoverageScore += 5;
             } else {
                 weaknesses.push("Missing secondary theme coverage in tags.");
             }
         } else {
-            tagsScore += 5; // Auto-award if no secondary themes requested
+            themeCoverageScore += 5; // Auto-award if no secondary themes requested
         }
     } else {
-        tagsScore += 10;
+        themeCoverageScore = 10;
     }
+    tagsScore += themeCoverageScore;
 
     // Delivery Clarity Tag (5 pts)
     if (allTagsText.includes("instant download") || allTagsText.includes("digital journal") || allTagsText.includes("google drive")) {
-        tagsScore += 5;
+        deliveryClarityScore = 5;
         strengths.push("Excellent delivery clarity in tags.");
     } else {
+        deliveryClarityScore = 0;
         weaknesses.push("Missing delivery clarity tag (e.g., 'instant download').");
     }
+    tagsScore += deliveryClarityScore;
 
     // Commercial Use Tag Preference (5 pts)
     let hasStrongCommercialTag = false;
@@ -195,14 +214,16 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     });
 
     if (hasStrongCommercialTag) {
-        tagsScore += 5;
+        commercialUseScore = 5;
         strengths.push("Strong commercial use tag pattern used ('commercial use license' or 'included').");
     } else if (hasWeakCommercialTag) {
-        tagsScore += 2;
+        commercialUseScore = 2;
         weaknesses.push("'commercial use' as a standalone tag is weak. Use 'commercial use license' or 'commercial use included'.");
     } else {
+        commercialUseScore = 0;
         weaknesses.push("Missing commercial use tag (e.g., 'commercial use license').");
     }
+    tagsScore += commercialUseScore;
 
     tagsScore = Math.max(0, Math.min(35, tagsScore));
 
@@ -354,6 +375,12 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
             tags: tagsScore,
             description: descScore,
             ctrRisk: ctrScore
+        },
+        tagSubPillars: {
+            intentRatio: { score: intentRatioScore, max: 15, label: 'Intent Ratio' },
+            themeCoverage: { score: themeCoverageScore, max: 10, label: 'Theme Coverage' },
+            deliveryClarity: { score: deliveryClarityScore, max: 5, label: 'Delivery Clarity' },
+            commercialUse: { score: commercialUseScore, max: 5, label: 'Commercial Use' }
         },
         strengths,
         weaknesses,

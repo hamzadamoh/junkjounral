@@ -509,10 +509,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
                 const insufficientTags = tagBoundary.productAttachedCount < 5;
+                const hasDuplicates = tagBoundary.duplicateTags.length > 0;
 
-                if (hasFormatViolations || insufficientTags) {
+                if (hasFormatViolations || insufficientTags || hasDuplicates) {
                     const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5`);
+                    console.warn(`Attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5, Duplicates: ${tagBoundary.duplicateTags.length}`);
 
                     if (attempt < 3) {
                         currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
@@ -523,11 +524,15 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                         if (insufficientTags) {
                             currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 5 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
                         }
+                        if (hasDuplicates) {
+                            currentPromptLines.push(`Your previous attempt contained DUPLICATE tags: ${tagBoundary.duplicateTags.join(', ')}. Every tag must be unique.`);
+                        }
                         continue; // Force regenerate immediately without scoring
                     } else {
                         let errorMsg = `AI failed to generate valid results after 3 attempts.`;
                         if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
                         if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/5).`;
+                        if (hasDuplicates) errorMsg += ` Duplicate tags: ${tagBoundary.duplicateTags.join(', ')}.`;
                         throw new Error(errorMsg);
                     }
                 }
@@ -694,10 +699,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 
                 const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
                 const insufficientTags = tagBoundary.productAttachedCount < 5;
+                const hasDuplicates = tagBoundary.duplicateTags.length > 0;
 
-                if (hasFormatViolations || insufficientTags) {
+                if (hasFormatViolations || insufficientTags || hasDuplicates) {
                     const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Refinement attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5`);
+                    console.warn(`Refinement attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5, Duplicates: ${tagBoundary.duplicateTags.length}`);
 
                     if (attempt < 3) {
                         currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
@@ -708,11 +714,15 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                         if (insufficientTags) {
                             currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 5 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
                         }
+                        if (hasDuplicates) {
+                            currentPromptLines.push(`Your previous attempt contained DUPLICATE tags: ${tagBoundary.duplicateTags.join(', ')}. Every tag must be unique.`);
+                        }
                         continue; // Force regenerate immediately without scoring
                     } else {
                         let errorMsg = `AI failed to refine results after 3 attempts.`;
                         if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
                         if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/5).`;
+                        if (hasDuplicates) errorMsg += ` Duplicate tags: ${tagBoundary.duplicateTags.join(', ')}.`;
                         throw new Error(errorMsg);
                     }
                 }
@@ -872,6 +882,19 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                             </ul>
                                         </div>
                                     )}
+                                    {scrapedData.score.tagSubPillars && (
+                                        <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                            <strong className="text-slate-500 uppercase text-[10px] block mb-1">Tag Score Breakdown ({scrapedData.score.pillars.tags}/35)</strong>
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                                                {Object.values(scrapedData.score.tagSubPillars).map((sp: any, i: number) => (
+                                                    <div key={i} className="flex justify-between">
+                                                        <span className="text-slate-500">{sp.label}</span>
+                                                        <span className={sp.score >= sp.max ? 'text-emerald-400 font-bold' : sp.score > 0 ? 'text-amber-400' : 'text-red-400'}>{sp.score}/{sp.max}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1012,6 +1035,19 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                                                     <ul className="space-y-1 text-[10px] text-slate-400">
                                                         {optimizedData.score.ctrRiskReasons.map((r, i) => <li key={i}>• {r}</li>)}
                                                     </ul>
+                                                </div>
+                                            )}
+                                            {optimizedData.score.tagSubPillars && (
+                                                <div className="mt-2 pt-2 border-t border-slate-700/50">
+                                                    <strong className="text-slate-500 uppercase text-[10px] block mb-1">Tag Score Breakdown ({optimizedData.score.pillars.tags}/35)</strong>
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                                                        {Object.values(optimizedData.score.tagSubPillars).map((sp: any, i: number) => (
+                                                            <div key={i} className="flex justify-between">
+                                                                <span className="text-slate-500">{sp.label}</span>
+                                                                <span className={sp.score >= sp.max ? 'text-emerald-400 font-bold' : sp.score > 0 ? 'text-amber-400' : 'text-red-400'}>{sp.score}/{sp.max}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

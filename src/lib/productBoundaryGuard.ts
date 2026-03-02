@@ -114,9 +114,22 @@ export function analyzeTagContainment(tags: string[], primaryTheme?: string): {
     isValid: boolean;
     productAttachedCount: number;
     formatViolations: string[];
+    duplicateTags: string[];
 } {
     let productAttachedCount = 0;
     const formatViolations: string[] = [];
+
+    // Duplicate tag detection
+    const seen = new Set<string>();
+    const duplicateTags: string[] = [];
+    tags.forEach(tag => {
+        const normalized = tag.trim().toLowerCase();
+        if (seen.has(normalized)) {
+            if (!duplicateTags.includes(normalized)) duplicateTags.push(normalized);
+        } else {
+            seen.add(normalized);
+        }
+    });
 
     tags.forEach(tag => {
         if (tagHasProductAttachment(tag, primaryTheme)) {
@@ -127,12 +140,13 @@ export function analyzeTagContainment(tags: string[], primaryTheme?: string): {
         }
     });
 
-    // Strict enforcement: no format violations allowed, at least 5 product attached tags
-    const isValid = formatViolations.length === 0 && productAttachedCount >= 5;
+    // Strict enforcement: no format violations, no duplicates, at least 5 product attached tags
+    const isValid = formatViolations.length === 0 && duplicateTags.length === 0 && productAttachedCount >= 5;
 
     return {
         isValid,
         productAttachedCount,
-        formatViolations
+        formatViolations,
+        duplicateTags
     };
 }
