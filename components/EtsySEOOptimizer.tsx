@@ -414,10 +414,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '1. Re-evaluate title for stacking.',
             '2. Re-count tag characters.',
             '3. Confirm exactly 13 tags.',
-            '4. Confirm no tag exceeds 20 characters.',
-            '5. Confirm description > 800 characters.',
-            '6. Confirm no hallucinated themes added.',
-            '7. Highlight words in title that are broad, redundant, or non-transactional.',
+            '4. Confirm at least 5 tags contain a core product noun (e.g., "junk journal", "scrapbook", "paper pack", "journal pages").',
+            '5. Confirm no tag exceeds 20 characters.',
+            '6. Confirm description > 800 characters.',
+            '7. Confirm no hallucinated themes added.',
+            '8. Highlight words in title that are broad, redundant, or non-transactional.',
             '8. If 3+ weak words appear in the final 40% of the title, REDO the tail section.',
             '9. Ensure at least one niche modifier exists, no more than one format clarifier phrase, and no more than one broad craft descriptor.',
             'If any fail -> silently iterate and fix before responding.',
@@ -501,11 +502,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 const titleFormatViolation = titleViolations.length > 0;
 
                 const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
-                const insufficientTags = tagBoundary.productAttachedCount < 6;
+                const insufficientTags = tagBoundary.productAttachedCount < 5;
 
                 if (hasFormatViolations || insufficientTags) {
                     const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/6`);
+                    console.warn(`Attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5`);
 
                     if (attempt < 3) {
                         currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
@@ -514,13 +515,13 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                             currentPromptLines.push(`You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`);
                         }
                         if (insufficientTags) {
-                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 6 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
+                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 5 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
                         }
                         continue; // Force regenerate immediately without scoring
                     } else {
                         let errorMsg = `AI failed to generate valid results after 3 attempts.`;
                         if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
-                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/6).`;
+                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/5).`;
                         throw new Error(errorMsg);
                     }
                 }
@@ -606,7 +607,7 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
             '- CRITICAL TITLE RULE: Do NOT remove or replace the primary buyer-intent product phrase from the original (e.g., KEEP "Junk Journal Kit", do not downgrade to "Vintage Journal").',
             '- NEVER remove strong secondary angles just to make the title short. Keep it competitive and dense with buyer intent.',
             '- BAN poetic filler ("Creative Souls", "Delight", "Elevate").',
-            '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. Formula: Product + Theme + Use Case. Focus on commercial buyer phrasing, avoid weak tags like "creative journaling" or "vintage aesthetics".',
+            '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. CRITICAL: At least 5 tags MUST contain a core product noun (e.g. "junk journal", "scrapbook", "paper pack", "journal pages"). Formula: Product + Theme + Use Case.',
             '- Description: OVER 800 chars. Pick ONE dominant market cluster. MUST USE \\n for line breaks to preserve formatting.',
             '',
             '=== TAIL EFFICIENCY & SEMANTIC AUDIT (CRITICAL) ===',
@@ -681,11 +682,11 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 const titleFormatViolation = titleViolations.length > 0;
 
                 const hasFormatViolations = tagBoundary.formatViolations.length > 0 || titleFormatViolation;
-                const insufficientTags = tagBoundary.productAttachedCount < 6;
+                const insufficientTags = tagBoundary.productAttachedCount < 5;
 
                 if (hasFormatViolations || insufficientTags) {
                     const violations = Array.from(new Set([...tagBoundary.formatViolations, ...titleViolations]));
-                    console.warn(`Refinement attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/6`);
+                    console.warn(`Refinement attempt ${attempt} blocked by boundary guard. Format violations: ${violations.length}, Product tags: ${tagBoundary.productAttachedCount}/5`);
 
                     if (attempt < 3) {
                         currentPromptLines.push(`=== CRITICAL BOUNDARY VIOLATION ===`);
@@ -694,13 +695,13 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                             currentPromptLines.push(`You MUST NOT include these terms or any terms like "kit", "set", "ephemera", "wall art", etc.`);
                         }
                         if (insufficientTags) {
-                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 6 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
+                            currentPromptLines.push(`Your previous attempt lacked core product identifiers. You only included ${tagBoundary.productAttachedCount} product-attached tags (minimum 5 required). Ensure tags use terms like "junk journal pages" or "scrapbook paper".`);
                         }
                         continue; // Force regenerate immediately without scoring
                     } else {
                         let errorMsg = `AI failed to refine results after 3 attempts.`;
                         if (hasFormatViolations) errorMsg += ` Banned terms detected: ${violations.join(', ')}.`;
-                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/6).`;
+                        if (insufficientTags) errorMsg += ` Insufficient product tags (${tagBoundary.productAttachedCount}/5).`;
                         throw new Error(errorMsg);
                     }
                 }

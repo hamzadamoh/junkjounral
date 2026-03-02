@@ -96,8 +96,8 @@ export function analyzeTagContainment(tags: string[]): {
         }
     });
 
-    // Strict enforcement: no format violations allowed, at least 6 product attached tags
-    const isValid = formatViolations.length === 0 && productAttachedCount >= 6;
+    // Strict enforcement: no format violations allowed, at least 5 product attached tags
+    const isValid = formatViolations.length === 0 && productAttachedCount >= 5;
 
     return {
         isValid,
