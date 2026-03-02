@@ -228,19 +228,22 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     let hasStrongCommercialTag = false;
     let hasWeakCommercialTag = false;
     lowerTags.forEach(tag => {
-        if (tag.includes("commercial use license") || tag.includes("commercial use included")) {
+        const trimmed = tag.trim();
+        if (trimmed.includes("commercial use") && trimmed.split(/\s+/).length > 2) {
+            // "commercial use" + at least one other word (e.g., "commercial use pages", "commercial use license")
             hasStrongCommercialTag = true;
-        } else if (tag === "commercial use" || tag.includes("commercial use")) {
+        } else if (trimmed === "commercial use") {
+            // Standalone 2-word tag only
             hasWeakCommercialTag = true;
         }
     });
 
     if (hasStrongCommercialTag) {
         commercialUseScore = 5;
-        strengths.push("Strong commercial use tag pattern used ('commercial use license' or 'included').");
+        strengths.push("Strong commercial use tag with additional context.");
     } else if (hasWeakCommercialTag) {
         commercialUseScore = 3;
-        weaknesses.push("'commercial use' standalone scores 3/5. Use 'commercial use license' or 'commercial use included' for full credit.");
+        weaknesses.push("'commercial use' standalone scores 3/5. Add a word (e.g., 'commercial use license', 'commercial use pages') for full credit.");
     } else {
         commercialUseScore = 0;
         weaknesses.push("Missing commercial use tag (e.g., 'commercial use license').");
