@@ -517,14 +517,22 @@ Return ONLY a JSON object:
             : '';
 
         let competitorPrompt = '';
-        if (insights.extractedPattern) {
+        if (insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0) {
+            const primaryTheme = currentIdentity!.primary_theme || 'Theme';
+            const numberedPhrases = insights.extractedPattern.themePhrases.slice(0, 5).map((p, i) => `${i + 1}. ${p}`).join('\n');
             competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (EXTRACTED THEME PHRASES) ===',
-                'TOP THEME-SPECIFIC PHRASES TO USE:',
-                ...insights.extractedPattern.themePhrases.map(p => `- ${p}`),
+                '=== 1. COMPETITOR INTELLIGENCE (MANDATORY TITLE SEGMENTS) ===',
+                `MANDATORY TITLE SEGMENTS — you MUST use these exact phrases in your title,`,
+                `replacing only the theme words with "${primaryTheme}":`,
                 '',
-                `Your primary theme is: ${currentIdentity!.primary_theme || ''}`,
-                'Generate a title that follows the strict slot structure defined below using these extracted phrases.',
+                numberedPhrases,
+                '',
+                'Build your title BY COMBINING these phrases with commas.',
+                'Do not invent new segments. Use these phrases as your segments.',
+                'Fill remaining characters with additional theme+product combinations.',
+                'Target: 130-140 characters total.',
+                '',
+                `Your primary theme is: ${primaryTheme}`,
                 ''
             ].join('\n');
         } else if (insights.referenceTitles.length > 0) {
@@ -589,13 +597,10 @@ Return ONLY a JSON object:
             'TITLE RULES:',
             `- The primary theme is [${currentIdentity!.primary_theme || 'Theme'}]. Every segment of the title MUST contain a word from the primary theme.`,
             `- You may use competitor phrases as structural inspiration ONLY — never copy their theme words.`,
-            `- If a competitor phrase contains a different theme like 'Shabby Chic' or 'Victorian', replace those theme words with '[${currentIdentity!.primary_theme || 'Theme'}]' before using the phrase structure.`,
-            `- Generate a title using this exact structure:`,
-            `  - Slot 1: ${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Kit OR Pages`,
-            '  - Slot 2: Most common theme-specific phrase from analysis',
-            '  - Slot 3: Second most common theme-specific phrase',
-            '  - Slot 4: Third theme-specific phrase',
-            '- Fill to 135+ characters',
+            `- If a competitor phrase contains a different theme like 'Shabby Chic' or 'Victorian', replace those theme words with '${currentIdentity!.primary_theme || 'Theme'}' before using the phrase structure.`,
+            `- Slot 1 MUST be: ${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Pages`,
+            '- Slots 2-4+: Use the MANDATORY TITLE SEGMENTS from section 1 above as your actual comma-separated segments. Do NOT invent new segments.',
+            '- Fill to 130-140 characters total.',
             '- Every comma-separated segment must contain either the theme word OR a high-value niche noun: ephemera, scrapbook, collage sheet, digital papers, printable, kit.',
             '- "Ephemera" must appear at least once in the title.',
             '- Last segment should be a delivery/format signal: "Digital Download", "Printable", "Digital Papers".',
