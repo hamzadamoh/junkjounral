@@ -108,10 +108,9 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) { console.log('[TRACE] SKIPPED (banned):', phrase); continue; }
         if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) { console.log('[TRACE] SKIPPED (already in title):', phrase); continue; }
 
-        // If the phrase already contains the theme, use it directly; otherwise prefix with theme
-        const segment = capitalizeWords(phrase);
-        const hasTheme = phrase.toLowerCase().includes(baseTheme);
-        const addition = hasTheme ? `, ${segment}` : `, ${capitalizeWords(baseTheme)} ${segment}`;
+        // Append phrase as-is — competitor phrases are already real buyer search terms
+        // Etsy's AI infers the theme from context, no need to prefix every segment
+        const addition = `, ${capitalizeWords(phrase)}`;
 
         // Check if appending would exceed 140 — skip if so
         if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase, '| addition length:', addition.length); continue; }
