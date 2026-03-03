@@ -348,6 +348,7 @@ Return a single JSON object matching this exact structure:
 }
 
 RULES:
+- primary_theme MUST be the FULL compound theme descriptor, not a single word. If the title says "Vintage Swatchbook Junk Journal Pages", the primary_theme is "vintage swatchbook" NOT just "vintage". If the title says "Dark Gothic Fairy", the primary_theme is "dark gothic fairy" NOT just "gothic". Always capture the complete, most-specific multi-word theme.
 - If no theme is present, set primary_theme to "unthemed"
 - If secondary_themes are not present, return []
 - If confidence is below 0.7, still return the JSON but flag it
