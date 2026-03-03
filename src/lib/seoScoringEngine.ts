@@ -24,7 +24,7 @@ export interface SEOScore {
     ctrRiskReasons: string[];
 }
 
-export function evaluateListingSEO(title: string, tags: string[], description: string, identityContract?: JunkJournalPagesIdentity): SEOScore {
+export function evaluateListingSEO(title: string, tags: string[], description: string, identityContract?: JunkJournalPagesIdentity, competitorPhrases?: string[]): SEOScore {
     let strengths: string[] = [];
     let weaknesses: string[] = [];
     let ctrRiskReasons: string[] = [];
@@ -166,6 +166,21 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         const deduction = Math.min(6, redundantPairs.length * 2);
         titleScore -= deduction;
         weaknesses.push(`Redundancy detected (-${deduction}pts): ${redundantPairs.join(', ')}`);
+    }
+
+    // Title Phrase Match (bonus/penalty based on competitor vocabulary usage)
+    if (competitorPhrases && competitorPhrases.length > 0) {
+        const matchedPhrases = competitorPhrases.filter(phrase => lowerTitle.includes(phrase.toLowerCase()));
+        if (matchedPhrases.length >= 3) {
+            titleScore += 5;
+            strengths.push(`Strong competitor vocabulary: ${matchedPhrases.length} proven phrases found in title (+5pts).`);
+        } else if (matchedPhrases.length >= 1) {
+            titleScore += 2;
+            weaknesses.push(`Only ${matchedPhrases.length} competitor phrase(s) in title (+2pts). Use more proven theme vocabulary.`);
+        } else {
+            titleScore -= 5;
+            weaknesses.push(`Zero competitor phrases in title (-5pts). Title ignores proven market vocabulary.`);
+        }
     }
 
     titleScore = Math.max(0, Math.min(30, titleScore));

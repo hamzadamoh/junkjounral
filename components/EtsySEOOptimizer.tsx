@@ -220,9 +220,9 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         return { valid: valid.slice(0, 5), rejected };
     };
 
-    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }, identityContract?: JunkJournalPagesIdentity): Promise<SEOScore> => {
+    const evaluateListing = async (listing: { title: string, description: string, tags: string[] }, identityContract?: JunkJournalPagesIdentity, competitorPhrases?: string[]): Promise<SEOScore> => {
         // Now using purely deterministic TS analysis instead of LLM token burn
-        return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description, identityContract));
+        return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description, identityContract, competitorPhrases));
     };
 
     const handleScrape = async () => {
@@ -729,7 +729,7 @@ Return ONLY a JSON object:
                     title: aiResponse.title,
                     description: aiResponse.description,
                     tags: aiResponse.tags
-                }, currentIdentity || undefined);
+                }, currentIdentity || undefined, insights.extractedPattern?.themePhrases);
                 setIsEvaluatingOptimized(false);
 
                 if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
@@ -900,7 +900,7 @@ Return ONLY a JSON object:
                     title: aiResponse.title,
                     description: aiResponse.description,
                     tags: aiResponse.tags
-                }, extractedIdentity || undefined);
+                }, extractedIdentity || undefined, competitorInsights?.extractedPattern?.themePhrases);
                 setIsEvaluatingOptimized(false);
 
                 if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
