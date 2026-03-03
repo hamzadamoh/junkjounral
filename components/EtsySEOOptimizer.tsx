@@ -435,13 +435,14 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
 Titles:
 ${insights.themeTitles.map(t => `- ${t}`).join('\n')}
 
-Extract ONLY the descriptive noun phrases that describe this theme.
-Ignore generic product terms like "Digital Download", "Printable Pages", "Junk Journal Kit", "Ephemera", "Scrapbook" — those are product structure, not theme vocabulary.
+Extract complete 2-4 word buyer search phrases from these titles.
+Always include the product noun in each phrase.
+Example: extract 'Paint Palette Ephemera' not just 'Paint Palette'.
+Example: extract 'Watercolor Color Palette Papers' not just 'Watercolor Color Palette'.
+Example: extract 'Mixed Media Collage Backgrounds' not just 'Mixed Media'.
 
-Focus on: What specific words do sellers use to describe THIS theme?
-- Adjectives and descriptive modifiers specific to this theme
-- Niche-specific nouns that buyers would search for
-- Theme-related word combinations
+Ignore generic standalone terms like "Digital Download", "Printable", "Junk Journal".
+Only extract phrases that are SPECIFIC to this theme and include a product noun.
 
 Return ONLY a JSON object:
 {
@@ -498,11 +499,10 @@ Return ONLY a JSON object:
         let competitorPrompt = '';
         if (insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0) {
             const phraseList = insights.extractedPattern.themePhrases.join(', ');
+            const themeCapitalized = (currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
             competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (THEME VOCABULARY) ===',
-                `These are proven search phrases buyers use for this theme: ${phraseList}.`,
-                'Incorporate as many as naturally fit into your title segments.',
-                `Your primary theme is: ${currentIdentity!.primary_theme || 'Theme'}`,
+                '=== 1. COMPETITOR INTELLIGENCE (PROVEN NICHE PHRASES) ===',
+                `Proven buyer search phrases for this theme: ${phraseList}`,
                 ''
             ].join('\n');
         }
@@ -529,19 +529,21 @@ Return ONLY a JSON object:
             '',
             '=== 2. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
             '',
-            'TITLE RULES:',
-            `- The primary theme is [${currentIdentity!.primary_theme || 'Theme'}]. Every segment of the title MUST contain a word from the primary theme.`,
-            `- You may use competitor phrases as structural inspiration ONLY — never copy their theme words.`,
-            `- If a competitor phrase contains a different theme like 'Shabby Chic' or 'Victorian', replace those theme words with '${currentIdentity!.primary_theme || 'Theme'}' before using the phrase structure.`,
-            `- Slot 1 MUST be: ${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Pages`,
-            '- Slots 2-4+: Build comma-separated segments using theme vocabulary from Section 1 combined with high-value product nouns.',
-            '- Fill to 130-140 characters total.',
-            '- Every comma-separated segment must contain either the theme word OR a high-value niche noun: ephemera, scrapbook, collage sheet, digital papers, printable, kit.',
-            '- "Ephemera" must appear at least once in the title.',
-            '- Last segment should be a delivery/format signal: "Digital Download", "Printable", "Digital Papers".',
+            'Generate a title EXACTLY like this structure:',
+            '"[Theme] Junk Journal Pages, [Theme] [Niche Noun], [Theme] [Niche Noun], [Theme] [Niche Noun], [Theme] [Niche Noun]"',
+            '',
+            `Where [Theme] = "${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}"`,
+            `Where [Niche Noun] comes from the proven phrases in Section 1: ${insights.extractedPattern ? insights.extractedPattern.themePhrases.join(', ') : 'ephemera, collage sheets, digital papers, scrapbook'}`,
+            '',
+            `Example output for theme "${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}":`,
+            `"${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Pages, ${insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0 ? insights.extractedPattern.themePhrases.slice(0, 4).map(p => p.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ') : 'Ephemera Collage, Scrapbook Papers, Digital Download'}"`,
+            '',
+            'RULES:',
+            '- Every segment = [Theme word] + [Niche noun from competitor phrases]. No standalone single words as segments.',
+            '- Minimum 5 comma-separated segments.',
+            '- Target 130-140 characters total.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
-            '- BANNED PHRASES: "Commercial Use License", "PDF Download". Do NOT include these anywhere in the title.',
-            "- Strong title example from top-performing shop: 'Cozy Winter Junk Journal Pages, Digital Scrapbook Paper Kit, Snow Printable, Cottage Collage Sheet, Vintage Ephemera, Christmas Download' — 138 chars, 6 segments, theme in every segment.",
+            '- BANNED PHRASES: "Commercial Use License", "PDF Download". Do NOT include these anywhere.',
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
