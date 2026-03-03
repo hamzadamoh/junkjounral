@@ -10,6 +10,18 @@ import { analyzeTagContainment, violatesFormatContainment, getFormatViolations }
 
 const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality"];
 
+const FILLER_ONLY_SEGMENTS = new Set([
+    "printable", "digital", "color", "digital download",
+    "printable pages", "mixed media", "craft supplies"
+]);
+
+const removeFillerSegments = (title: string): string => {
+    if (!title) return "";
+    const segments = title.split(',').map(s => s.trim());
+    const filtered = segments.filter(seg => !FILLER_ONLY_SEGMENTS.has(seg.toLowerCase()));
+    return filtered.join(', ');
+};
+
 const applyReplacements = (text: string): string => {
     if (!text) return "";
     let newText = text.replace(/\bwall art\b/gi, "pages")
@@ -721,6 +733,7 @@ Return ONLY a JSON object:
                 }
 
                 // SILENT POST-PROCESSING
+                aiResponse.title = removeFillerSegments(aiResponse.title);
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 aiResponse.title = truncateTo140(aiResponse.title);
@@ -892,6 +905,7 @@ Return ONLY a JSON object:
                 }
 
                 // SILENT POST-PROCESSING
+                aiResponse.title = removeFillerSegments(aiResponse.title);
                 aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 aiResponse.title = truncateTo140(aiResponse.title);
