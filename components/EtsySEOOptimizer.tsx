@@ -98,6 +98,10 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const segment = capitalizeWords(phrase);
         const hasTheme = phrase.toLowerCase().includes(baseTheme);
         const addition = hasTheme ? `, ${segment}` : `, ${capitalizeWords(baseTheme)} ${segment}`;
+
+        // Check if appending would exceed 140 — skip if so
+        if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase, '| addition length:', addition.length); continue; }
+
         finalTitle += addition;
         console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
     }
@@ -113,7 +117,9 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
         if (finalTitle.toLowerCase().includes(desc.toLowerCase())) continue;
 
-        finalTitle += `, ${capitalizeWords(baseTheme)} ${capitalizeWords(desc)}`;
+        const addition = `, ${capitalizeWords(baseTheme)} ${capitalizeWords(desc)}`;
+        if (finalTitle.length + addition.length > 140) continue;
+        finalTitle += addition;
     }
 
     if (finalTitle.length >= 130) return truncateTo140(finalTitle);
@@ -130,10 +136,13 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         if (bannedTerms.some(banned => fb.toLowerCase().includes(banned))) continue;
         if (finalTitle.toLowerCase().includes(fb.toLowerCase())) continue;
 
-        finalTitle += `, ${capitalizeWords(baseTheme)} ${fb}`;
+        const addition = `, ${capitalizeWords(baseTheme)} ${fb}`;
+        if (finalTitle.length + addition.length > 140) continue;
+        finalTitle += addition;
     }
 
-    return truncateTo140(finalTitle);
+    console.log('[TRACE] Title after padding:', finalTitle, '| Length:', finalTitle.length);
+    return finalTitle;
 };
 
 
@@ -791,6 +800,9 @@ Return ONLY a JSON object:
                 if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
                     bestScoreObj = evalScore;
                     bestOptimizedData = { ...aiResponse, score: evalScore };
+                    console.log(`[TRACE] Attempt ${attempt} is NEW BEST: score=${evalScore.overallScore}, title="${aiResponse.title}" (${aiResponse.title?.length} chars)`);
+                } else {
+                    console.log(`[TRACE] Attempt ${attempt} NOT best: score=${evalScore.overallScore} vs best=${bestScoreObj.overallScore}`);
                 }
 
                 if (evalScore.overallScore >= 100) {
