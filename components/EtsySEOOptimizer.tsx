@@ -410,12 +410,12 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
         // --- PHASE 1.5: COMPETITOR INTELLIGENCE (PARALLEL SEARCH + PATTERN EXTRACTION) ---
         setIsFetchingInsights(true);
         let insights: CompetitorInsights = {
-            searchQuery: currentIdentity!.primary_theme,
+            searchQuery: `${currentIdentity!.primary_theme} junk journal`,
             themeTitles: []
         };
 
         try {
-            const themeQuery = `${currentIdentity!.primary_theme} junk journal`;
+            const themeQuery = insights.searchQuery;
 
             // Single theme-specific search only
             const themeSearchRes = await fetch('/api/etsy', {
@@ -1293,7 +1293,7 @@ Return ONLY a JSON object:
 
                                     {competitorInsights.themeTitles.length > 0 && (
                                         <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
-                                            <div className="text-xs text-slate-500 font-bold mb-2">Theme Search Results ({competitorInsights.searchQuery} junk journal)</div>
+                                            <div className="text-xs text-slate-500 font-bold mb-2">Etsy Search Query: "{competitorInsights.searchQuery}"</div>
                                             <ul className="space-y-1">
                                                 {competitorInsights.themeTitles.map((title, j) => (
                                                     <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
