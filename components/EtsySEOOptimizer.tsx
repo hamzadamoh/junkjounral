@@ -69,7 +69,7 @@ const truncateTo140 = (title: string): string => {
     return truncated.replace(/[,-\s]+$/, '').trim();
 };
 
-const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): string => {
+const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, competitorPhrases?: string[]): string => {
     if (!title) return "";
     let finalTitle = title.trim();
 
@@ -78,38 +78,56 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
 
     if (finalTitle.length >= 130) return finalTitle;
 
-    const descriptors = [...(identity.secondary_themes || []), ...(identity.theme_synonyms || [])];
-    const uniqueDescriptors = Array.from(new Set(descriptors.map(d => d.trim().toLowerCase()))).filter(d => d.length > 0);
+    const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     const baseTheme = identity.primary_theme && identity.primary_theme !== "unthemed"
         ? identity.primary_theme.toLowerCase()
         : "junk journal";
-
-    const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-
     const bannedTerms = ["set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent"];
 
+    // Priority 1: Competitor phrases (extracted from search) — use these first
+    const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
+
+    for (const phrase of competitorOptions) {
+        if (finalTitle.length >= 130) break;
+        if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) continue;
+        if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) continue;
+
+        // If the phrase already contains the theme, use it directly; otherwise prefix with theme
+        const segment = capitalizeWords(phrase);
+        const hasTheme = phrase.toLowerCase().includes(baseTheme);
+        const addition = hasTheme ? `, ${segment}` : `, ${capitalizeWords(baseTheme)} ${segment}`;
+        finalTitle += addition;
+    }
+
+    if (finalTitle.length >= 130) return truncateTo140(finalTitle);
+
+    // Priority 2: identity.theme_synonyms, then secondary_themes
+    const descriptors = [...(identity.theme_synonyms || []), ...(identity.secondary_themes || [])];
+    const uniqueDescriptors = Array.from(new Set(descriptors.map(d => d.trim().toLowerCase()))).filter(d => d.length > 0);
+
+    for (const desc of uniqueDescriptors) {
+        if (finalTitle.length >= 130) break;
+        if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
+        if (finalTitle.toLowerCase().includes(desc.toLowerCase())) continue;
+
+        finalTitle += `, ${capitalizeWords(baseTheme)} ${capitalizeWords(desc)}`;
+    }
+
+    if (finalTitle.length >= 130) return truncateTo140(finalTitle);
+
+    // Priority 3: Hardcoded fallbacks — last resort
     const fallbacks = [
-        "Ephemera", "Scrapbook", "Collage Sheet", "Digital Papers", "Printable",
-        "Journal Kit", "Art Journal", "Paper Craft", "Mixed Media", "Collage Sheets",
-        "Decorative Pages", "Craft Supplies", "Digital Download"
+        "Ephemera", "Scrapbook", "Collage Sheet", "Digital Papers",
+        "Journal Kit", "Art Journal", "Paper Craft", "Collage Sheets",
+        "Decorative Pages", "Digital Download"
     ];
-    const optionsToTry = [...uniqueDescriptors, ...fallbacks];
 
-    let loopCount = 0;
-    while (finalTitle.length < 130 && loopCount < 10) {
-        for (const desc of optionsToTry) {
-            if (finalTitle.length >= 130) break;
+    for (const fb of fallbacks) {
+        if (finalTitle.length >= 130) break;
+        if (bannedTerms.some(banned => fb.toLowerCase().includes(banned))) continue;
+        if (finalTitle.toLowerCase().includes(fb.toLowerCase())) continue;
 
-            if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
-
-            const segment = capitalizeWords(desc);
-            const addition = `, ${capitalizeWords(baseTheme)} ${segment}`;
-
-            if (!finalTitle.toLowerCase().includes(desc.toLowerCase())) {
-                finalTitle += addition;
-            }
-        }
-        loopCount++;
+        finalTitle += `, ${capitalizeWords(baseTheme)} ${fb}`;
     }
 
     return truncateTo140(finalTitle);
@@ -734,7 +752,7 @@ Return ONLY a JSON object:
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = removeFillerSegments(aiResponse.title);
-                aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!);
+                aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!, insights.extractedPattern?.themePhrases);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
@@ -906,7 +924,7 @@ Return ONLY a JSON object:
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = removeFillerSegments(aiResponse.title);
-                aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!);
+                aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!, competitorInsights?.extractedPattern?.themePhrases);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
