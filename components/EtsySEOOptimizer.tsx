@@ -12,7 +12,7 @@ const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality
 
 const FILLER_ONLY_SEGMENTS = new Set([
     "printable", "digital", "color", "digital download",
-    "printable pages", "mixed media", "craft supplies"
+    "printable pages", "mixed media", "craft supplies", "digital papers"
 ]);
 
 const removeFillerSegments = (title: string): string => {
@@ -349,6 +349,7 @@ Return a single JSON object matching this exact structure:
 
 RULES:
 - primary_theme MUST be the FULL compound theme descriptor, not a single word. If the title says "Vintage Swatchbook Junk Journal Pages", the primary_theme is "vintage swatchbook" NOT just "vintage". If the title says "Dark Gothic Fairy", the primary_theme is "dark gothic fairy" NOT just "gothic". Always capture the complete, most-specific multi-word theme.
+- primary_theme must be the subject/aesthetic ONLY — never include product words like 'junk journal', 'pages', 'printable', 'digital', 'kit', 'paper', 'scrapbook', 'ephemera', 'download' in the theme. Correct examples: 'cherry blossom', 'vintage swatchbook', 'whimsical cats', 'dark gothic fairy'. Wrong examples: 'cherry junk journal', 'vintage journal pages', 'gothic scrapbook kit'.
 - If no theme is present, set primary_theme to "unthemed"
 - If secondary_themes are not present, return []
 - If confidence is below 0.7, still return the JSON but flag it
@@ -384,6 +385,17 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     analysisContent = analysisContent.replace(/```json|```/g, '').trim();
                 }
                 currentIdentity = JSON.parse(analysisContent) as JunkJournalPagesIdentity;
+
+                // Sanitize primary_theme: strip product words that GPT may include
+                const PRODUCT_WORDS = ['journal', 'junk', 'pages', 'printable', 'digital', 'kit', 'download', 'paper', 'scrapbook', 'ephemera'];
+                if (currentIdentity.primary_theme && currentIdentity.primary_theme !== 'unthemed') {
+                    currentIdentity.primary_theme = currentIdentity.primary_theme
+                        .split(' ')
+                        .filter(w => !PRODUCT_WORDS.includes(w.toLowerCase()))
+                        .join(' ')
+                        .trim();
+                    if (!currentIdentity.primary_theme) currentIdentity.primary_theme = 'unthemed';
+                }
 
                 // Sanitize theme_synonyms after extraction — track rejected
                 const { valid, rejected } = sanitizeSynonyms(currentIdentity.theme_synonyms || []);
