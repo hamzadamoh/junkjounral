@@ -70,6 +70,8 @@ const truncateTo140 = (title: string): string => {
 };
 
 const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, competitorPhrases?: string[]): string => {
+    console.log('[TRACE] ensureTitleLength called with competitorPhrases:', competitorPhrases);
+    console.log('[TRACE] Title before padding:', title, '| Length:', title?.length);
     if (!title) return "";
     let finalTitle = title.trim();
 
@@ -88,15 +90,16 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
 
     for (const phrase of competitorOptions) {
-        if (finalTitle.length >= 130) break;
-        if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) continue;
-        if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) continue;
+        if (finalTitle.length >= 130) { console.log('[TRACE] Reached 130, stopping'); break; }
+        if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) { console.log('[TRACE] SKIPPED (banned):', phrase); continue; }
+        if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) { console.log('[TRACE] SKIPPED (already in title):', phrase); continue; }
 
         // If the phrase already contains the theme, use it directly; otherwise prefix with theme
         const segment = capitalizeWords(phrase);
         const hasTheme = phrase.toLowerCase().includes(baseTheme);
         const addition = hasTheme ? `, ${segment}` : `, ${capitalizeWords(baseTheme)} ${segment}`;
         finalTitle += addition;
+        console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
     }
 
     if (finalTitle.length >= 130) return truncateTo140(finalTitle);
@@ -483,6 +486,7 @@ Return ONLY a JSON object:
                             patternContent = patternContent.replace(/```json|```/g, '').trim();
                         }
                         insights.extractedPattern = JSON.parse(patternContent);
+                        console.log('[TRACE] Extracted themePhrases:', insights.extractedPattern?.themePhrases);
                     }
                 } catch (e) {
                     console.error("Pattern extraction failed", e);
@@ -490,6 +494,7 @@ Return ONLY a JSON object:
             }
 
             setCompetitorInsights(insights);
+            console.log('[TRACE] insights.extractedPattern at setCompetitorInsights:', insights.extractedPattern);
 
         } catch (err) {
             console.error("Competitor intelligence phase failed silently", err);
@@ -766,6 +771,7 @@ Return ONLY a JSON object:
                 }
 
                 // SILENT POST-PROCESSING
+                console.log('[TRACE] Before ensureTitleLength — insights.extractedPattern?.themePhrases:', insights.extractedPattern?.themePhrases);
                 aiResponse.title = removeFillerSegments(aiResponse.title);
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!, insights.extractedPattern?.themePhrases);
                 aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
