@@ -74,9 +74,13 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity): s
 
     const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-    const bannedTerms = ["ephemera", "kit", "set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent"];
+    const bannedTerms = ["set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent"];
 
-    const fallbacks = ["Ephemera", "Scrapbook", "Collage Sheet", "Digital Papers", "Printable", "Journal Kit"];
+    const fallbacks = [
+        "Ephemera", "Scrapbook", "Collage Sheet", "Digital Papers", "Printable",
+        "Journal Kit", "Art Journal", "Paper Craft", "Mixed Media", "Collage Sheets",
+        "Decorative Pages", "Craft Supplies", "Digital Download"
+    ];
     const optionsToTry = [...uniqueDescriptors, ...fallbacks];
 
     let loopCount = 0;
