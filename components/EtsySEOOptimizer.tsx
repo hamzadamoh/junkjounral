@@ -140,8 +140,6 @@ export interface ReferenceShop {
 export interface CompetitorInsights {
     searchQuery: string;
     themeTitles: string[];
-    topTitles: string[];
-    referenceTitles: { shopId: string, titles: string[] }[];
     extractedPattern?: {
         themePhrases: string[];
     };
@@ -378,91 +376,38 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
         setIsFetchingInsights(true);
         let insights: CompetitorInsights = {
             searchQuery: currentIdentity!.primary_theme,
-            themeTitles: [],
-            topTitles: [],
-            referenceTitles: []
+            themeTitles: []
         };
 
         try {
-            const themeQuery = `${currentIdentity!.primary_theme} junk journal pages`;
-            const categoryQuery = `junk journal pages ephemera printable`;
+            const themeQuery = `${currentIdentity!.primary_theme} junk journal`;
 
-            // Execute searches in parallel:
-            // - Global Search for Theme Specific
-            // - Global Search for Category Wide
-            // - Reference Shops for Category Wide (adds verified shop authority)
+            // Single theme-specific search only
+            const themeSearchRes = await fetch('/api/etsy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ operation: 'search-listings', keywords: themeQuery, limit: 10, sort_on: 'score' })
+            });
 
-            const [themeSearchRes, categorySearchRes, ...shopSearchRes] = await Promise.all([
-                fetch('/api/etsy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ operation: 'search-listings', keywords: themeQuery, limit: 10, sort_on: 'score' })
-                }),
-                fetch('/api/etsy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ operation: 'search-listings', keywords: categoryQuery, limit: 10, sort_on: 'score' })
-                }),
-                ...referenceShops.map(shop =>
-                    fetch('/api/etsy', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ operation: 'shop-search', shopName: shop.shopId, keywords: categoryQuery, limit: 5 })
-                    }).then(res => ({ shop, res }))
-                )
-            ]);
-
-            // 1. Process Theme Specific Results (top 5)
             if (themeSearchRes.ok) {
                 const themeData = await themeSearchRes.json();
-                insights.themeTitles = (themeData.results || []).slice(0, 5).map((l: any) => l.title);
+                insights.themeTitles = (themeData.results || []).slice(0, 10).map((l: any) => l.title);
             }
 
-            // 2. Process Reference Shops for Category Wide
-            let referenceTitleCount = 0;
-            for (const { shop, res } of shopSearchRes as { shop: typeof referenceShops[0], res: Response }[]) {
-                if (res.ok) {
-                    const shopData = await res.json();
-                    if (shopData.shop && shopData.shop.transaction_sold_count >= 1000) {
-                        setReferenceShops(prev => prev.map(s => s.shopId === shop.shopId ? { ...s, verified: true } : s));
-                    }
-                    const verifiedListings = (shopData.results || []).filter((l: any) => (l.num_favorers || 0) >= 10);
-                    if (verifiedListings.length > 0) {
-                        const titles = verifiedListings.slice(0, 3).map((l: any) => l.title);
-                        insights.referenceTitles.push({ shopId: shop.shopId, titles });
-                        referenceTitleCount += titles.length;
-                    }
-                }
-            }
+            // Extract descriptive vocabulary from theme results
+            if (insights.themeTitles.length > 0) {
+                const patternPrompt = `Analyze these Etsy listing titles that all relate to the theme "${currentIdentity!.primary_theme}".
 
-            // 3. Process Global Category Wide Results (Targeting top 10 combined Category results)
-            if (categorySearchRes.ok) {
-                const categoryData = await categorySearchRes.json();
-                const neededCategoryTitles = Math.max(0, 10 - referenceTitleCount);
-                if (neededCategoryTitles > 0) {
-                    insights.topTitles = (categoryData.results || []).slice(0, neededCategoryTitles).map((l: any) => l.title);
-                }
-            }
+Titles:
+${insights.themeTitles.map(t => `- ${t}`).join('\n')}
 
-            // 4. Extract Pattern Using AI
-            const hasData = insights.themeTitles.length > 0 || insights.referenceTitles.length > 0 || insights.topTitles.length > 0;
+Extract ONLY the descriptive noun phrases that describe this theme.
+Ignore generic product terms like "Digital Download", "Printable Pages", "Junk Journal Kit", "Ephemera", "Scrapbook" — those are product structure, not theme vocabulary.
 
-            if (hasData) {
-                const patternPrompt = `Analyze these competitor titles. 
-For each title identify the THEME-SPECIFIC phrases only — 
-ignore generic terms like "Digital Download", "Printable Pages", 
-"Junk Journal Kit" since those appear everywhere.
-
-[THEME-SPECIFIC TITLES] (What works for THIS exact theme):
-${insights.themeTitles.length > 0 ? insights.themeTitles.map(t => `- ${t}`).join('\n') : 'None found.'}
-
-[CATEGORY-WIDE TITLES] (What structure works across ALL themes):
-${[...insights.referenceTitles.flatMap(r => r.titles), ...insights.topTitles].map(t => `- ${t}`).join('\n')}
-
-Extract only the phrases that are UNIQUE to successful titles:
-- What specific product descriptors do top titles use?
-- What niche-specific nouns appear repeatedly?
-- What combinations of theme + product noun appear most?
+Focus on: What specific words do sellers use to describe THIS theme?
+- Adjectives and descriptive modifiers specific to this theme
+- Niche-specific nouns that buyers would search for
+- Theme-related word combinations
 
 Return ONLY a JSON object:
 {
@@ -518,56 +463,12 @@ Return ONLY a JSON object:
 
         let competitorPrompt = '';
         if (insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0) {
-            const primaryTheme = currentIdentity!.primary_theme || 'Theme';
-            const numberedPhrases = insights.extractedPattern.themePhrases.slice(0, 5).map((p, i) => `${i + 1}. ${p}`).join('\n');
+            const phraseList = insights.extractedPattern.themePhrases.join(', ');
             competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (MANDATORY TITLE SEGMENTS) ===',
-                `MANDATORY TITLE SEGMENTS — you MUST use these exact phrases in your title,`,
-                `replacing only the theme words with "${primaryTheme}":`,
-                '',
-                numberedPhrases,
-                '',
-                'Build your title BY COMBINING these phrases with commas.',
-                'Do not invent new segments. Use these phrases as your segments.',
-                'Fill remaining characters with additional theme+product combinations.',
-                'Target: 130-140 characters total.',
-                '',
-                `Your primary theme is: ${primaryTheme}`,
-                ''
-            ].join('\n');
-        } else if (insights.referenceTitles.length > 0) {
-            competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (TRUSTED REFERENCE TITLES) ===',
-                'These titles are from verified high-performing shops in your niche.',
-                'They have proven sales data and are ranking organically.',
-                'You MUST use at least 3 keyword phrases that appear across multiple reference shop titles. Identify the most repeated phrases across all reference titles and prioritize those in your generated title. Generic phrases like "Digital Papers" and "Nostalgic Printables" that do not appear in any reference title should be replaced with specific phrases that do appear.',
-                '',
-                ...insights.referenceTitles.map(rs =>
-                    `${rs.shopId}:\n${rs.titles.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
-                ),
-                '',
-                'PATTERN ANALYSIS INSTRUCTIONS:',
-                '- Position 1: Match the most common opening phrase pattern.',
-                '- Position 2: Match the most common middle phrase pattern.',
-                '- Position 3: Match the most common closing phrase pattern.',
-                '- Length: Target the average length of these titles.',
-                '- IMPORTANT: When analyzing reference titles, identify which keywords appear in the FIRST 50 characters across the majority of top titles. These are the highest-priority keywords and must appear in the first 50 characters of my generated title. Keywords that appear later in reference titles are secondary and should fill the remaining characters.',
-                ''
-            ].join('\n');
-        } else if (insights.topTitles.length > 0) {
-            competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (TOP RANKING TITLES) ===',
-                'These are the current top organically ranking listings for this theme.',
-                'You MUST use at least 3 keyword phrases that appear across multiple reference shop titles. Identify the most repeated phrases across all reference titles and prioritize those in your generated title. Generic phrases like "Digital Papers" and "Nostalgic Printables" that do not appear in any reference title should be replaced with specific phrases that do appear.',
-                '',
-                ...insights.topTitles.map((t, i) => `${i + 1}. ${t}`),
-                '',
-                'PATTERN ANALYSIS INSTRUCTIONS:',
-                '- Position 1: Match the most common opening phrase pattern.',
-                '- Position 2: Match the most common middle phrase pattern.',
-                '- Position 3: Match the most common closing phrase pattern.',
-                '- Length: Target the average length of these titles.',
-                '- IMPORTANT: When analyzing reference titles, identify which keywords appear in the FIRST 50 characters across the majority of top titles. These are the highest-priority keywords and must appear in the first 50 characters of my generated title. Keywords that appear later in reference titles are secondary and should fill the remaining characters.',
+                '=== 1. COMPETITOR INTELLIGENCE (THEME VOCABULARY) ===',
+                `These are proven search phrases buyers use for this theme: ${phraseList}.`,
+                'Incorporate as many as naturally fit into your title segments.',
+                `Your primary theme is: ${currentIdentity!.primary_theme || 'Theme'}`,
                 ''
             ].join('\n');
         }
@@ -599,7 +500,7 @@ Return ONLY a JSON object:
             `- You may use competitor phrases as structural inspiration ONLY — never copy their theme words.`,
             `- If a competitor phrase contains a different theme like 'Shabby Chic' or 'Victorian', replace those theme words with '${currentIdentity!.primary_theme || 'Theme'}' before using the phrase structure.`,
             `- Slot 1 MUST be: ${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Pages`,
-            '- Slots 2-4+: Use the MANDATORY TITLE SEGMENTS from section 1 above as your actual comma-separated segments. Do NOT invent new segments.',
+            '- Slots 2-4+: Build comma-separated segments using theme vocabulary from Section 1 combined with high-value product nouns.',
             '- Fill to 130-140 characters total.',
             '- Every comma-separated segment must contain either the theme word OR a high-value niche noun: ephemera, scrapbook, collage sheet, digital papers, printable, kit.',
             '- "Ephemera" must appear at least once in the title.',
@@ -1046,7 +947,7 @@ Return ONLY a JSON object:
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6 space-y-8 bg-slate-900 text-slate-100 min-h-screen">
+        <div className="max-w-7xl mx-auto p-6 space-y-8 bg-slate-900 text-slate-100 min-h-screen">
             <header className="relative text-center space-y-2">
                 {onClose && (
                     <button
@@ -1353,41 +1254,9 @@ Return ONLY a JSON object:
 
                                     {competitorInsights.themeTitles.length > 0 && (
                                         <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
-                                            <div className="text-xs text-slate-500 font-bold mb-2">Theme Matches ({competitorInsights.searchQuery})</div>
+                                            <div className="text-xs text-slate-500 font-bold mb-2">Theme Search Results ({competitorInsights.searchQuery} junk journal)</div>
                                             <ul className="space-y-1">
                                                 {competitorInsights.themeTitles.map((title, j) => (
-                                                    <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
-                                                        <span className="text-slate-600 shrink-0 mt-0.5">•</span>
-                                                        <span className="line-clamp-2">{title}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    {competitorInsights.referenceTitles.length > 0 && (
-                                        competitorInsights.referenceTitles.map((rt, i) => (
-                                            <div key={i} className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
-                                                <div className="text-xs text-slate-500 font-bold mb-2 flex items-center gap-2">
-                                                    Reference Shop Category Wide: {rt.shopId} <span className="w-2 h-2 rounded-full bg-emerald-500" title="Verified high sales"></span>
-                                                </div>
-                                                <ul className="space-y-1">
-                                                    {rt.titles.map((title, j) => (
-                                                        <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
-                                                            <span className="text-slate-600 shrink-0 mt-0.5">•</span>
-                                                            <span className="line-clamp-2">{title}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ))
-                                    )}
-
-                                    {competitorInsights.topTitles.length > 0 && (
-                                        <div className="p-3 bg-slate-900/50 border border-slate-700/50 rounded-lg">
-                                            <div className="text-xs text-slate-500 font-bold mb-2">Global Category Wide Matches</div>
-                                            <ul className="space-y-1">
-                                                {competitorInsights.topTitles.map((title, j) => (
                                                     <li key={j} className="text-xs text-slate-300 flex items-start gap-1">
                                                         <span className="text-slate-600 shrink-0 mt-0.5">•</span>
                                                         <span className="line-clamp-2">{title}</span>
