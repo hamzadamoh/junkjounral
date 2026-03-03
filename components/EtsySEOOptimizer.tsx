@@ -37,19 +37,33 @@ const applyReplacements = (text: string): string => {
 
 const removeTitleDuplicates = (title: string): string => {
     if (!title) return "";
-    const seen = new Set<string>();
-    let newTitle = title.replace(/\b[A-Za-z0-9'-]+\b/g, (match) => {
-        const lower = match.toLowerCase();
-        if (seen.has(lower)) return "";
-        seen.add(lower);
-        return match;
-    });
-    return newTitle
-        .replace(/\s+/g, ' ')
-        .replace(/,\s*,/g, ',')
-        .replace(/\s+,/g, ',')
-        .replace(/(^,\s*)|(,\s*$)/g, '')
-        .trim();
+    const segments = title.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (segments.length <= 1) return title;
+
+    const kept: string[] = [];
+    for (const seg of segments) {
+        const segWords = new Set(seg.toLowerCase().split(/\s+/).filter(w => w.length > 0));
+        let isDuplicate = false;
+
+        for (const existing of kept) {
+            const existingWords = new Set(existing.toLowerCase().split(/\s+/).filter(w => w.length > 0));
+            // Count how many words in this segment overlap with an existing segment
+            let overlapCount = 0;
+            for (const word of segWords) {
+                if (existingWords.has(word)) overlapCount++;
+            }
+            const overlapRatio = segWords.size > 0 ? overlapCount / segWords.size : 0;
+            if (overlapRatio > 0.7) {
+                console.log(`[TRACE] DEDUP: dropping segment "${seg}" (${Math.round(overlapRatio * 100)}% overlap with "${existing}")`);
+                isDuplicate = true;
+                break;
+            }
+        }
+
+        if (!isDuplicate) kept.push(seg);
+    }
+
+    return kept.join(', ');
 };
 
 const truncateTo140 = (title: string): string => {
