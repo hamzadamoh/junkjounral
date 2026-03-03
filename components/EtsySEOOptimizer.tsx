@@ -780,10 +780,12 @@ Return ONLY a JSON object:
                 }
 
                 // SILENT POST-PROCESSING
-                console.log('[TRACE] Before ensureTitleLength — insights.extractedPattern?.themePhrases:', insights.extractedPattern?.themePhrases);
+                console.log('[TRACE] Before post-processing — raw title:', aiResponse.title, '| Length:', aiResponse.title?.length);
                 aiResponse.title = removeFillerSegments(aiResponse.title);
+                aiResponse.title = applyReplacements(aiResponse.title);
+                aiResponse.title = removeTitleDuplicates(aiResponse.title);
+                console.log('[TRACE] After dedup, before padder:', aiResponse.title, '| Length:', aiResponse.title?.length);
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!, insights.extractedPattern?.themePhrases);
-                aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
@@ -957,8 +959,9 @@ Return ONLY a JSON object:
 
                 // SILENT POST-PROCESSING
                 aiResponse.title = removeFillerSegments(aiResponse.title);
+                aiResponse.title = applyReplacements(aiResponse.title);
+                aiResponse.title = removeTitleDuplicates(aiResponse.title);
                 aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!, competitorInsights?.extractedPattern?.themePhrases);
-                aiResponse.title = removeTitleDuplicates(applyReplacements(aiResponse.title));
                 aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
                     aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
