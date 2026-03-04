@@ -12,7 +12,8 @@ const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality
 
 const FILLER_ONLY_SEGMENTS = new Set([
     "printable", "digital", "color", "digital download",
-    "printable pages", "mixed media", "craft supplies", "digital papers"
+    "printable pages", "mixed media", "craft supplies", "digital papers",
+    "journal magic", "printable journal magic"
 ]);
 
 const removeFillerSegments = (title: string): string => {
@@ -36,7 +37,13 @@ const applyReplacements = (text: string): string => {
     let newText = text.replace(/\bwall art\b/gi, "pages")
         .replace(/\bhome decor\b/gi, "pages")
         .replace(/\bcommercial use license\b/gi, "")
-        .replace(/\bpdf download\b/gi, "");
+        .replace(/\bpdf download\b/gi, "")
+        .replace(/\b\w+\s+magic\b/gi, "")        // [word] Magic combos
+        .replace(/\bmagic\b/gi, "")                // standalone Magic
+        .replace(/\b160\+?\b/g, "")                // specs: 160+
+        .replace(/\b300\s*dpi\b/gi, "")            // specs: 300 DPI
+        .replace(/\b8\.?5\s*x\s*11\b/gi, "")       // specs: 8.5x11
+        .replace(/-/g, ',');                        // dashes → commas
     let cleanText = ` ${newText} `;
     for (const filler of FILLER_WORDS) {
         cleanText = cleanText.replace(new RegExp(`\\b${filler}\\b`, 'gi'), '');
@@ -608,7 +615,8 @@ Return ONLY a JSON object:
             '- LENGTH TARGET: 120-140 characters total.',
             '- NO ORPHANS: Zero standalone, single-word segments allowed.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
-            '- BANNED PHRASES: "Commercial Use License", "PDF Download". Do NOT include these anywhere.',
+            '- BANNED PHRASES: "Commercial Use License", "PDF Download", any "[word] Magic" combo (e.g. "Journal Magic", "Printable Journal Magic"), "160+", "300 DPI", "8.5x11". Do NOT include these anywhere.',
+            '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.',
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
@@ -921,7 +929,8 @@ Return ONLY a JSON object:
             '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters.',
             '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally.',
             '- DENSITY CAP: Never repeat the exact same root word more than twice.',
-            '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely',
+            '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
+            '- BANNED: any "[word] Magic" combo, "160+", "300 DPI", "8.5x11", dashes (-). Specs go in description only.',
             '- GOOD: "Vintage Swatchbook Junk Journal Pages with Color Swatch Ephemera, Printable Paint Chip Collage Sheets"',
             '- BAD: "Vintage Swatchbook Junk Journal Pages, Vintage Swatch Collage, Swatchbook Ephemera, Vintage Papers"',
             '- Weave competitor phrases naturally into the sentence. Do not append them as isolated comma segments.',
