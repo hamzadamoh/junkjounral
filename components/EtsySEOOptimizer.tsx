@@ -98,7 +98,7 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
     const baseTheme = identity.primary_theme && identity.primary_theme !== "unthemed"
         ? identity.primary_theme.toLowerCase()
         : "junk journal";
-    const bannedTerms = ["set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent"];
+    const bannedTerms = ["set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent", "stickers", "sticker", "washi", "tape", "stamps", "stamp", "foil", "die cut", "die cuts"];
 
     // Priority 1: Competitor phrases (extracted from search) — use these first
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
@@ -481,6 +481,7 @@ Example: extract 'Mixed Media Collage Backgrounds' not just 'Mixed Media'.
 
 Ignore generic standalone terms like "Digital Download", "Printable", "Junk Journal".
 Only extract phrases that are SPECIFIC to this theme and include a product noun.
+EXCLUDE phrases for different product types — no stickers, washi tape, stamps, die cuts, foil, or clipart phrases. This product is PAGES/PAPERS/EPHEMERA only.
 
 Return ONLY a JSON object:
 {
