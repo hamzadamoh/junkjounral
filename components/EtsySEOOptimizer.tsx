@@ -130,8 +130,10 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
 
     const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     const bannedTerms = ["set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent", "stickers", "sticker", "washi", "tape", "stamps", "stamp", "foil", "die cut", "die cuts"];
-    const connectors = ["with", "for"];
-    const hasConnector = connectors.some(c => finalTitle.toLowerCase().includes(` ${c} `));
+
+    // Connector rotation — never use same connector twice consecutively
+    const padConnectors = [', ', ' for ', ' with '];
+    let lastConnectorIdx = -1;
 
     // Root-word extraction helper
     const rootStem = (w: string) => w.toLowerCase().replace(/[^a-z]/g, '').replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
@@ -160,18 +162,15 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const overlapCount = phraseRoots.filter(r => titleRoots.has(r)).length;
         if (overlapCount >= 2) { console.log('[TRACE] SKIPPED (2+ root overlap):', phrase, '| overlaps:', overlapCount); continue; }
 
-        // Build natural extension
-        let addition: string;
-        const currentHasWithFor = /\bwith\b|\bfor\b/i.test(finalTitle);
-        if (!currentHasWithFor && !hasConnector) {
-            addition = ` with ${capitalizeWords(phrase)}`;
-        } else {
-            addition = `, ${capitalizeWords(phrase)}`;
-        }
+        // Build natural extension with rotating connector
+        let nextIdx = (lastConnectorIdx + 1) % padConnectors.length;
+        const connector = padConnectors[nextIdx];
+        const addition = `${connector}${capitalizeWords(phrase)}`;
 
         if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase); continue; }
 
         finalTitle += addition;
+        lastConnectorIdx = nextIdx;
         console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
     }
 
@@ -186,16 +185,19 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
         if (finalTitle.toLowerCase().includes(desc.toLowerCase())) continue;
 
-        // Extend with "for [use case]" or "and [descriptor]"
-        const currentHasFor = /\bfor\b/i.test(finalTitle);
-        let addition: string;
-        if (!currentHasFor) {
-            addition = ` for ${capitalizeWords(desc)} Crafts`;
-        } else {
-            addition = ` and ${capitalizeWords(desc)}`;
-        }
+        // Root-word overlap filter: skip if phrase shares 2+ root words with existing title
+        const titleRoots2 = getTitleRoots(finalTitle);
+        const descRoots = desc.split(/\s+/).map(w => rootStem(w)).filter(s => s.length > 2 && !stopWords.has(s));
+        const descOverlap = descRoots.filter(r => titleRoots2.has(r)).length;
+        if (descOverlap >= 2) { console.log('[TRACE] SKIPPED synonym (2+ root overlap):', desc); continue; }
+
+        // Rotating connector
+        let nextIdx2 = (lastConnectorIdx + 1) % padConnectors.length;
+        const connector2 = padConnectors[nextIdx2];
+        const addition = `${connector2}${capitalizeWords(desc)}`;
         if (finalTitle.length + addition.length > 140) continue;
         finalTitle += addition;
+        lastConnectorIdx = nextIdx2;
     }
 
     console.log('[TRACE] Title after padding:', finalTitle, '| Length:', finalTitle.length);
@@ -636,7 +638,8 @@ Return ONLY a JSON object:
             '- NO ORPHANS: Zero standalone, single-word segments allowed.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
             '- BANNED PHRASES: "Commercial Use License", "PDF Download", any "[word] Magic" combo (e.g. "Journal Magic", "Printable Journal Magic"), "160+", "300 DPI", "8.5x11". Do NOT include these anywhere.',
-            '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.', ,
+            '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.',
+            '- HARD LENGTH RULE: You MUST generate a title between 100 and 120 characters. Never return a title shorter than 100 characters. The padder will only add one final phrase — your generated sentence must be nearly complete on its own.',
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
