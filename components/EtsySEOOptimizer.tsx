@@ -29,7 +29,7 @@ const removeFillerSegments = (title: string): string => {
     }
     // Remove orphan single words (a single word between commas)
     cleaned = cleaned.replace(/,\s*\b[A-Za-z]{2,15}\b\s*(?=,|$)/g, '');
-    return cleaned.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '').trim();
+    return cleaned.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '').replace(/(?<![a-zA-Z0-9])[+%&](?![a-zA-Z0-9])/g, '').replace(/\s+/g, ' ').trim();
 };
 
 const applyReplacements = (text: string): string => {
@@ -121,7 +121,7 @@ const truncateTo140 = (title: string): string => {
         truncated = truncated.substring(0, lastSpace);
     }
 
-    return truncated.replace(/[,-\s]+$/, '').trim();
+    return truncated.replace(/[,-\s]+$/, '').replace(/(?<![a-zA-Z0-9])[+%&](?![a-zA-Z0-9])/g, '').replace(/\s+/g, ' ').trim();
 };
 
 const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, competitorPhrases?: string[]): string => {
@@ -180,12 +180,21 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         return freq;
     };
 
-    // Global root cap: if appending a phrase would cause any root to exceed 3 occurrences, skip it
-    const wouldExceedRootCap = (currentTitle: string, candidateAddition: string, maxPerRoot: number = 3): string | null => {
+    // Aesthetic adjectives get stricter cap (max 2) vs nouns (max 3)
+    const aestheticAdjectives = new Set([
+        'whimsical', 'quirky', 'vintage', 'shabby', 'aesthetic', 'surreal', 'enchanted', 'dreamy',
+        'mystical', 'ethereal', 'romantic', 'rustic', 'cottagecore', 'bohemian', 'retro', 'gothic',
+        'celestial', 'moody', 'dark', 'grunge', 'pastel', 'watercolor', 'delicate', 'charming',
+        'elegant', 'antique', 'nostalgic', 'serene', 'magical', 'fantastical', 'playful'
+    ]);
+
+    // Global root cap with split sensitivity: adjectives=2, nouns=3
+    const wouldExceedRootCap = (currentTitle: string, candidateAddition: string): string | null => {
         const combined = `${currentTitle} ${candidateAddition}`;
         const freq = getRootFrequencies(combined);
         for (const [root, count] of freq.entries()) {
-            if (count > maxPerRoot) return root;
+            const cap = aestheticAdjectives.has(root) ? 2 : 3;
+            if (count > cap) return root;
         }
         return null;
     };
@@ -204,14 +213,19 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const overlapCount = phraseRoots.filter(r => titleRoots.has(r)).length;
         if (overlapCount >= 2) { console.log('[TRACE] SKIPPED (2+ root overlap):', phrase, '| overlaps:', overlapCount); continue; }
 
-        // Trailing-word duplicate check: if last word of title matches last word of phrase, skip
-        const titleWords = finalTitle.trim().split(/\s+/);
-        const phraseWords = capitalizeWords(phrase).trim().split(/\s+/);
-        const lastTitleWord = titleWords[titleWords.length - 1]?.toLowerCase();
-        const lastPhraseWord = phraseWords[phraseWords.length - 1]?.toLowerCase();
-        if (lastTitleWord && lastPhraseWord && lastTitleWord === lastPhraseWord) {
-            console.log('[TRACE] SKIPPED (trailing word duplicate):', phrase, '| word:', lastTitleWord);
-            continue;
+        // Enhanced echo guard: skip if candidate's last word matches the final word of ANY segment in the title
+        const titleSegments = finalTitle.split(/,\s*|\bfor\b|\bwith\b|\band\b/i).map(s => s.trim()).filter(s => s.length > 0);
+        const candidateWords = capitalizeWords(phrase).trim().split(/\s+/);
+        const candidateLastWord = candidateWords[candidateWords.length - 1]?.toLowerCase();
+        if (candidateLastWord) {
+            const hasEcho = titleSegments.some(seg => {
+                const segWords = seg.trim().split(/\s+/);
+                return segWords[segWords.length - 1]?.toLowerCase() === candidateLastWord;
+            });
+            if (hasEcho) {
+                console.log('[TRACE] SKIPPED (echo guard):', phrase, '| trailing word:', candidateLastWord);
+                continue;
+            }
         }
 
         // Build natural extension with rotating connector
@@ -249,6 +263,18 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const descRoots = desc.split(/\s+/).map(w => rootStem(w)).filter(s => s.length > 2 && !stopWords.has(s));
         const descOverlap = descRoots.filter(r => titleRoots2.has(r)).length;
         if (descOverlap >= 2) { console.log('[TRACE] SKIPPED synonym (2+ root overlap):', desc); continue; }
+
+        // Echo guard for synonyms: skip if candidate's last word echoes any segment-final word
+        const synSegments = finalTitle.split(/,\s*|\bfor\b|\bwith\b|\band\b/i).map(s => s.trim()).filter(s => s.length > 0);
+        const synCandidateWords = capitalizeWords(desc).trim().split(/\s+/);
+        const synLastWord = synCandidateWords[synCandidateWords.length - 1]?.toLowerCase();
+        if (synLastWord) {
+            const synEcho = synSegments.some(seg => {
+                const sw = seg.trim().split(/\s+/);
+                return sw[sw.length - 1]?.toLowerCase() === synLastWord;
+            });
+            if (synEcho) { console.log('[TRACE] SKIPPED synonym (echo guard):', desc, '| trailing:', synLastWord); continue; }
+        }
 
         // Rotating connector
         let nextIdx2 = (lastConnectorIdx + 1) % padConnectors.length;
