@@ -115,8 +115,8 @@ export default async function handler(req, res) {
           offset += limit;
         }
 
-        // Safety: max 10 pages (1000 listings)
-        if (offset >= 1000) hasMore = false;
+        // Safety: max 20 pages (2000 listings)
+        if (offset >= 2000) hasMore = false;
       }
 
       return allListings;
