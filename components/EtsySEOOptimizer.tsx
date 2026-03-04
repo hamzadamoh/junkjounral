@@ -168,6 +168,28 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         return roots;
     };
 
+    // Global root frequency counter — counts every root stem in a string
+    const getRootFrequencies = (t: string): Map<string, number> => {
+        const freq = new Map<string, number>();
+        t.split(/\s+/).forEach(w => {
+            const stem = rootStem(w);
+            if (stem.length > 2 && !stopWords.has(stem)) {
+                freq.set(stem, (freq.get(stem) || 0) + 1);
+            }
+        });
+        return freq;
+    };
+
+    // Global root cap: if appending a phrase would cause any root to exceed 3 occurrences, skip it
+    const wouldExceedRootCap = (currentTitle: string, candidateAddition: string, maxPerRoot: number = 3): string | null => {
+        const combined = `${currentTitle} ${candidateAddition}`;
+        const freq = getRootFrequencies(combined);
+        for (const [root, count] of freq.entries()) {
+            if (count > maxPerRoot) return root;
+        }
+        return null;
+    };
+
     // Priority 1: Competitor phrases — extend naturally with connectors
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
 
@@ -199,6 +221,13 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
 
         if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase); continue; }
 
+        // GLOBAL ROOT CAP: simulate combined string and check no root exceeds 3
+        const overloadedRoot = wouldExceedRootCap(finalTitle, addition);
+        if (overloadedRoot) {
+            console.log(`[TRACE] SKIPPED (global root cap): '${phrase}' would push '${overloadedRoot}' over 3 occurrences`);
+            continue;
+        }
+
         finalTitle += addition;
         lastConnectorIdx = nextIdx;
         console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
@@ -226,6 +255,14 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const connector2 = padConnectors[nextIdx2];
         const addition = `${connector2}${capitalizeWords(desc)}`;
         if (finalTitle.length + addition.length > 140) continue;
+
+        // GLOBAL ROOT CAP: simulate combined string and check no root exceeds 3
+        const overloadedRoot2 = wouldExceedRootCap(finalTitle, addition);
+        if (overloadedRoot2) {
+            console.log(`[TRACE] SKIPPED synonym (global root cap): '${desc}' would push '${overloadedRoot2}' over 3 occurrences`);
+            continue;
+        }
+
         finalTitle += addition;
         lastConnectorIdx = nextIdx2;
     }
