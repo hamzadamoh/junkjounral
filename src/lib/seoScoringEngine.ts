@@ -143,7 +143,10 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     for (const [word, count] of titleWordCounts.entries()) {
         if (count > 2) {
-            redundantPairs.push(`root word repeated ${count}× ('${word}') — max allowed is 2`);
+            const extraOccurrences = count - 2;
+            const penalty = extraOccurrences * 5;
+            titleScore -= penalty;
+            weaknesses.push(`Root word '${word}' repeated ${count}× (-${penalty}pts). Max allowed is 2.`);
         }
     }
 

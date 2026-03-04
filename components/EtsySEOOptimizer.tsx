@@ -133,6 +133,19 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
     const connectors = ["with", "for"];
     const hasConnector = connectors.some(c => finalTitle.toLowerCase().includes(` ${c} `));
 
+    // Root-word extraction helper
+    const rootStem = (w: string) => w.toLowerCase().replace(/[^a-z]/g, '').replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
+    const stopWords = new Set(["with", "for", "and", "the", "a", "an", "of", "in", "on", "to", "junk", "journal", "pages", "printable", "digital"]);
+
+    const getTitleRoots = (t: string): Set<string> => {
+        const roots = new Set<string>();
+        t.split(/\s+/).forEach(w => {
+            const stem = rootStem(w);
+            if (stem.length > 2 && !stopWords.has(stem)) roots.add(stem);
+        });
+        return roots;
+    };
+
     // Priority 1: Competitor phrases — extend naturally with connectors
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
 
@@ -140,6 +153,12 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         if (finalTitle.length >= 120) { console.log('[TRACE] Reached 120, stopping'); break; }
         if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) { console.log('[TRACE] SKIPPED (banned):', phrase); continue; }
         if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) { console.log('[TRACE] SKIPPED (already in title):', phrase); continue; }
+
+        // Root-word overlap filter: skip if phrase shares 2+ root words with existing title
+        const titleRoots = getTitleRoots(finalTitle);
+        const phraseRoots = phrase.split(/\s+/).map(w => rootStem(w)).filter(s => s.length > 2 && !stopWords.has(s));
+        const overlapCount = phraseRoots.filter(r => titleRoots.has(r)).length;
+        if (overlapCount >= 2) { console.log('[TRACE] SKIPPED (2+ root overlap):', phrase, '| overlaps:', overlapCount); continue; }
 
         // Build natural extension
         let addition: string;
@@ -608,15 +627,16 @@ Return ONLY a JSON object:
             'BAD EXAMPLE: "Cat With Kitten Junk Journal Pages, Cats Collage Ephemera, Vintage Cats And Kittens, Cottage Cats Ephemera"',
             '',
             'STRICT GENERATION RULES:',
-            '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters (e.g. "Vintage Swatchbook Junk Journal Pages").',
+            '- COMPLETE SENTENCE: Generate the ENTIRE title as one flowing 120-130 character natural sentence. Do NOT write a short anchor and expect padding to fill the rest.',
+            '- 60-CHARACTER ANCHOR: The first 60 characters must clearly state the core product (e.g. "Vintage Swatchbook Junk Journal Pages").',
             '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally. Do not just list comma segments.',
-            '- DENSITY CAP: Never repeat the exact same root word more than twice in the entire title.',
-            '- COMPETITOR INTEGRATION: Use competitor phrases naturally within the sentence flow, not as standalone comma segments.',
-            '- LENGTH TARGET: 120-140 characters total.',
+            '- DENSITY CAP: Never repeat the exact same root word more than twice in the entire title. "Cat" appearing 3+ times = rejected.',
+            '- COMPETITOR INTEGRATION: Weave competitor phrases naturally into the sentence flow, not as standalone comma segments.',
+            '- LENGTH TARGET: 120-130 characters. The AI must hit this range in one shot. A post-processor may add one final phrase if under 120.',
             '- NO ORPHANS: Zero standalone, single-word segments allowed.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
             '- BANNED PHRASES: "Commercial Use License", "PDF Download", any "[word] Magic" combo (e.g. "Journal Magic", "Printable Journal Magic"), "160+", "300 DPI", "8.5x11". Do NOT include these anywhere.',
-            '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.',
+            '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.', ,
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
@@ -923,7 +943,7 @@ Return ONLY a JSON object:
             '',
             '=== STRICT CONSTRAINTS ===',
             'TITLE RULES (NLP SENTENCE STRUCTURE):',
-            '- Title must be 120-140 characters. Use all available space.',
+            '- COMPLETE SENTENCE: Generate the ENTIRE title as one flowing 120-130 character natural sentence.',
             '- Structure: 2-3 flowing phrases connected with "with", "for", and commas — NOT a keyword list.',
             '- FORMULA: [Adjective] [Theme] Junk Journal [Product Type] with [Style/Aesthetic] [Niche Noun], Printable [Use Case] [Format]',
             '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters.',
