@@ -37,17 +37,17 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     // --- PILLAR 1: TITLE ENGINEERING (Max 30) ---
     let titleScore = 0;
 
-    // Buyer Intent Core (10 pts)
-    const first40 = lowerTitle.substring(0, 40);
+    // Buyer Intent Core (10 pts) — first 60 chars must contain core product identity
+    const first60 = lowerTitle.substring(0, 60);
     const hasJunkJournalCore = lowerTitle.includes("junk journal pages") || lowerTitle.includes("journal pages");
-    const hasJunkJournalInFirst40 = first40.includes("junk journal pages") || first40.includes("journal pages");
+    const hasJunkJournalInFirst60 = first60.includes("junk journal pages") || first60.includes("journal pages");
 
-    if (hasJunkJournalCore && hasJunkJournalInFirst40) {
+    if (hasJunkJournalCore && hasJunkJournalInFirst60) {
         titleScore += 10;
-        strengths.push("Core intent 'junk journal pages' found in first 40 chars.");
+        strengths.push("Core intent 'junk journal pages' found in first 60 chars (strong anchor).");
     } else if (hasJunkJournalCore) {
         titleScore += 5;
-        weaknesses.push("Core product 'junk journal pages' is pushed past the first 40 characters.");
+        weaknesses.push("Core product 'junk journal pages' is pushed past the first 60 characters. Anchor it earlier.");
     } else {
         weaknesses.push("Missing core product phrase 'junk journal pages' or 'journal pages'.");
     }
@@ -60,12 +60,12 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         const primaryTheme = identityContract.primary_theme.toLowerCase();
 
         // Theme Anchor (8 pts)
-        if (first40.includes(primaryTheme)) {
+        if (first60.includes(primaryTheme)) {
             titleScore += 8;
-            strengths.push(`Primary theme '${primaryTheme}' anchored in first 40 chars.`);
+            strengths.push(`Primary theme '${primaryTheme}' anchored in first 60 chars.`);
         } else if (lowerTitle.includes(primaryTheme)) {
             titleScore += 4;
-            weaknesses.push(`Primary theme '${primaryTheme}' is present but pushed past the first 40 characters.`);
+            weaknesses.push(`Primary theme '${primaryTheme}' is present but pushed past the first 60 characters.`);
         } else {
             missingPrimaryTheme = true;
             weaknesses.push(`IDENTITY VIOLATION: Missing primary theme '${primaryTheme}' in title.`);
@@ -106,6 +106,22 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         weaknesses.push("Missing format signal ('printable' or 'digital download') in title.");
     }
 
+    // Natural Connector Check (NEW — 4 pts for NLP sentence structure)
+    const hasWithConnector = /\bwith\b/i.test(lowerTitle);
+    const hasForConnector = /\bfor\b/i.test(lowerTitle);
+    const hasAndConnector = /\band\b/i.test(lowerTitle);
+    const connectorCount = [hasWithConnector, hasForConnector, hasAndConnector].filter(Boolean).length;
+
+    if (connectorCount >= 2) {
+        titleScore += 4;
+        strengths.push("Strong NLP sentence structure with multiple natural connectors.");
+    } else if (connectorCount === 1) {
+        titleScore += 2;
+        weaknesses.push("Title has only one natural connector. Use 'with', 'for', or 'and' to create flowing phrases.");
+    } else {
+        weaknesses.push("No natural connectors found ('with', 'for', 'and'). Title reads like a keyword list, not a product name.");
+    }
+
     // Redundancy Detector
     let redundantPairs: string[] = [];
     if (lowerTitle.includes("printable") && (lowerTitle.includes("digital download") || lowerTitle.includes("digital file"))) {
@@ -126,8 +142,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     });
 
     for (const [word, count] of titleWordCounts.entries()) {
-        if (count >= 3) {
-            redundantPairs.push(`motif repetition (${count} '${word}' signals)`);
+        if (count > 2) {
+            redundantPairs.push(`root word repeated ${count}× ('${word}') — max allowed is 2`);
         }
     }
 
@@ -136,30 +152,11 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         redundantPairs.push("'printable pages' repeating 'pages'");
     }
 
-    // Stuffing Detector: Same [Theme + Product Noun] across multiple segments
+    // Stuffing Detector: Root words appearing in too many phrases
+    // (Adapted for sentence-based titles — checks full title, not just comma segments)
     if (identityContract && identityContract.primary_theme !== "unthemed") {
         const primaryTheme = identityContract.primary_theme.toLowerCase();
-        const segments = lowerTitle.split(',').map(s => s.trim());
-        const productNouns = ["junk journal pages", "journal pages", "ephemera", "scrapbook", "collage sheet", "digital papers", "printable", "kit", "pages"];
-
-        const usedCombinations = new Set<string>();
-        let stuffingPenalty = 0;
-
-        for (const segment of segments) {
-            if (segment.includes(primaryTheme)) {
-                const matchingNoun = productNouns.find(n => segment.includes(n));
-                if (matchingNoun) {
-                    const combo = `${primaryTheme} ${matchingNoun}`;
-                    if (usedCombinations.has(combo)) {
-                        stuffingPenalty += 3;
-                        weaknesses.push(`Stuffing detected (-3pts): Repeated exact combination '${combo}'.`);
-                    } else {
-                        usedCombinations.add(combo);
-                    }
-                }
-            }
-        }
-        titleScore -= stuffingPenalty;
+        // No longer penalizes comma segment structure — sentence structure is expected
     }
 
     if (redundantPairs.length > 0) {
@@ -183,7 +180,15 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         }
     }
 
-    titleScore = Math.max(0, Math.min(30, titleScore));
+    // Title length range bonus (120-140 is ideal)
+    if (title.length >= 120 && title.length <= 140) {
+        titleScore += 2;
+        strengths.push("Title length in ideal 120-140 character range.");
+    } else if (title.length < 120) {
+        weaknesses.push(`Title is only ${title.length} chars. Target 120-140 for maximum search coverage.`);
+    }
+
+    titleScore = Math.max(0, Math.min(35, titleScore));
 
     // --- PILLAR 2: TAG INTELLIGENCE (Max 35) ---
     let tagsScore = 0;
@@ -425,7 +430,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     // ELITE 100 CONDITIONS CHECK
     if (fillerRatio >= 0.1) hardCapLimit = Math.min(hardCapLimit, 95);
-    if (!hasJunkJournalInFirst40) hardCapLimit = Math.min(hardCapLimit, 95);
+    if (!hasJunkJournalInFirst60) hardCapLimit = Math.min(hardCapLimit, 95);
     if (singleWordTags > 4) hardCapLimit = Math.min(hardCapLimit, 95);
 
     overallScore = Math.max(0, Math.min(overallScore, hardCapLimit));

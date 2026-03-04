@@ -17,9 +17,18 @@ const FILLER_ONLY_SEGMENTS = new Set([
 
 const removeFillerSegments = (title: string): string => {
     if (!title) return "";
-    const segments = title.split(',').map(s => s.trim());
-    const filtered = segments.filter(seg => !FILLER_ONLY_SEGMENTS.has(seg.toLowerCase()));
-    return filtered.join(', ');
+    // Remove orphan single words (words surrounded by commas or at boundaries that stand alone)
+    // Also remove filler-only phrases anywhere in the title
+    let cleaned = title;
+    for (const filler of FILLER_ONLY_SEGMENTS) {
+        // Remove as standalone comma segment
+        cleaned = cleaned.replace(new RegExp(`,\\s*${filler}\\s*,`, 'gi'), ',');
+        cleaned = cleaned.replace(new RegExp(`,\\s*${filler}\\s*$`, 'gi'), '');
+        cleaned = cleaned.replace(new RegExp(`^\\s*${filler}\\s*,`, 'gi'), '');
+    }
+    // Remove orphan single words (a single word between commas)
+    cleaned = cleaned.replace(/,\s*\b[A-Za-z]{2,15}\b\s*(?=,|$)/g, '');
+    return cleaned.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '').trim();
 };
 
 const applyReplacements = (text: string): string => {
@@ -37,30 +46,52 @@ const applyReplacements = (text: string): string => {
 
 const removeTitleDuplicates = (title: string): string => {
     if (!title) return "";
-    const segments = title.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (segments.length <= 1) return title;
+    // Detect repeated root words (>2 occurrences) and trim the later occurrence phrase
+    const words = title.split(/\s+/);
+    const stopWords = new Set(["with", "for", "and", "the", "a", "an", "of", "in", "on", "to", "junk", "journal", "pages", "printable", "digital"]);
+    const rootCounts = new Map<string, number>();
+    const rootStem = (w: string) => w.toLowerCase().replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
 
+    for (const w of words) {
+        const stem = rootStem(w.replace(/[^a-zA-Z]/g, ''));
+        if (stem.length > 2 && !stopWords.has(stem)) {
+            rootCounts.set(stem, (rootCounts.get(stem) || 0) + 1);
+        }
+    }
+
+    // Find stems that appear 3+ times
+    const overusedStems = new Set<string>();
+    for (const [stem, count] of rootCounts.entries()) {
+        if (count > 2) overusedStems.add(stem);
+    }
+
+    if (overusedStems.size === 0) return title;
+
+    // Split into phrases (by comma or connector) and remove later occurrences
+    const phrases = title.split(/,\s*/).map(p => p.trim()).filter(p => p.length > 0);
+    if (phrases.length <= 1) return title;
+
+    const usedStems = new Map<string, number>();
     const kept: string[] = [];
-    for (const seg of segments) {
-        const segWords = new Set(seg.toLowerCase().split(/\s+/).filter(w => w.length > 0));
-        let isDuplicate = false;
 
-        for (const existing of kept) {
-            const existingWords = new Set(existing.toLowerCase().split(/\s+/).filter(w => w.length > 0));
-            // Count how many words in this segment overlap with an existing segment
-            let overlapCount = 0;
-            for (const word of segWords) {
-                if (existingWords.has(word)) overlapCount++;
-            }
-            const overlapRatio = segWords.size > 0 ? overlapCount / segWords.size : 0;
-            if (overlapRatio > 0.7) {
-                console.log(`[TRACE] DEDUP: dropping segment "${seg}" (${Math.round(overlapRatio * 100)}% overlap with "${existing}")`);
-                isDuplicate = true;
-                break;
+    for (const phrase of phrases) {
+        const phraseWords = phrase.split(/\s+/);
+        let shouldDrop = false;
+
+        for (const w of phraseWords) {
+            const stem = rootStem(w.replace(/[^a-zA-Z]/g, ''));
+            if (overusedStems.has(stem)) {
+                const count = (usedStems.get(stem) || 0) + 1;
+                usedStems.set(stem, count);
+                if (count > 2) {
+                    console.log(`[TRACE] DEDUP: dropping phrase "${phrase}" (root "${stem}" used ${count}x)`);
+                    shouldDrop = true;
+                    break;
+                }
             }
         }
 
-        if (!isDuplicate) kept.push(seg);
+        if (!shouldDrop) kept.push(phrase);
     }
 
     return kept.join(', ');
@@ -72,12 +103,10 @@ const truncateTo140 = (title: string): string => {
     if (t.length <= 140) return t;
 
     let truncated = t.substring(0, 140);
+    // Cut at last word boundary
     const lastSpace = truncated.lastIndexOf(' ');
-    const lastComma = truncated.lastIndexOf(',');
-    const cutPos = Math.max(lastSpace, lastComma);
-
-    if (cutPos > 100) {
-        truncated = truncated.substring(0, cutPos);
+    if (lastSpace > 100) {
+        truncated = truncated.substring(0, lastSpace);
     }
 
     return truncated.replace(/[,-\s]+$/, '').trim();
@@ -89,73 +118,62 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
     if (!title) return "";
     let finalTitle = title.trim();
 
-    // Ensure it's truncated first so we don't start padding over the limit
     finalTitle = truncateTo140(finalTitle);
-
-    if (finalTitle.length >= 130) return finalTitle;
+    if (finalTitle.length >= 120) return finalTitle;
 
     const capitalizeWords = (str: string) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    const baseTheme = identity.primary_theme && identity.primary_theme !== "unthemed"
-        ? identity.primary_theme.toLowerCase()
-        : "junk journal";
     const bannedTerms = ["set", "pack", "bundle", "collection", "clipart", "clip art", "png", "svg", "transparent", "stickers", "sticker", "washi", "tape", "stamps", "stamp", "foil", "die cut", "die cuts"];
+    const connectors = ["with", "for"];
+    const hasConnector = connectors.some(c => finalTitle.toLowerCase().includes(` ${c} `));
 
-    // Priority 1: Competitor phrases (extracted from search) — use these first
+    // Priority 1: Competitor phrases — extend naturally with connectors
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
 
     for (const phrase of competitorOptions) {
-        if (finalTitle.length >= 130) { console.log('[TRACE] Reached 130, stopping'); break; }
+        if (finalTitle.length >= 120) { console.log('[TRACE] Reached 120, stopping'); break; }
         if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) { console.log('[TRACE] SKIPPED (banned):', phrase); continue; }
         if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) { console.log('[TRACE] SKIPPED (already in title):', phrase); continue; }
 
-        // Append phrase as-is — competitor phrases are already real buyer search terms
-        // Etsy's AI infers the theme from context, no need to prefix every segment
-        const addition = `, ${capitalizeWords(phrase)}`;
+        // Build natural extension
+        let addition: string;
+        const currentHasWithFor = /\bwith\b|\bfor\b/i.test(finalTitle);
+        if (!currentHasWithFor && !hasConnector) {
+            addition = ` with ${capitalizeWords(phrase)}`;
+        } else {
+            addition = `, ${capitalizeWords(phrase)}`;
+        }
 
-        // Check if appending would exceed 140 — skip if so
-        if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase, '| addition length:', addition.length); continue; }
+        if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase); continue; }
 
         finalTitle += addition;
         console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
     }
 
-    if (finalTitle.length >= 130) return truncateTo140(finalTitle);
+    if (finalTitle.length >= 120) return truncateTo140(finalTitle);
 
-    // Priority 2: identity.theme_synonyms, then secondary_themes
+    // Priority 2: theme synonyms/secondary themes as natural extensions
     const descriptors = [...(identity.theme_synonyms || []), ...(identity.secondary_themes || [])];
     const uniqueDescriptors = Array.from(new Set(descriptors.map(d => d.trim().toLowerCase()))).filter(d => d.length > 0);
 
     for (const desc of uniqueDescriptors) {
-        if (finalTitle.length >= 130) break;
+        if (finalTitle.length >= 120) break;
         if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
         if (finalTitle.toLowerCase().includes(desc.toLowerCase())) continue;
 
-        const addition = `, ${capitalizeWords(baseTheme)} ${capitalizeWords(desc)}`;
-        if (finalTitle.length + addition.length > 140) continue;
-        finalTitle += addition;
-    }
-
-    if (finalTitle.length >= 130) return truncateTo140(finalTitle);
-
-    // Priority 3: Hardcoded fallbacks — last resort
-    const fallbacks = [
-        "Ephemera", "Scrapbook", "Collage Sheet", "Digital Papers",
-        "Journal Kit", "Art Journal", "Paper Craft", "Collage Sheets",
-        "Decorative Pages", "Digital Download"
-    ];
-
-    for (const fb of fallbacks) {
-        if (finalTitle.length >= 130) break;
-        if (bannedTerms.some(banned => fb.toLowerCase().includes(banned))) continue;
-        if (finalTitle.toLowerCase().includes(fb.toLowerCase())) continue;
-
-        const addition = `, ${capitalizeWords(baseTheme)} ${fb}`;
+        // Extend with "for [use case]" or "and [descriptor]"
+        const currentHasFor = /\bfor\b/i.test(finalTitle);
+        let addition: string;
+        if (!currentHasFor) {
+            addition = ` for ${capitalizeWords(desc)} Crafts`;
+        } else {
+            addition = ` and ${capitalizeWords(desc)}`;
+        }
         if (finalTitle.length + addition.length > 140) continue;
         finalTitle += addition;
     }
 
     console.log('[TRACE] Title after padding:', finalTitle, '| Length:', finalTitle.length);
-    return finalTitle;
+    return truncateTo140(finalTitle);
 };
 
 
@@ -540,10 +558,11 @@ Return ONLY a JSON object:
         let competitorPrompt = '';
         if (insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0) {
             const phraseList = insights.extractedPattern.themePhrases.join(', ');
-            const themeCapitalized = (currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
             competitorPrompt = [
                 '=== 1. COMPETITOR INTELLIGENCE (PROVEN NICHE PHRASES) ===',
                 `Proven buyer search phrases for this theme: ${phraseList}`,
+                'IMPORTANT: Weave these phrases naturally into the sentence-structured title using connective language ("with", "for", "and").',
+                'Do NOT append them as isolated comma-separated segments. Integrate them into the flowing product name.',
                 ''
             ].join('\n');
         }
@@ -568,22 +587,26 @@ Return ONLY a JSON object:
             'Priority formula: Relevance x Click Appeal x Buyer Intent x Conversion Clarity',
             'NOT keyword stuffing.',
             '',
-            '=== 2. TITLE OPTIMIZATION (STRATEGIC STRUCTURE) ===',
+            '=== 2. TITLE OPTIMIZATION (NLP SENTENCE STRUCTURE) ===',
             '',
-            'Generate a title EXACTLY like this structure:',
-            '"[Theme] Junk Journal Pages, [Theme] [Niche Noun], [Theme] [Niche Noun], [Theme] [Niche Noun], [Theme] [Niche Noun]"',
+            'Generate a title that reads like a natural product name, NOT a keyword list.',
+            'Structure it as 2-3 flowing phrases connected with "with", "for", and commas — not just comma-separated keywords.',
+            '',
+            'FORMULA: [Adjective] [Theme] Junk Journal [Product Type] with [Style/Aesthetic] [Niche Noun], Printable [Use Case] [Format]',
             '',
             `Where [Theme] = "${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}"`,
-            `Where [Niche Noun] comes from the proven phrases in Section 1: ${insights.extractedPattern ? insights.extractedPattern.themePhrases.join(', ') : 'ephemera, collage sheets, digital papers, scrapbook'}`,
+            `Where [Niche Noun] comes from proven phrases in Section 1: ${insights.extractedPattern ? insights.extractedPattern.themePhrases.join(', ') : 'ephemera, collage sheets, digital papers, scrapbook'}`,
             '',
-            `Example output for theme "${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}":`,
-            `"${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Junk Journal Pages, ${insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0 ? insights.extractedPattern.themePhrases.slice(0, 4).map(p => p.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ') : 'Ephemera Collage, Scrapbook Papers, Digital Download'}"`,
+            'GOOD EXAMPLE: "Vintage Cat and Kitten Junk Journal Pages with Cottagecore Ephemera, Printable Scrapbook Collage Sheets"',
+            'BAD EXAMPLE: "Cat With Kitten Junk Journal Pages, Cats Collage Ephemera, Vintage Cats And Kittens, Cottage Cats Ephemera"',
             '',
-            'RULES:',
-            '- Use the competitor phrases provided as your actual title segments. Only generate your own segments if competitor phrases run out. Do not generate generic segments like \"Printable Journal Pages\" when niche-specific competitor phrases are available.',
-            '- Every segment = [Theme word] + [Niche noun from competitor phrases]. No standalone single words as segments.',
-            '- Minimum 5 comma-separated segments.',
-            '- Target 130-140 characters total.',
+            'STRICT GENERATION RULES:',
+            '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters (e.g. "Vintage Swatchbook Junk Journal Pages").',
+            '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally. Do not just list comma segments.',
+            '- DENSITY CAP: Never repeat the exact same root word more than twice in the entire title.',
+            '- COMPETITOR INTEGRATION: Use competitor phrases naturally within the sentence flow, not as standalone comma segments.',
+            '- LENGTH TARGET: 120-140 characters total.',
+            '- NO ORPHANS: Zero standalone, single-word segments allowed.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
             '- BANNED PHRASES: "Commercial Use License", "PDF Download". Do NOT include these anywhere.',
             '',
@@ -891,16 +914,17 @@ Return ONLY a JSON object:
             optimizedData.description.substring(0, 2000),
             '',
             '=== STRICT CONSTRAINTS ===',
-            'TITLE RULES:',
-            '- Title must be between 100-140 characters. Use all available space.',
-            '- Structure: [Primary Theme] Junk Journal Pages, [2-3 specific descriptors], [page count or format signal]',
-            '- Use specific visual descriptors from the product: colors, styles, moods',
+            'TITLE RULES (NLP SENTENCE STRUCTURE):',
+            '- Title must be 120-140 characters. Use all available space.',
+            '- Structure: 2-3 flowing phrases connected with "with", "for", and commas — NOT a keyword list.',
+            '- FORMULA: [Adjective] [Theme] Junk Journal [Product Type] with [Style/Aesthetic] [Niche Noun], Printable [Use Case] [Format]',
+            '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters.',
+            '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally.',
+            '- DENSITY CAP: Never repeat the exact same root word more than twice.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely',
-            '- Example of a strong 120-character title:',
-            '  "Vintage Swatchbook Junk Journal Pages, Color Swatch Printable, Paint Chip Digital Pages 168"',
-            '- Example of a weak title to avoid:',
-            '  "Vintage Junk Journal Pages, Printable Digital Download"',
-            '- Use the competitor phrases provided as your actual title segments. Only generate your own segments if competitor phrases run out. Do not generate generic segments like "Printable Journal Pages" when niche-specific competitor phrases are available.',
+            '- GOOD: "Vintage Swatchbook Junk Journal Pages with Color Swatch Ephemera, Printable Paint Chip Collage Sheets"',
+            '- BAD: "Vintage Swatchbook Junk Journal Pages, Vintage Swatch Collage, Swatchbook Ephemera, Vintage Papers"',
+            '- Weave competitor phrases naturally into the sentence. Do not append them as isolated comma segments.',
             '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. CRITICAL: At least 5 tags MUST contain a core product noun (e.g. "junk journal", "scrapbook", "paper pack", "journal pages"). Formula: Product + Theme + Use Case.',
             '- TAG RULE: Never end a tag with a noun that has no product signal. "art journaling", "creative journaling", "cat art" are BANNED patterns. Every tag MUST contain one of: pages, journal, printable, papers, download.',
             '- TITLE RULE: NEVER include "Commercial Use" or license language in the title. The title is for search discovery only.',
