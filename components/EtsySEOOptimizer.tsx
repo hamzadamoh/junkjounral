@@ -60,7 +60,10 @@ const removeTitleDuplicates = (title: string): string => {
     const rootStem = (w: string) => w.toLowerCase().replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
 
     for (const w of words) {
-        const stem = rootStem(w.replace(/[^a-zA-Z]/g, ''));
+        // Strip only non-alpha for stemming, but skip words that are purely numeric/special (e.g. '160+')
+        const alphaOnly = w.replace(/[^a-zA-Z]/g, '');
+        if (alphaOnly.length === 0) continue; // skip pure numbers/symbols like '160+'
+        const stem = rootStem(alphaOnly);
         if (stem.length > 2 && !stopWords.has(stem)) {
             rootCounts.set(stem, (rootCounts.get(stem) || 0) + 1);
         }
@@ -86,7 +89,9 @@ const removeTitleDuplicates = (title: string): string => {
         let shouldDrop = false;
 
         for (const w of phraseWords) {
-            const stem = rootStem(w.replace(/[^a-zA-Z]/g, ''));
+            const alphaOnly2 = w.replace(/[^a-zA-Z]/g, '');
+            if (alphaOnly2.length === 0) continue; // skip pure numbers/symbols
+            const stem = rootStem(alphaOnly2);
             if (overusedStems.has(stem)) {
                 const count = (usedStems.get(stem) || 0) + 1;
                 usedStems.set(stem, count);
@@ -629,17 +634,15 @@ Return ONLY a JSON object:
             'BAD EXAMPLE: "Cat With Kitten Junk Journal Pages, Cats Collage Ephemera, Vintage Cats And Kittens, Cottage Cats Ephemera"',
             '',
             'STRICT GENERATION RULES:',
-            '- COMPLETE SENTENCE: Generate the ENTIRE title as one flowing 120-130 character natural sentence. Do NOT write a short anchor and expect padding to fill the rest.',
+            '- EXTENDED SENTENCE: You MUST generate a highly detailed, extended sentence. Your generated sentence must explicitly include the Primary Theme, the Product Type, at least two Aesthetic Adjectives, and the intended Use Case or Audience. Do not return short summaries.',
             '- 60-CHARACTER ANCHOR: The first 60 characters must clearly state the core product (e.g. "Vintage Swatchbook Junk Journal Pages").',
             '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally. Do not just list comma segments.',
             '- DENSITY CAP: Never repeat the exact same root word more than twice in the entire title. "Cat" appearing 3+ times = rejected.',
             '- COMPETITOR INTEGRATION: Weave competitor phrases naturally into the sentence flow, not as standalone comma segments.',
-            '- LENGTH TARGET: 120-130 characters. The AI must hit this range in one shot. A post-processor may add one final phrase if under 120.',
             '- NO ORPHANS: Zero standalone, single-word segments allowed.',
             '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
             '- BANNED PHRASES: "Commercial Use License", "PDF Download", any "[word] Magic" combo (e.g. "Journal Magic", "Printable Journal Magic"), "160+", "300 DPI", "8.5x11". Do NOT include these anywhere.',
             '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.',
-            '- HARD LENGTH RULE: You MUST generate a title between 100 and 120 characters. Never return a title shorter than 100 characters. The padder will only add one final phrase — your generated sentence must be nearly complete on its own.',
             '',
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
@@ -946,7 +949,7 @@ Return ONLY a JSON object:
             '',
             '=== STRICT CONSTRAINTS ===',
             'TITLE RULES (NLP SENTENCE STRUCTURE):',
-            '- COMPLETE SENTENCE: Generate the ENTIRE title as one flowing 120-130 character natural sentence.',
+            '- EXTENDED SENTENCE: You MUST generate a highly detailed, extended sentence. Include the Primary Theme, Product Type, at least two Aesthetic Adjectives, and the Use Case/Audience. Do not return short summaries.',
             '- Structure: 2-3 flowing phrases connected with "with", "for", and commas — NOT a keyword list.',
             '- FORMULA: [Adjective] [Theme] Junk Journal [Product Type] with [Style/Aesthetic] [Niche Noun], Printable [Use Case] [Format]',
             '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters.',
