@@ -514,7 +514,16 @@ Return a single JSON object matching this exact structure:
 }
 
 RULES:
-- primary_theme MUST be the FULL compound theme descriptor, not a single word. If the title says "Vintage Swatchbook Junk Journal Pages", the primary_theme is "vintage swatchbook" NOT just "vintage". If the title says "Dark Gothic Fairy", the primary_theme is "dark gothic fairy" NOT just "gothic". Always capture the complete, most-specific multi-word theme.
+- primary_theme is NOT the first adjective in the title.
+- primary_theme is the SPECIFIC SUBJECT or VISUAL AESTHETIC that makes this listing unique and different from other junk journal listings.
+- To find it, ask: "If I removed this theme word, would this listing look identical to any other junk journal listing?"
+- Examples:
+  * "Vintage Swatchbook Junk Journal Pages" → primary_theme = "vintage swatchbook" (swatchbook is the specific subject)
+  * "Shabby Chic Rose Junk Journal Kit" → primary_theme = "shabby chic rose" (the specific floral aesthetic)
+  * "Vintage Junk Journal Pages" → primary_theme = LOOK AT TAGS AND DESCRIPTION to find the specific subject — "vintage" alone is not enough
+  * "Sacred Pagan Junk Journal Pages" → primary_theme = "sacred pagan"
+- If the title is generic, extract the specific theme from the tags and description instead. Never return a single generic adjective as the primary_theme.
+- Minimum: primary_theme must be 2 words.
 - primary_theme must be the subject/aesthetic ONLY — never include product words like 'junk journal', 'pages', 'printable', 'digital', 'kit', 'paper', 'scrapbook', 'ephemera', 'download' in the theme. Correct examples: 'cherry blossom', 'vintage swatchbook', 'whimsical cats', 'dark gothic fairy'. Wrong examples: 'cherry junk journal', 'vintage journal pages', 'gothic scrapbook kit'.
 - If no theme is present, set primary_theme to "unthemed"
 - If secondary_themes are not present, return []
@@ -552,14 +561,24 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 }
                 currentIdentity = JSON.parse(analysisContent) as JunkJournalPagesIdentity;
 
-                // Sanitize primary_theme: strip product words that GPT may include
+                // Sanitize primary_theme: strip product words but preserve compound descriptors
                 const PRODUCT_WORDS = ['journal', 'junk', 'pages', 'printable', 'digital', 'kit', 'download', 'paper', 'scrapbook', 'ephemera'];
+                const GENERIC_ADJECTIVES = new Set(['vintage', 'floral', 'dark', 'light', 'old', 'new', 'cute', 'pretty', 'nice', 'classic', 'modern', 'simple', 'basic', 'fancy', 'colorful', 'pastel', 'retro', 'antique', 'botanical', 'rustic', 'elegant', 'whimsical']);
                 if (currentIdentity.primary_theme && currentIdentity.primary_theme !== 'unthemed') {
-                    currentIdentity.primary_theme = currentIdentity.primary_theme
-                        .split(' ')
-                        .filter(w => !PRODUCT_WORDS.includes(w.toLowerCase()))
-                        .join(' ')
-                        .trim();
+                    const themeWords = currentIdentity.primary_theme.split(' ');
+                    const stripped = themeWords.filter(w => !PRODUCT_WORDS.includes(w.toLowerCase())).join(' ').trim();
+                    // Only use stripped version if it leaves 2+ meaningful words,
+                    // or if the remaining word is NOT a generic adjective
+                    const strippedWords = stripped.split(/\s+/).filter(w => w.length > 0);
+                    if (strippedWords.length >= 2) {
+                        currentIdentity.primary_theme = stripped;
+                    } else if (strippedWords.length === 1 && !GENERIC_ADJECTIVES.has(strippedWords[0].toLowerCase())) {
+                        currentIdentity.primary_theme = stripped;
+                    } else {
+                        // Stripping would leave a single generic adjective — keep original without product words at edges
+                        currentIdentity.primary_theme = currentIdentity.primary_theme.trim();
+                        console.log('[TRACE] Sanitizer kept full theme (stripping would reduce to generic):', currentIdentity.primary_theme);
+                    }
                     if (!currentIdentity.primary_theme) currentIdentity.primary_theme = 'unthemed';
                 }
 
@@ -622,7 +641,7 @@ Your task:
 1. Understand what my product actually is
 2. For each competitor listing, determine if it sells the same TYPE of product (digital printable journal pages/ephemera)
 3. Return ONLY the titles of listings that are the same product type as mine
-4. Discard listings that sell: stickers, washi tape, physical items, bundles of unrelated items, ATC cards, clipart sheets, or anything that is not printable journal pages/ephemera
+4. Discard listings that sell: stickers, washi tape, physical items, bundles of unrelated items, ATC cards, clipart sheets, fussy cuts, embellishments, tags, pockets, physical craft supplies, or anything that is not printable journal pages/ephemera
 
 Return a JSON object: { "relevantTitles": ["title1", "title2", ...] }`;
 
