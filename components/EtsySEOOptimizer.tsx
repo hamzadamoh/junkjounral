@@ -607,7 +607,54 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                 insights.themeTitles = (themeData.results || []).slice(0, 10).map((l: any) => l.title);
             }
 
-            // Extract descriptive vocabulary from theme results
+            // --- Phase 1.5: Relevance Filter — keep only same-product-type listings ---
+            if (insights.themeTitles.length > 0) {
+                const relevancePrompt = `My product is a digital printable junk journal pages listing.
+My product identity:
+- Title: ${scrapedData.title}
+- Primary theme: ${currentIdentity!.primary_theme}
+- Tags: ${scrapedData.tags.join(', ')}
+
+Here are competitor listings found in search:
+${insights.themeTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Your task:
+1. Understand what my product actually is
+2. For each competitor listing, determine if it sells the same TYPE of product (digital printable journal pages/ephemera)
+3. Return ONLY the titles of listings that are the same product type as mine
+4. Discard listings that sell: stickers, washi tape, physical items, bundles of unrelated items, ATC cards, clipart sheets, or anything that is not printable journal pages/ephemera
+
+Return a JSON object: { "relevantTitles": ["title1", "title2", ...] }`;
+
+                try {
+                    const relevanceRes = await fetch('/api/openai/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'gpt-4o',
+                            messages: [{ role: 'user', content: relevancePrompt }],
+                            response_format: { type: 'json_object' },
+                            temperature: 0.1
+                        }),
+                    });
+
+                    if (relevanceRes.ok) {
+                        const relevanceData = await relevanceRes.json();
+                        let relevanceContent = relevanceData.choices[0].message.content;
+                        if (relevanceContent.includes('```')) {
+                            relevanceContent = relevanceContent.replace(/```json|```/g, '').trim();
+                        }
+                        const parsed = JSON.parse(relevanceContent);
+                        const filtered = parsed.relevantTitles || [];
+                        console.log(`[TRACE] Relevance filter: ${insights.themeTitles.length} fetched → ${filtered.length} relevant`);
+                        insights.themeTitles = filtered;
+                    }
+                } catch (filterErr) {
+                    console.warn('[TRACE] Relevance filter failed, using unfiltered titles:', filterErr);
+                }
+            }
+
+            // Extract descriptive vocabulary from filtered theme results
             if (insights.themeTitles.length > 0) {
                 const patternPrompt = `Analyze these Etsy listing titles that all relate to the theme "${currentIdentity!.primary_theme}".
 
