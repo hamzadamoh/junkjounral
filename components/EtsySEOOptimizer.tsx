@@ -140,8 +140,23 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
     const padConnectors = [', ', ' for ', ' with '];
     let lastConnectorIdx = -1;
 
-    // Root-word extraction helper
-    const rootStem = (w: string) => w.toLowerCase().replace(/[^a-z]/g, '').replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
+    // Root-word extraction helper with normalization map for irregular plurals/synonyms
+    const normalizationMap: Record<string, string> = {
+        'kitties': 'cat', 'kitty': 'cat', 'kittens': 'cat', 'kitten': 'cat', 'cats': 'cat', 'feline': 'cat', 'felines': 'cat',
+        'puppies': 'dog', 'puppy': 'dog', 'puppys': 'dog', 'dogs': 'dog', 'pups': 'dog', 'pup': 'dog',
+        'bunnies': 'rabbit', 'bunny': 'rabbit', 'rabbits': 'rabbit',
+        'roses': 'rose', 'rosy': 'rose',
+        'butterflies': 'butterfly',
+        'fairies': 'fairy', 'faeries': 'fairy',
+        'foxes': 'fox', 'foxy': 'fox',
+        'owls': 'owl',
+        'flowers': 'flower', 'floral': 'flower', 'florals': 'flower',
+    };
+    const rootStem = (w: string) => {
+        const lower = w.toLowerCase().replace(/[^a-z]/g, '');
+        if (normalizationMap[lower]) return normalizationMap[lower];
+        return lower.replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
+    };
     const stopWords = new Set(["with", "for", "and", "the", "a", "an", "of", "in", "on", "to", "junk", "journal", "pages", "printable", "digital"]);
 
     const getTitleRoots = (t: string): Set<string> => {
@@ -166,6 +181,16 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const phraseRoots = phrase.split(/\s+/).map(w => rootStem(w)).filter(s => s.length > 2 && !stopWords.has(s));
         const overlapCount = phraseRoots.filter(r => titleRoots.has(r)).length;
         if (overlapCount >= 2) { console.log('[TRACE] SKIPPED (2+ root overlap):', phrase, '| overlaps:', overlapCount); continue; }
+
+        // Trailing-word duplicate check: if last word of title matches last word of phrase, skip
+        const titleWords = finalTitle.trim().split(/\s+/);
+        const phraseWords = capitalizeWords(phrase).trim().split(/\s+/);
+        const lastTitleWord = titleWords[titleWords.length - 1]?.toLowerCase();
+        const lastPhraseWord = phraseWords[phraseWords.length - 1]?.toLowerCase();
+        if (lastTitleWord && lastPhraseWord && lastTitleWord === lastPhraseWord) {
+            console.log('[TRACE] SKIPPED (trailing word duplicate):', phrase, '| word:', lastTitleWord);
+            continue;
+        }
 
         // Build natural extension with rotating connector
         let nextIdx = (lastConnectorIdx + 1) % padConnectors.length;
@@ -647,6 +672,12 @@ Return ONLY a JSON object:
             '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
             '',
             'Output exactly 13 tags.',
+            '',
+            'RESERVED SLOTS (MANDATORY): You MUST reserve exactly 3 of your 13 tags for product format and licensing:',
+            '- One tag for delivery format (e.g., "digital download", "instant download")',
+            '- One tag for product type (e.g., "printable journal", "digital journal")',
+            '- One tag for license (e.g., "commercial use")',
+            'Use the remaining 10 tags for exact-match aesthetic and competitor keywords.',
             '',
             'A. Character Rule: Max 20 characters each. 2-3 words per tag. No single-word tags.',
             '',
