@@ -13,7 +13,9 @@ const FILLER_WORDS = ["beautiful", "amazing", "perfect", "lovely", "high quality
 const FILLER_ONLY_SEGMENTS = new Set([
     "printable", "digital", "color", "digital download",
     "printable pages", "mixed media", "craft supplies", "digital papers",
-    "journal magic", "printable journal magic"
+    "journal magic", "printable journal magic",
+    "printable download", "whimsical background", "vintage background",
+    "background", "download"
 ]);
 
 const removeFillerSegments = (title: string): string => {
@@ -203,7 +205,7 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
 
     for (const phrase of competitorOptions) {
-        if (finalTitle.length >= 120) { console.log('[TRACE] Reached 120, stopping'); break; }
+        if (finalTitle.length >= 100) { console.log('[TRACE] Reached 100, stopping'); break; }
         if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) { console.log('[TRACE] SKIPPED (banned):', phrase); continue; }
         if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) { console.log('[TRACE] SKIPPED (already in title):', phrase); continue; }
 
@@ -247,14 +249,14 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
     }
 
-    if (finalTitle.length >= 120) return truncateTo140(finalTitle);
+    if (finalTitle.length >= 100) return truncateTo140(finalTitle);
 
     // Priority 2: theme synonyms/secondary themes as natural extensions
     const descriptors = [...(identity.theme_synonyms || []), ...(identity.secondary_themes || [])];
     const uniqueDescriptors = Array.from(new Set(descriptors.map(d => d.trim().toLowerCase()))).filter(d => d.length > 0);
 
     for (const desc of uniqueDescriptors) {
-        if (finalTitle.length >= 120) break;
+        if (finalTitle.length >= 100) break;
         if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
         if (finalTitle.toLowerCase().includes(desc.toLowerCase())) continue;
 
