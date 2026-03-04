@@ -14,6 +14,7 @@ interface EtsySalesTrackerProps {
 interface Listing {
     listing_id: number;
     title: string;
+    description: string;
     views: number;
     favorites: number;
     stock: number;
@@ -133,10 +134,11 @@ const EtsySalesTracker: React.FC<EtsySalesTrackerProps> = ({ onClose }) => {
 
     const handleExportCSV = () => {
         if (!result) return;
-        const headers = ['Listing ID', 'Title', 'Stock', 'Sold (999-stock)', 'Views', 'Favorites', 'Price', 'Digital', 'Tags'];
+        const headers = ['Listing ID', 'Title', 'Description', 'Stock', 'Sold (999-stock)', 'Views', 'Favorites', 'Price', 'Digital', 'Tags'];
         const rows = result.listings.map(l => [
             l.listing_id,
             `"${l.title.replace(/"/g, '""')}"`,
+            `"${(l.description || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
             l.stock,
             Math.max(0, DEFAULT_BASELINE_STOCK - l.stock),
             l.views,
@@ -393,6 +395,8 @@ const EtsySalesTracker: React.FC<EtsySalesTrackerProps> = ({ onClose }) => {
                                                 Price<SortIcon col="price" />
                                             </th>
                                             <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Type</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Tags</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase">Description</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-700/50">
@@ -420,6 +424,25 @@ const EtsySalesTracker: React.FC<EtsySalesTrackerProps> = ({ onClose }) => {
                                                     <span className={`px-1.5 py-0.5 text-[10px] rounded ${listing.is_digital ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-slate-600/30 text-slate-400 border border-slate-600/30'}`}>
                                                         {listing.is_digital ? 'Digital' : 'Physical'}
                                                     </span>
+                                                </td>
+                                                <td className="px-3 py-2 max-w-[200px]">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {listing.tags.slice(0, 5).map((tag, i) => (
+                                                            <span key={i} className="px-1.5 py-0.5 text-[10px] bg-slate-700 text-slate-300 rounded">
+                                                                {tag}
+                                                            </span>
+                                                        ))}
+                                                        {listing.tags.length > 5 && (
+                                                            <span className="px-1.5 py-0.5 text-[10px] bg-slate-700 text-slate-500 rounded">
+                                                                +{listing.tags.length - 5}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-2 max-w-[250px]">
+                                                    <p className="text-xs text-slate-400 truncate" title={listing.description}>
+                                                        {listing.description ? listing.description.substring(0, 80) + (listing.description.length > 80 ? '...' : '') : '—'}
+                                                    </p>
                                                 </td>
                                             </tr>
                                         ))}
