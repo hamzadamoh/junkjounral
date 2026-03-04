@@ -98,7 +98,6 @@ const removeTitleDuplicates = (title: string): string => {
                 const count = (usedStems.get(stem) || 0) + 1;
                 usedStems.set(stem, count);
                 if (count > 2) {
-                    console.log(`[TRACE] DEDUP: dropping phrase "${phrase}" (root "${stem}" used ${count}x)`);
                     shouldDrop = true;
                     break;
                 }
@@ -127,8 +126,6 @@ const truncateTo140 = (title: string): string => {
 };
 
 const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, competitorPhrases?: string[]): string => {
-    console.log('[TRACE] ensureTitleLength called with competitorPhrases:', competitorPhrases);
-    console.log('[TRACE] Title before padding:', title, '| Length:', title?.length);
     if (!title) return "";
     let finalTitle = title.trim();
 
@@ -201,21 +198,50 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         return null;
     };
 
+    // Alien theme filter: build vocabulary set from product identity
+    const identityVocab = new Set<string>();
+    const genericProductWords = new Set(['art', 'paper', 'craft', 'print', 'page', 'ephemera', 'collage', 'scrapbook', 'background', 'mixed', 'media', 'decorative', 'ornamental']);
+    // Add primary theme words
+    if (identity.primary_theme && identity.primary_theme !== 'unthemed') {
+        identity.primary_theme.toLowerCase().split(/\s+/).forEach(w => { identityVocab.add(rootStem(w)); identityVocab.add(w.toLowerCase()); });
+    }
+    // Add secondary themes
+    (identity.secondary_themes || []).forEach(t => t.toLowerCase().split(/\s+/).forEach(w => { identityVocab.add(rootStem(w)); identityVocab.add(w.toLowerCase()); }));
+    // Add theme synonyms
+    (identity.theme_synonyms || []).forEach(s => s.toLowerCase().split(/\s+/).forEach(w => { identityVocab.add(rootStem(w)); identityVocab.add(w.toLowerCase()); }));
+    // Add color palette
+    (identity.color_palette || []).forEach(c => c.toLowerCase().split(/\s+/).forEach(w => { identityVocab.add(rootStem(w)); identityVocab.add(w.toLowerCase()); }));
+
+    const isAlienPhrase = (phrase: string): boolean => {
+        const phraseWords = phrase.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        for (const w of phraseWords) {
+            const stem = rootStem(w);
+            if (stopWords.has(w) || stopWords.has(stem)) continue;
+            if (genericProductWords.has(w) || genericProductWords.has(stem)) continue;
+            if (identityVocab.has(w) || identityVocab.has(stem)) continue;
+            return true; // word not in identity — alien
+        }
+        return false;
+    };
+
     // Priority 1: Competitor phrases — extend naturally with connectors
     const competitorOptions = (competitorPhrases || []).map(p => p.trim()).filter(p => p.length > 0);
 
     for (const phrase of competitorOptions) {
-        if (finalTitle.length >= 100) { console.log('[TRACE] Reached 100, stopping'); break; }
-        if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) { console.log('[TRACE] SKIPPED (banned):', phrase); continue; }
-        if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) { console.log('[TRACE] SKIPPED (already in title):', phrase); continue; }
+        if (finalTitle.length >= 100) break;
+        if (bannedTerms.some(banned => phrase.toLowerCase().includes(banned))) continue;
+        if (finalTitle.toLowerCase().includes(phrase.toLowerCase())) continue;
 
         // Root-word overlap filter: skip if phrase shares 2+ root words with existing title
         const titleRoots = getTitleRoots(finalTitle);
         const phraseRoots = phrase.split(/\s+/).map(w => rootStem(w)).filter(s => s.length > 2 && !stopWords.has(s));
         const overlapCount = phraseRoots.filter(r => titleRoots.has(r)).length;
-        if (overlapCount >= 2) { console.log('[TRACE] SKIPPED (2+ root overlap):', phrase, '| overlaps:', overlapCount); continue; }
+        if (overlapCount >= 2) continue;
 
-        // Enhanced echo guard: skip if candidate's last word matches the final word of ANY segment in the title
+        // Alien theme filter: skip if any word in phrase is not in product identity
+        if (isAlienPhrase(phrase)) continue;
+
+        // Enhanced echo guard: skip if candidate's last word matches the final word of ANY segment
         const titleSegments = finalTitle.split(/,\s*|\bfor\b|\bwith\b|\band\b/i).map(s => s.trim()).filter(s => s.length > 0);
         const candidateWords = capitalizeWords(phrase).trim().split(/\s+/);
         const candidateLastWord = candidateWords[candidateWords.length - 1]?.toLowerCase();
@@ -224,10 +250,7 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
                 const segWords = seg.trim().split(/\s+/);
                 return segWords[segWords.length - 1]?.toLowerCase() === candidateLastWord;
             });
-            if (hasEcho) {
-                console.log('[TRACE] SKIPPED (echo guard):', phrase, '| trailing word:', candidateLastWord);
-                continue;
-            }
+            if (hasEcho) continue;
         }
 
         // Build natural extension with rotating connector
@@ -235,18 +258,14 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const connector = padConnectors[nextIdx];
         const addition = `${connector}${capitalizeWords(phrase)}`;
 
-        if (finalTitle.length + addition.length > 140) { console.log('[TRACE] SKIPPED (would exceed 140):', phrase); continue; }
+        if (finalTitle.length + addition.length > 140) continue;
 
-        // GLOBAL ROOT CAP: simulate combined string and check no root exceeds 3
+        // GLOBAL ROOT CAP: simulate combined string and check no root exceeds cap
         const overloadedRoot = wouldExceedRootCap(finalTitle, addition);
-        if (overloadedRoot) {
-            console.log(`[TRACE] SKIPPED (global root cap): '${phrase}' would push '${overloadedRoot}' over 3 occurrences`);
-            continue;
-        }
+        if (overloadedRoot) continue;
 
         finalTitle += addition;
         lastConnectorIdx = nextIdx;
-        console.log('[TRACE] APPENDED:', addition, '| New length:', finalTitle.length);
     }
 
     if (finalTitle.length >= 100) return truncateTo140(finalTitle);
@@ -260,13 +279,13 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         if (bannedTerms.some(banned => desc.toLowerCase().includes(banned))) continue;
         if (finalTitle.toLowerCase().includes(desc.toLowerCase())) continue;
 
-        // Root-word overlap filter: skip if phrase shares 2+ root words with existing title
+        // Root-word overlap filter
         const titleRoots2 = getTitleRoots(finalTitle);
         const descRoots = desc.split(/\s+/).map(w => rootStem(w)).filter(s => s.length > 2 && !stopWords.has(s));
         const descOverlap = descRoots.filter(r => titleRoots2.has(r)).length;
-        if (descOverlap >= 2) { console.log('[TRACE] SKIPPED synonym (2+ root overlap):', desc); continue; }
+        if (descOverlap >= 2) continue;
 
-        // Echo guard for synonyms: skip if candidate's last word echoes any segment-final word
+        // Echo guard for synonyms
         const synSegments = finalTitle.split(/,\s*|\bfor\b|\bwith\b|\band\b/i).map(s => s.trim()).filter(s => s.length > 0);
         const synCandidateWords = capitalizeWords(desc).trim().split(/\s+/);
         const synLastWord = synCandidateWords[synCandidateWords.length - 1]?.toLowerCase();
@@ -275,7 +294,7 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
                 const sw = seg.trim().split(/\s+/);
                 return sw[sw.length - 1]?.toLowerCase() === synLastWord;
             });
-            if (synEcho) { console.log('[TRACE] SKIPPED synonym (echo guard):', desc, '| trailing:', synLastWord); continue; }
+            if (synEcho) continue;
         }
 
         // Rotating connector
@@ -284,18 +303,14 @@ const ensureTitleLength = (title: string, identity: JunkJournalPagesIdentity, co
         const addition = `${connector2}${capitalizeWords(desc)}`;
         if (finalTitle.length + addition.length > 140) continue;
 
-        // GLOBAL ROOT CAP: simulate combined string and check no root exceeds 3
+        // GLOBAL ROOT CAP
         const overloadedRoot2 = wouldExceedRootCap(finalTitle, addition);
-        if (overloadedRoot2) {
-            console.log(`[TRACE] SKIPPED synonym (global root cap): '${desc}' would push '${overloadedRoot2}' over 3 occurrences`);
-            continue;
-        }
+        if (overloadedRoot2) continue;
 
         finalTitle += addition;
         lastConnectorIdx = nextIdx2;
     }
 
-    console.log('[TRACE] Title after padding:', finalTitle, '| Length:', finalTitle.length);
     return truncateTo140(finalTitle);
 };
 
@@ -577,7 +592,6 @@ Description: ${scrapedData.description.substring(0, 2000)}`;
                     } else {
                         // Stripping would leave a single generic adjective — keep original without product words at edges
                         currentIdentity.primary_theme = currentIdentity.primary_theme.trim();
-                        console.log('[TRACE] Sanitizer kept full theme (stripping would reduce to generic):', currentIdentity.primary_theme);
                     }
                     if (!currentIdentity.primary_theme) currentIdentity.primary_theme = 'unthemed';
                 }
@@ -665,11 +679,10 @@ Return a JSON object: { "relevantTitles": ["title1", "title2", ...] }`;
                         }
                         const parsed = JSON.parse(relevanceContent);
                         const filtered = parsed.relevantTitles || [];
-                        console.log(`[TRACE] Relevance filter: ${insights.themeTitles.length} fetched → ${filtered.length} relevant`);
                         insights.themeTitles = filtered;
                     }
                 } catch (filterErr) {
-                    console.warn('[TRACE] Relevance filter failed, using unfiltered titles:', filterErr);
+                    console.warn('Relevance filter failed, using unfiltered titles:', filterErr);
                 }
             }
 
@@ -716,7 +729,6 @@ Return ONLY a JSON object:
                             patternContent = patternContent.replace(/```json|```/g, '').trim();
                         }
                         insights.extractedPattern = JSON.parse(patternContent);
-                        console.log('[TRACE] Extracted themePhrases:', insights.extractedPattern?.themePhrases);
                     }
                 } catch (e) {
                     console.error("Pattern extraction failed", e);
@@ -724,7 +736,6 @@ Return ONLY a JSON object:
             }
 
             setCompetitorInsights(insights);
-            console.log('[TRACE] insights.extractedPattern at setCompetitorInsights:', insights.extractedPattern);
 
         } catch (err) {
             console.error("Competitor intelligence phase failed silently", err);
@@ -1038,11 +1049,9 @@ Return ONLY a JSON object:
                 }
 
                 // SILENT POST-PROCESSING
-                console.log('[TRACE] Before post-processing — raw title:', aiResponse.title, '| Length:', aiResponse.title?.length);
                 aiResponse.title = removeFillerSegments(aiResponse.title);
                 aiResponse.title = applyReplacements(aiResponse.title);
                 aiResponse.title = removeTitleDuplicates(aiResponse.title);
-                console.log('[TRACE] After dedup, before padder:', aiResponse.title, '| Length:', aiResponse.title?.length);
                 aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!, insights.extractedPattern?.themePhrases);
                 aiResponse.title = truncateTo140(aiResponse.title);
                 if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
@@ -1060,9 +1069,6 @@ Return ONLY a JSON object:
                 if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
                     bestScoreObj = evalScore;
                     bestOptimizedData = { ...aiResponse, score: evalScore };
-                    console.log(`[TRACE] Attempt ${attempt} is NEW BEST: score=${evalScore.overallScore}, title="${aiResponse.title}" (${aiResponse.title?.length} chars)`);
-                } else {
-                    console.log(`[TRACE] Attempt ${attempt} NOT best: score=${evalScore.overallScore} vs best=${bestScoreObj.overallScore}`);
                 }
 
                 if (evalScore.overallScore >= 100) {

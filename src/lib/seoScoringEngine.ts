@@ -155,12 +155,6 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         redundantPairs.push("'printable pages' repeating 'pages'");
     }
 
-    // Stuffing Detector: Root words appearing in too many phrases
-    // (Adapted for sentence-based titles — checks full title, not just comma segments)
-    if (identityContract && identityContract.primary_theme !== "unthemed") {
-        const primaryTheme = identityContract.primary_theme.toLowerCase();
-        // No longer penalizes comma segment structure — sentence structure is expected
-    }
 
     if (redundantPairs.length > 0) {
         const deduction = Math.min(6, redundantPairs.length * 2);
@@ -183,12 +177,15 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         }
     }
 
-    // Title length range bonus (120-140 is ideal)
-    if (title.length >= 120 && title.length <= 140) {
+    // Title length range bonus (100-140 is ideal)
+    if (title.length >= 100 && title.length <= 140) {
         titleScore += 2;
-        strengths.push("Title length in ideal 120-140 character range.");
-    } else if (title.length < 120) {
-        weaknesses.push(`Title is only ${title.length} chars. Target 120-140 for maximum search coverage.`);
+        strengths.push("Title length in ideal 100-140 character range.");
+    } else if (title.length > 140) {
+        titleScore -= 5;
+        weaknesses.push(`Title is ${title.length} chars — exceeds 140. Trim to avoid truncation.`);
+    } else {
+        weaknesses.push(`Title is only ${title.length} chars. Target 100-140 for maximum search coverage.`);
     }
 
     titleScore = Math.max(0, Math.min(35, titleScore));
@@ -238,8 +235,6 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
             const tagWords = t.split(/\s+/).map(stemWord);
             return Array.from(expandedThemeWords).some(sw => tagWords.some(tw => tw.includes(sw) || sw.includes(tw)));
         });
-
-        console.log(`[Theme Coverage Debug] primary_theme="${identityContract.primary_theme}" | synonyms=${JSON.stringify(identityContract.theme_synonyms || [])} | expanded=[${Array.from(expandedThemeWords).join(', ')}] | matching tags (${themeTags.length}):`, themeTags);
 
         if (themeTags.length >= 3) {
             themeCoverageScore += 5;
