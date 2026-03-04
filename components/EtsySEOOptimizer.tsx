@@ -757,6 +757,16 @@ Return ONLY a JSON object:
         }
 
         const promptLines = [
+            'CRITICAL: You are writing a title for THIS SPECIFIC PRODUCT ONLY.',
+            'Before generating anything, read the title, tags, and description carefully.',
+            'Identify ONLY the visual elements and themes that actually exist in this product.',
+            '',
+            'Never import themes from competitor titles that don\'t exist in the product.',
+            'If the competitor intelligence contains "Vintage Fall" but the product has no autumn/fall content — do NOT use "Vintage Fall".',
+            '',
+            'Test every word: "Is this theme actually in the product I\'m optimizing?"',
+            'If no — remove it.',
+            '',
             'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
             '',
             dynamicWarning,
