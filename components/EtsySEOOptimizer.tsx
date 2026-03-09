@@ -423,6 +423,9 @@ Return ONLY a JSON object:
     });
 
     const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error?.message || data.error || `Error ${response.status}: Failed to extract visual identity`);
+    }
     const raw = data.choices[0].message.content;
     const clean = raw.replace(/```json|```/g, "").trim();
     return clean;
@@ -734,7 +737,10 @@ Analyze this listing and return a strictly formatted JSON object.
                 }),
             });
 
-            if (!response.ok) throw new Error('Failed to optimize with AI');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || errorData.error || `Error ${response.status}: Failed to optimize with AI`);
+            }
             const result = await response.json();
             let content = result.choices[0].message.content;
 
