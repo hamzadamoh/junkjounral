@@ -766,7 +766,18 @@ Analyze this listing and return a strictly formatted JSON object.
             setOptimizedData(aiResponse);
 
         } catch (err: any) {
-            setError('AI Optimization failed: ' + err.message);
+            console.error("Optimization error:", err);
+            let errorMessage = err.message || "Failed to optimize listing";
+
+            if (errorMessage.includes("429") || errorMessage.includes("Too Many Requests")) {
+                errorMessage = "OpenRouter Rate Limit: The free models are currently busy. I tried retrying with fallback models, but please wait 30 seconds and try again, or use OpenAI (GPT-4o).";
+            } else if (errorMessage.includes("503") || errorMessage.includes("502")) {
+                errorMessage = "AI Service Unavailable: The model provider is currently having issues. Please try again in a few minutes.";
+            } else {
+                errorMessage = 'AI Optimization failed: ' + errorMessage;
+            }
+
+            setError(errorMessage);
         } finally {
             setIsOptimizing(false);
         }

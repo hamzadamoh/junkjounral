@@ -38,22 +38,50 @@ export default async function handler(req, res) {
       headers['X-Title'] = 'Etsy SEO Optimizer';
     }
 
-    // Call API from the server (no CORS issues, API key hidden)
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens,
-        temperature,
-      }),
-    });
+    const fetchAI = async (currentModel, isRetry = false) => {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: currentModel,
+          messages,
+          max_tokens,
+          temperature,
+        }),
+      });
 
+      // Handle Rate Limits (429) or Temporary Service Issues (503/502)
+      if ((response.status === 429 || response.status === 503 || response.status === 502) && isOpenRouter) {
+        console.warn(`[Proxy] ${currentModel} returned ${response.status}. Attempting fallback/retry...`);
+
+        // Define fallback map for free models
+        const fallbacks = {
+          'google/gemma-3-27b-it:free': 'nvidia/nemotron-nano-12b-v2-vl:free',
+          'meta-llama/llama-3.3-70b-instruct:free': 'qwen/qwen3-coder:free'
+        };
+
+        const fallbackModel = fallbacks[currentModel];
+
+        if (!isRetry) {
+          // First attempt: Wait 1.5s and retry SAME model
+          await new Promise(r => setTimeout(r, 1500));
+          return fetchAI(currentModel, true);
+        } else if (fallbackModel) {
+          // Second attempt failed: Swap to FALLBACK model
+          console.log(`[Proxy] Retrying with fallback: ${fallbackModel}`);
+          await new Promise(r => setTimeout(r, 500));
+          return fetchAI(fallbackModel, true); // Mark as retry so we don't loop forever
+        }
+      }
+
+      return response;
+    };
+
+    const response = await fetchAI(model);
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('OpenAI API error:', data);
+      console.error('AI Proxy API error:', data);
       return res.status(response.status).json(data);
     }
 
@@ -61,7 +89,7 @@ export default async function handler(req, res) {
     res.status(200).json(data);
 
   } catch (error) {
-    console.error('OpenAI proxy error:', error);
+    console.error('AI proxy error:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }
