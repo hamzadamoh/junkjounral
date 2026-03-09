@@ -493,616 +493,72 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         if (!scrapedData) return;
 
         setError(null);
+        setIsOptimizing(true);
+        setOptimizedData(null);
 
-        // --- PHASE 1: IDENTITY EXTRACTION ---
-        let currentIdentity = extractedIdentity;
-        if (!currentIdentity) {
-            setIsAnalyzingProduct(true);
-            try {
-                const analysisPrompt = `You are a product identity extraction engine for an Etsy store that sells 
-DIGITAL PRINTABLE JUNK JOURNAL PAGES ONLY.
+        const prompt = `You are an Etsy SEO expert executing the "Nick Method".
 
-The store sells themed decorative journal pages (160+ JPGs, 8.5x11, 300 DPI).
-Delivery is via a PDF file that contains a Google Drive download link.
-All listings include commercial use license.
-There are NO physical items, NO kits, NO pockets, NO tags — pages only.
-
-Analyze the listing title, tags, and description provided.
-Extract ONLY what is factually present. Do NOT invent motifs or themes.
-
-Return a single JSON object matching this exact structure:
-
-{
-  "core_product_type": "junk_journal_pages",
-  "format": "digital_printable",
-  "delivery_method": "pdf_google_drive_link",
-  "file_types": ["JPG"],
-  "print_size": "8.5x11",
-  "page_count": 160,
-  "dpi": "300 DPI",
-  "license_type": "commercial_use",
-  "primary_theme": "string",
-  "theme_synonyms": ["3-5 words buyers use instead of the primary theme. E.g. if theme is 'vintage': ['antique', 'nostalgic', 'retro', 'classic']. If theme is 'cottagecore': ['cottage', 'rustic', 'farmhouse', 'botanical']. Extract based on the actual theme, not examples."],
-  "secondary_themes": ["string"],
-  "color_palette": ["string"],
-  "mood": "string",
-  "locked_identity_terms": ["string"],
-  "theme_cluster": "string",
-  "confidence": 0.9
-}
-
-RULES:
-- primary_theme is NOT the first adjective in the title.
-- primary_theme is the SPECIFIC SUBJECT or VISUAL AESTHETIC that makes this listing unique and different from other junk journal listings.
-- To find it, ask: "If I removed this theme word, would this listing look identical to any other junk journal listing?"
-- Examples:
-  * "Vintage Swatchbook Junk Journal Pages" → primary_theme = "vintage swatchbook" (swatchbook is the specific subject)
-  * "Shabby Chic Rose Junk Journal Kit" → primary_theme = "shabby chic rose" (the specific floral aesthetic)
-  * "Vintage Junk Journal Pages" → primary_theme = LOOK AT TAGS AND DESCRIPTION to find the specific subject — "vintage" alone is not enough
-  * "Sacred Pagan Junk Journal Pages" → primary_theme = "sacred pagan"
-- If the title is generic, extract the specific theme from the tags and description instead. Never return a single generic adjective as the primary_theme.
-- Minimum: primary_theme must be 2 words.
-- primary_theme must be the subject/aesthetic ONLY — never include product words like 'junk journal', 'pages', 'printable', 'digital', 'kit', 'paper', 'scrapbook', 'ephemera', 'download' in the theme. Correct examples: 'cherry blossom', 'vintage swatchbook', 'whimsical cats', 'dark gothic fairy'. Wrong examples: 'cherry junk journal', 'vintage journal pages', 'gothic scrapbook kit'.
-- If no theme is present, set primary_theme to "unthemed"
-- If secondary_themes are not present, return []
-- If confidence is below 0.7, still return the JSON but flag it
-- Never add themes that are not explicitly supported by the original listing
-- The locked_identity_terms MUST include the primary theme noun and "junk journal pages"
-- For theme_synonyms, do not extract generic craft words like 'creative', 'artistic', 'vintage', 'antique'. Instead extract the specific buyer search phrases someone would type into Etsy when looking for THIS specific type of page. Think like a buyer, not a designer. For a swatchbook listing a buyer would search 'color swatch journal pages', 'paint chip printable', 'color palette pages' — not 'creative scrapbooking paper'. Do NOT include format words ('printable', 'digital') alone or invented compound words. Maximum 5 synonyms. If unsure, return fewer — an empty array is better than hallucinated terms.
-
-Do not invent motifs. Do not add aesthetics not present. Only extract what is explicitly implied.
-
-=== ORIGINAL LISTING ===
+==== LISTING DATA ====
 Title: ${scrapedData.title}
 Tags: ${scrapedData.tags.join(', ')}
-Description: ${scrapedData.description.substring(0, 2000)}`;
+Description: ${scrapedData.description.substring(0, 1000)}
 
-                const analysisRes = await fetch('/api/openai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [
-                            { role: 'system', content: 'You are an objective product identity extractor.' },
-                            { role: 'user', content: analysisPrompt }
-                        ],
-                        response_format: { type: 'json_object' },
-                        temperature: 0.2
-                    }),
-                });
+Analyze this listing and return a strictly formatted JSON object matching the NickMethodReport interface.
 
-                if (!analysisRes.ok) throw new Error('Failed to analyze product identity');
-                const analysisData = await analysisRes.json();
-                let analysisContent = analysisData.choices[0].message.content;
-                if (analysisContent.includes('```')) {
-                    analysisContent = analysisContent.replace(/```json|```/g, '').trim();
-                }
-                currentIdentity = JSON.parse(analysisContent) as JunkJournalPagesIdentity;
-
-                // Sanitize primary_theme: strip product words but preserve compound descriptors
-                const PRODUCT_WORDS = ['journal', 'junk', 'pages', 'printable', 'digital', 'kit', 'download', 'paper', 'scrapbook', 'ephemera'];
-                const GENERIC_ADJECTIVES = new Set(['vintage', 'floral', 'dark', 'light', 'old', 'new', 'cute', 'pretty', 'nice', 'classic', 'modern', 'simple', 'basic', 'fancy', 'colorful', 'pastel', 'retro', 'antique', 'botanical', 'rustic', 'elegant', 'whimsical']);
-                if (currentIdentity.primary_theme && currentIdentity.primary_theme !== 'unthemed') {
-                    const themeWords = currentIdentity.primary_theme.split(' ');
-                    const stripped = themeWords.filter(w => !PRODUCT_WORDS.includes(w.toLowerCase())).join(' ').trim();
-                    // Only use stripped version if it leaves 2+ meaningful words,
-                    // or if the remaining word is NOT a generic adjective
-                    const strippedWords = stripped.split(/\s+/).filter(w => w.length > 0);
-                    if (strippedWords.length >= 2) {
-                        currentIdentity.primary_theme = stripped;
-                    } else if (strippedWords.length === 1 && !GENERIC_ADJECTIVES.has(strippedWords[0].toLowerCase())) {
-                        currentIdentity.primary_theme = stripped;
-                    } else {
-                        // Stripping would leave a single generic adjective — keep original without product words at edges
-                        currentIdentity.primary_theme = currentIdentity.primary_theme.trim();
-                    }
-                    if (!currentIdentity.primary_theme) currentIdentity.primary_theme = 'unthemed';
-                }
-
-                // Sanitize theme_synonyms after extraction — track rejected
-                const { valid, rejected } = sanitizeSynonyms(currentIdentity.theme_synonyms || []);
-                currentIdentity.theme_synonyms = valid;
-                setRejectedSynonyms(rejected);
-                setSynonymInput(valid.join(', '));
-
-                setExtractedIdentity(currentIdentity);
-
-                if (currentIdentity.confidence < 0.7) {
-                    setShowIdentityConfirmation(true);
-                    setIsAnalyzingProduct(false);
-                    return; // Pause the pipeline
-                }
-            } catch (err: any) {
-                setError('Identity extraction failed: ' + err.message);
-                setIsAnalyzingProduct(false);
-                return;
-            } finally {
-                setIsAnalyzingProduct(false);
-            }
-        }
-
-        // --- PHASE 1.5: COMPETITOR INTELLIGENCE (PARALLEL SEARCH + PATTERN EXTRACTION) ---
-        setIsFetchingInsights(true);
-        let insights: CompetitorInsights = {
-            searchQuery: `${currentIdentity!.primary_theme} junk journal`,
-            themeTitles: []
-        };
+==== Output Requirement (JSON ONLY) ====  
+{
+    "brainstorm": {
+        "descriptive": ["word1", "word2"],
+        "anchors": ["word1", "word2"]
+    },
+    "titleScore": {
+        "total": 20,
+        "breakdown": ["Good point", "Bad point"]
+    },
+    "tagScore": {
+        "total": 30,
+        "breakdown": ["Good point", "Bad point"]
+    },
+    "totalScore": {
+        "score": 50,
+        "rating": "Needs Work"
+    },
+    "improvedTitle": "Your new optimized title here max 140 chars",
+    "improvedTags": ["tag1", "tag2"],
+    "badAdviceWarning": "Optional warning message if needed"
+}
+`;
 
         try {
-            const themeQuery = insights.searchQuery;
-
-            // Single theme-specific search only
-            const themeSearchRes = await fetch('/api/etsy', {
+            const response = await fetch('/api/openai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ operation: 'search-listings', keywords: themeQuery, limit: 10, sort_on: 'score' })
+                body: JSON.stringify({
+                    model: 'gpt-4o',
+                    messages: [
+                        { role: 'system', content: 'You are an Etsy SEO expert. Respond ONLY with valid JSON matching the exact schema requested.' },
+                        { role: 'user', content: prompt }
+                    ],
+                    response_format: { type: 'json_object' },
+                    temperature: 0.7
+                }),
             });
 
-            if (themeSearchRes.ok) {
-                const themeData = await themeSearchRes.json();
-                insights.themeTitles = (themeData.results || []).slice(0, 10).map((l: any) => l.title);
+            if (!response.ok) throw new Error('Failed to optimize with AI');
+            const result = await response.json();
+            let content = result.choices[0].message.content;
+
+            if (content.includes('```')) {
+                content = content.replace(/```json|```/g, '').trim();
             }
 
-            // --- Phase 1.5: Relevance Filter — keep only same-product-type listings ---
-            if (insights.themeTitles.length > 0) {
-                const relevancePrompt = `My product is a digital printable junk journal pages listing.
-My product identity:
-- Title: ${scrapedData.title}
-- Primary theme: ${currentIdentity!.primary_theme}
-- Tags: ${scrapedData.tags.join(', ')}
-
-Here are competitor listings found in search:
-${insights.themeTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
-
-Your task:
-1. Understand what my product actually is
-2. For each competitor listing, determine if it sells the same TYPE of product (digital printable journal pages/ephemera)
-3. Return ONLY the titles of listings that are the same product type as mine
-4. Discard listings that sell: stickers, washi tape, physical items, bundles of unrelated items, ATC cards, clipart sheets, fussy cuts, embellishments, tags, pockets, physical craft supplies, or anything that is not printable journal pages/ephemera
-
-Return a JSON object: { "relevantTitles": ["title1", "title2", ...] }`;
-
-                try {
-                    const relevanceRes = await fetch('/api/openai/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model: 'gpt-4o',
-                            messages: [{ role: 'user', content: relevancePrompt }],
-                            response_format: { type: 'json_object' },
-                            temperature: 0.1
-                        }),
-                    });
-
-                    if (relevanceRes.ok) {
-                        const relevanceData = await relevanceRes.json();
-                        let relevanceContent = relevanceData.choices[0].message.content;
-                        if (relevanceContent.includes('```')) {
-                            relevanceContent = relevanceContent.replace(/```json|```/g, '').trim();
-                        }
-                        const parsed = JSON.parse(relevanceContent);
-                        const filtered = parsed.relevantTitles || [];
-                        insights.themeTitles = filtered;
-                    }
-                } catch (filterErr) {
-                    console.warn('Relevance filter failed, using unfiltered titles:', filterErr);
-                }
-            }
-
-            // Extract descriptive vocabulary from filtered theme results
-            if (insights.themeTitles.length > 0) {
-                const patternPrompt = `Analyze these Etsy listing titles that all relate to the theme "${currentIdentity!.primary_theme}".
-
-Titles:
-${insights.themeTitles.map(t => `- ${t}`).join('\n')}
-
-Extract complete 2-4 word buyer search phrases from these titles.
-Always include the product noun in each phrase.
-Example: extract 'Paint Palette Ephemera' not just 'Paint Palette'.
-Example: extract 'Watercolor Color Palette Papers' not just 'Watercolor Color Palette'.
-Example: extract 'Mixed Media Collage Backgrounds' not just 'Mixed Media'.
-
-Ignore generic standalone terms like "Digital Download", "Printable", "Junk Journal".
-Only extract phrases that are SPECIFIC to this theme and include a product noun.
-EXCLUDE phrases for different product types — no stickers, washi tape, stamps, die cuts, foil, or clipart phrases. This product is PAGES/PAPERS/EPHEMERA only.
-
-Return ONLY a JSON object:
-{
-  "themePhrases": ["phrase1", "phrase2", "phrase3", "phrase4", "phrase5"]
-}`;
-
-                try {
-                    const patternRes = await fetch('/api/openai/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model: 'gpt-4o',
-                            messages: [
-                                { role: 'user', content: patternPrompt }
-                            ],
-                            response_format: { type: 'json_object' },
-                            temperature: 0.1
-                        }),
-                    });
-
-                    if (patternRes.ok) {
-                        const patternData = await patternRes.json();
-                        let patternContent = patternData.choices[0].message.content;
-                        if (patternContent.includes('```')) {
-                            patternContent = patternContent.replace(/```json|```/g, '').trim();
-                        }
-                        insights.extractedPattern = JSON.parse(patternContent);
-                    }
-                } catch (e) {
-                    console.error("Pattern extraction failed", e);
-                }
-            }
-
-            setCompetitorInsights(insights);
-
-        } catch (err) {
-            console.error("Competitor intelligence phase failed silently", err);
-        } finally {
-            setIsFetchingInsights(false);
-        }
-
-        setIsOptimizing(true);
-
-        const originalViolations = getFormatViolations(scrapedData.title, scrapedData.tags);
-
-        const dynamicWarning = originalViolations.length > 0
-            ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
-            : '';
-
-        const swatchbookWarning = (extractedIdentity?.primary_theme?.toLowerCase().includes('swatch') || extractedIdentity?.primary_theme?.toLowerCase().includes('swatchbook'))
-            ? 'This product contains colorful swatch and paint chip style pages. The correct search terms are "swatchbook journal pages", "color swatch printable", "paint chip journal pages" — NOT ephemera.\n'
-            : '';
-
-        let competitorPrompt = '';
-        if (insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0) {
-            const phraseList = insights.extractedPattern.themePhrases.join(', ');
-            competitorPrompt = [
-                '=== 1. COMPETITOR INTELLIGENCE (PROVEN NICHE PHRASES) ===',
-                `Proven buyer search phrases for this theme: ${phraseList}`,
-                'IMPORTANT: Weave these phrases naturally into the sentence-structured title using connective language ("with", "for", "and").',
-                'Do NOT append them as isolated comma-separated segments. Integrate them into the flowing product name.',
-                ''
-            ].join('\n');
-        }
-
-        const promptLines = [
-            'CRITICAL: You are writing a title for THIS SPECIFIC PRODUCT ONLY.',
-            'Before generating anything, read the title, tags, and description carefully.',
-            'Identify ONLY the visual elements and themes that actually exist in this product.',
-            '',
-            'Never import themes from competitor titles that don\'t exist in the product.',
-            'If the competitor intelligence contains "Vintage Fall" but the product has no autumn/fall content — do NOT use "Vintage Fall".',
-            '',
-            'Test every word: "Is this theme actually in the product I\'m optimizing?"',
-            'If no — remove it.',
-            '',
-            'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
-            '',
-            dynamicWarning,
-            swatchbookWarning,
-            '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
-            buildIdentityLockPrompt(currentIdentity!),
-            '',
-            competitorPrompt,
-            '',
-            'Your goal is to optimize for:',
-            '- Search match relevance',
-            '- Click-through rate (CTR)',
-            '- Conversion rate (CVR)',
-            '- Listing quality score',
-            '- Long-term shop authority',
-            '',
-            'Priority formula: Relevance x Click Appeal x Buyer Intent x Conversion Clarity',
-            'NOT keyword stuffing.',
-            '',
-            '=== 2. TITLE OPTIMIZATION (NLP SENTENCE STRUCTURE) ===',
-            '',
-            'Generate a title that reads like a natural product name, NOT a keyword list.',
-            'Structure it as 2-3 flowing phrases connected with "with", "for", and commas — not just comma-separated keywords.',
-            '',
-            'FORMULA: [Adjective] [Theme] Junk Journal [Product Type] with [Style/Aesthetic] [Niche Noun], Printable [Use Case] [Format]',
-            '',
-            `Where [Theme] = "${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}"`,
-            `Where [Niche Noun] comes from proven phrases in Section 1: ${insights.extractedPattern ? insights.extractedPattern.themePhrases.join(', ') : 'ephemera, collage sheets, digital papers, scrapbook'}`,
-            '',
-            'GOOD EXAMPLE: "Vintage Cat and Kitten Junk Journal Pages with Cottagecore Ephemera, Printable Scrapbook Collage Sheets"',
-            'BAD EXAMPLE: "Cat With Kitten Junk Journal Pages, Cats Collage Ephemera, Vintage Cats And Kittens, Cottage Cats Ephemera"',
-            '',
-            'STRICT GENERATION RULES:',
-            '- EXTENDED SENTENCE: You MUST generate a highly detailed, extended sentence. Your generated sentence must explicitly include the Primary Theme, the Product Type, at least two Aesthetic Adjectives, and the intended Use Case or Audience. Do not return short summaries.',
-            '- 60-CHARACTER ANCHOR: The first 60 characters must clearly state the core product (e.g. "Vintage Swatchbook Junk Journal Pages").',
-            '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally. Do not just list comma segments.',
-            '- DENSITY CAP: Never repeat the exact same root word more than twice in the entire title. "Cat" appearing 3+ times = rejected.',
-            '- COMPETITOR INTEGRATION: Weave competitor phrases naturally into the sentence flow, not as standalone comma segments.',
-            '- NO ORPHANS: Zero standalone, single-word segments allowed.',
-            '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
-            '- BANNED PHRASES: "Commercial Use License", "PDF Download", any "[word] Magic" combo (e.g. "Journal Magic", "Printable Journal Magic"), "160+", "300 DPI", "8.5x11". Do NOT include these anywhere.',
-            '- BANNED CHARACTERS: Never use dashes (-) in titles. Etsy titles use commas only. Specs (page count, DPI, dimensions) belong in the description, NEVER in the title.',
-            '',
-            '=== 3. TAG STRATEGY (EXPANSION MODEL) ===',
-            '',
-            'Output exactly 13 tags.',
-            '',
-            'RESERVED SLOTS (MANDATORY): You MUST reserve exactly 3 of your 13 tags for product format and licensing:',
-            '- One tag for delivery format (e.g., "digital download", "instant download")',
-            '- One tag for product type (e.g., "printable journal", "digital journal")',
-            '- One tag for license (e.g., "commercial use")',
-            'Use the remaining 10 tags for exact-match aesthetic and competitor keywords.',
-            '',
-            'A. Character Rule: Max 20 characters each. 2-3 words per tag. No single-word tags.',
-            '',
-            'B. Tag Strategy Framework - do NOT repeat the full title phrase. Expand horizontally into different buyer angles:',
-            '1. Alternate product phrasing',
-            '2. Aesthetic niche',
-            '3. Use-case intent',
-            '4. Style variation',
-            '5. Broader entry keywords',
-            '6. Adjacent audience types',
-            '',
-            'Example good angles: "botanical journal pages", "garden scrapbook", "cottagecore printable", "floral printable pages", "digital paper pack", "shabby chic papers", "vintage craft papers"',
-            'Example BAD (too repetitive): "junk journal pages", "junk journal printable", "junk journal papers"',
-            '',
-            'C. Reinforcement Rule (Advanced):',
-            'You MAY lightly reinforce part of the main title phrase using a variation in ONE tag.',
-            'Example - Title: "Rustic Greenhouse Junk Journal Kit Printable" then Tag allowed: "greenhouse journal kit"',
-            'But NOT exact full duplication.',
-            '',
-            'D. Buyer Intent Filter (MANDATORY):',
-            'Tags are entry doors. They must be hyper-specific things buyers type to purchase.',
-            'MANDATORY FORMULA: Product + Theme + Format/Use Case (e.g., "[Theme] journal pages", "[Emotion] [Theme] papers", "[Color] [Theme] printable").',
-            'Never end a tag with a noun that has no product signal. "art journaling", "creative journaling", "cat art" are BANNED tag patterns.',
-            'Every tag MUST contain one of: pages, journal, printable, papers, download.',
-            'BANNED TAGS: "digital download", "instant download", "printable art", "digital paper pack", "botanical crafting", "shabby chic art", "creative journaling", "vintage aesthetics".',
-            'Do NOT use vague aesthetic labels alone or broad category terms. EVERY tag must sound like a physical or digital product people query.',
-            '',
-            'E. Strict Character Enforcement:',
-            'Before finalizing output:',
-            '- Count characters of each tag including spaces.',
-            '- If any tag exceeds 20 characters, shorten or replace it.',
-            '- Do NOT approximate. Hard limit: 20 characters.',
-            '- If constraint cannot be met, regenerate tag list.',
-            '',
-            '=== F. AESTHETIC SIGNAL TAG RULE ===',
-            'At least 2 tags must clearly signal the aesthetic mood or subculture identity (e.g., cottagecore paper, dark academia art, romantic floral kit).',
-            'These must still pass the Buyer Intent Filter.',
-            'Do NOT use vague aesthetic-only tags without product context.',
-            '',
-            '=== 3. DESCRIPTION OPTIMIZATION (SEO + CONVERSION MODEL) ===',
-            '',
-            'Descriptions influence: Google ranking, Etsy semantic indexing, buyer confidence, conversion rate, and time on listing.',
-            '',
-            '=== RULE 1: GOOGLE META-HOOK (First 160 Characters) ===',
-            'The VERY FIRST sentence of the description MUST be a highly engaging, natural sentence that:',
-            `- Explicitly includes the Primary Theme ("${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}")`,
-            '- Explicitly includes the Product Type (e.g., "junk journal pages", "printable pages")',
-            '- Reads like a premium brand introduction',
-            '- Fits within 160 characters (Google meta description snippet cutoff)',
-            'GOOD: "Transform your junk journals with these richly detailed vintage cat-themed pages, designed for collectors, crafters, and artists who love whimsical aesthetics."',
-            'BAD: "Vintage Cat Junk Journal Pages Digital Download Printable Ephemera Scrapbook Papers"',
-            '',
-            '=== RULE 2: SEMANTIC WEAVE (LSI Keyword Integration) ===',
-            `You must naturally weave these exact competitor phrases into the SECOND paragraph of the description using proper, flowing sentences:`,
-            ...(insights.extractedPattern && insights.extractedPattern.themePhrases.length > 0
-                ? [`PHRASES TO WEAVE: ${insights.extractedPattern.themePhrases.slice(0, 3).join(', ')}`,
-                    'Integrate these as natural descriptive language — do NOT list them as a comma-separated block.',
-                    'Example: "These pages feature [phrase1] styling with [phrase2] motifs, perfect for creating [phrase3] projects."']
-                : ['Use theme-relevant competitor vocabulary naturally in the second paragraph.']),
-            '',
-            '=== RULE 3: TECHNICAL BULLET POINTS (Conversion Hooks) ===',
-            'The product specifications MUST be formatted as a clean, scannable bulleted list (### section with emoji header).',
-            'This list MUST always include ALL of the following:',
-            `- Page count: "${currentIdentity!.page_count || 160}+ High-Resolution Printable Pages"`,
-            '- File quality: "300 DPI — Print-Ready Quality"',
-            '- Print size: "8.5 x 11 Inches"',
-            '- License: "Commercial Use License Included"',
-            '- Delivery: "Instant Digital Download via Google Drive"',
-            'These specs are BANNED from the title but MANDATORY in the description.',
-            '',
-            '=== DESCRIPTION STRUCTURE (Follow This Order) ===',
-            '',
-            'Paragraph 1 — Google Meta-Hook (1-2 sentences, max 160 chars)',
-            `Lead with the Primary Theme and Product Type. Name the buyer persona. Must be indexable by Google.`,
-            '',
-            'Paragraph 2 — Semantic Weave (2-3 sentences)',
-            'Naturally integrate the competitor phrases listed above. Describe the aesthetic, mood, and artistic details.',
-            'Include at least one SPECIFIC differentiating element unique to this listing.',
-            '',
-            "Paragraph 3 — What's Included (bulleted list with emoji header)",
-            `- ${currentIdentity!.page_count || 160}+ high-resolution JPG journal pages`,
-            '- Print size: 8.5 x 11 inches',
-            '- Resolution: 300 DPI — print-ready quality',
-            `- Theme: ${(currentIdentity!.primary_theme || 'Theme').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} with ${(currentIdentity!.secondary_themes || ['vintage']).join(', ')}`,
-            '- Commercial use license included',
-            '',
-            'Paragraph 4 — How Delivery Works (must be crystal clear)',
-            '"This is a DIGITAL DOWNLOAD. After purchase you will receive a PDF file. Inside that PDF is a Google Drive link where you can instantly download all [NUMBER]+ JPG image files directly to your device. No physical item will be shipped."',
-            '',
-            'Paragraph 5 — Usage Ideas (2-3 sentences)',
-            'Print at home or at a print shop. Use in junk journals, art journals, scrapbooks, mixed media projects, or planners.',
-            '',
-            'Paragraph 6 — License Statement (1-2 sentences)',
-            '"Commercial use license is included with your purchase. You may use these pages in journals or products you sell."',
-            '',
-            'D. Structure Preservation Rule:',
-            '- CRITICAL: Use \\\\n (newline characters) in the JSON description value to preserve line breaks, section headers, spacing, and paragraph structure',
-            '- Keep emoji headers (###), bullet lists, and section formatting',
-            '- Minimum length: 800+ characters',
-            '',
-            'E. Input Boundaries Rule:',
-            'Do NOT introduce themes, motifs, aesthetics, or use cases that are not supported by the original title or description.',
-            'Enhance — do not fabricate.',
-            '',
-            '=== F. MARKET CLUSTER POSITIONING & EMOTIONAL ENGINE (MANDATORY) ===',
-            'The first paragraph MUST:',
-            '1. Pick ONE dominant market cluster supported by the original listing and lean perfectly into it. Do NOT dilute the focus or invent clusters.',
-            '2. Establish a clear mood or atmosphere (romantic, moody, whimsical, nostalgic, enchanted, serene, etc.).',
-            '3. Identify the ideal buyer type (junk journal creators, scrapbook artists, cottagecore lovers, fantasy journal fans, etc.).',
-            '4. Include at least one SPECIFIC differentiating element (e.g., "Inspired by Japanese sakura gardens" or "Hand-painted watercolor texture").',
-            '5. Include at least one sensory or visual detail that is factually present in the original product images or description (e.g. watercolor texture, vintage parchment, etc).',
-            '',
-            'Do NOT write a neutral, safely beautiful, or informational opening.',
-            'The opening must establish distinct competitive edge.',
-            '',
-            '=== 4. WHAT TO AVOID (2026 PENALTY ZONE) ===',
-            '- Keyword stuffing',
-            '- Robotic phrasing',
-            '- Repeating exact title in description',
-            '- Extremely broad tags (printable, art, paper)',
-            '- Ranking for too many unrelated themes',
-            '- Title reading like a keyword list',
-            'Etsy AI now detects manipulation patterns.',
-            '',
-            '=== 5. FINAL INTERNAL CHECK & SEMANTIC AUDIT (CRITICAL) ===',
-            'Before returning JSON:',
-            '1. Re-evaluate title for stacking.',
-            '2. Re-count tag characters.',
-            '3. Confirm exactly 13 tags.',
-            '4. Confirm at least 5 tags contain a core product noun (e.g., "junk journal", "scrapbook", "paper pack", "journal pages").',
-            '5. Confirm no tag exceeds 20 characters.',
-            '6. Confirm description > 800 characters.',
-            '7. Confirm no hallucinated themes added.',
-            '8. Highlight words in title that are broad, redundant, or non-transactional.',
-            '8. If 3+ weak words appear in the final 40% of the title, REDO the tail section.',
-            '9. Ensure at least one niche modifier exists, no more than one format clarifier phrase, and no more than one broad craft descriptor.',
-            'If any fail -> silently iterate and fix before responding.',
-            '',
-            '=== INPUT DATA ===',
-            'Title: ' + scrapedData.title,
-            'Description (PRESERVE AND MODIFY - keep structure, sections, emojis):',
-            scrapedData.description.substring(0, 2500),
-            'Current Tags: ' + scrapedData.tags.join(', '),
-            '',
-            '=== OUTPUT (JSON ONLY) ===',
-            'IMPORTANT: In the description field, use \\n for line breaks to preserve formatting.',
-            'Do NOT return the description as one flat paragraph.',
-            'Keep sections, headers, bullet points, and emojis each on their own line using \\n.',
-            '{',
-            '  "title": "optimized title 125-140 chars",',
-            '  "description": "first line\\n\\nsecond section\\n- bullet 1\\n- bullet 2",',
-            '  "tags": ["13 tags each MUST be 1-20 characters, no exceptions"]',
-            '}',
-            '',
-            'FINAL REMINDER BEFORE YOU OUTPUT:',
-            'Do not write "kit". Write "pages" instead.',
-            'Do not write "journal kit". Write "journal pages" instead.',
-            'Do not write "ephemera". Do not write "ephemera collage". Do not write "digital ephemera". Write "journal pages" or "collage pages" or "digital journal pages" instead.',
-            'Do not put "Commercial Use" in the title.',
-            'Every tag must contain one of: pages, journal, printable, papers, download.',
-            'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
-            'Never repeat a tag concept. If you use "rustic greenhouse" as a tag, do not use "greenhouse pages", "rustic pages", or any other tag that shares a root word with a tag you already wrote. Treat each tag as a unique signal — no overlapping roots.',
-            'Check every tag before outputting. If any two tags share the same root word, delete one. Examples: "printable journal" and "printable pages" both start with "printable" — keep only one. "vintage journal" and "vintage papers" both start with "vintage" — keep only one. Output 13 completely unique tags with no shared root words.',
-            'Do not repeat "pages" more than once in the title. If "journal pages" is already present, do not add "printable pages" at the end.',
-            'Check your output one final time before returning it.'
-        ].join('\n');
-
-        try {
-            let bestOptimizedData: OptimizedDetails | null = null;
-            let bestScoreObj: SEOScore | null = null;
-            let currentPromptLines = [...promptLines];
-
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                console.log(`Optimization Attempt ${attempt}/3...`);
-
-                const response = await fetch('/api/openai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [
-                            { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". Optimize for Relevance x Click Appeal x Buyer Intent x Conversion Clarity. CRITICAL: In the description field, use \\n (actual newline characters) to preserve line breaks, section headers, spacing, bullets, and paragraph structure. Do NOT return the description as one flat paragraph.' },
-                            { role: 'user', content: currentPromptLines.join('\n') }
-                        ],
-                        response_format: { type: 'json_object' },
-                        temperature: attempt === 1 ? 0.7 : Math.min(0.9, 0.7 + (attempt * 0.1))
-                    }),
-                });
-
-                if (!response.ok) throw new Error(`Failed to optimize with AI on attempt ${attempt}`);
-                const result = await response.json();
-                let content = result.choices[0].message.content;
-
-                if (content.includes('```')) {
-                    content = content.replace(/```json|```/g, '').trim();
-                }
-
-                let aiResponse = JSON.parse(content);
-
-                if (aiResponse.title && aiResponse.title.length > 140) {
-                    let text = aiResponse.title.substring(0, 140);
-                    if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
-                        const lastSpaceIndex = text.lastIndexOf(' ');
-                        if (lastSpaceIndex > 0) text = text.substring(0, lastSpaceIndex);
-                    }
-                    aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
-                }
-
-                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
-                    aiResponse.tags = aiResponse.tags.map((tag: string) => {
-                        if (tag.length <= 20) return tag;
-                        let truncated = tag.substring(0, 20);
-                        const lastSpace = truncated.lastIndexOf(' ');
-                        if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
-                        return truncated.trim();
-                    });
-                }
-
-                // SILENT POST-PROCESSING
-                aiResponse.title = removeFillerSegments(aiResponse.title);
-                aiResponse.title = applyReplacements(aiResponse.title);
-                aiResponse.title = removeTitleDuplicates(aiResponse.title);
-                aiResponse.title = ensureTitleLength(aiResponse.title, currentIdentity!, insights.extractedPattern?.themePhrases);
-                aiResponse.title = truncateTo140(aiResponse.title);
-                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
-                    aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
-                }
-
-                setIsEvaluatingOptimized(true);
-                const evalScore = await evaluateListing({
-                    title: aiResponse.title,
-                    description: aiResponse.description,
-                    tags: aiResponse.tags
-                }, currentIdentity || undefined, insights.extractedPattern?.themePhrases);
-                setIsEvaluatingOptimized(false);
-
-                if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
-                    bestScoreObj = evalScore;
-                    bestOptimizedData = { ...aiResponse, score: evalScore };
-                }
-
-                if (evalScore.overallScore >= 100) {
-                    break;
-                }
-
-                if (attempt < 3 && evalScore.weaknesses.length > 0) {
-                    currentPromptLines = [
-                        'You are a Pro Seller Level Etsy SEO expert.',
-                        `Your previous optimization attempt scored ${evalScore.overallScore}/100.`,
-                        buildViolationReport(
-                            evalScore.weaknesses,
-                            currentIdentity!,
-                            ["The page count", "The file format", "The delivery method", "The license type"]
-                        ),
-                        '=== PREVIOUS OUTPUT SO YOU KNOW WHAT FAILED ===',
-                        'Title: ' + aiResponse.title,
-                        'Tags: ' + (aiResponse.tags || []).join(', '),
-                        '',
-                        ...promptLines
-                    ];
-                }
-            }
-
-            setOptimizedData(bestOptimizedData);
+            const aiResponse = JSON.parse(content) as NickMethodReport;
+            setOptimizedData(aiResponse);
 
         } catch (err: any) {
             setError('AI Optimization failed: ' + err.message);
         } finally {
             setIsOptimizing(false);
-            setIsEvaluatingOptimized(false);
         }
     };
 
