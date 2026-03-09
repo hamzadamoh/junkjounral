@@ -492,6 +492,8 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const handleOptimize = async () => {
         if (!scrapedData) return;
 
+        console.log("productIdentity:", extractedIdentity);
+
         setError(null);
         setIsOptimizing(true);
         setOptimizedData(null);
@@ -499,9 +501,12 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         const prompt = `You are an Etsy SEO expert executing the "Nick Method".
 
 ==== LISTING DATA ====
-Title: \${scrapedData.title}
-Tags: \${scrapedData.tags.join(', ')}
-Description: \${scrapedData.description.substring(0, 1000)}
+Title: ${scrapedData.title}
+Tags: ${scrapedData.tags.join(', ')}
+Description: ${scrapedData.description.substring(0, 1000)}
+
+==== PRODUCT IDENTITY ====
+${extractedIdentity ? JSON.stringify(extractedIdentity, null, 2) : "Assume this is a printable junk journal kit/pages product."}
 
 ==== NICK METHOD INSTRUCTIONS ====
 1. BRAINSTORM CLOUD:
