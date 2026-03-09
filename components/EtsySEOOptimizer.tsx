@@ -373,7 +373,7 @@ export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
 ];
 
 async function extractVisualIdentity(imageUrl: string, useOpenRouter: boolean): Promise<string> {
-    const model = useOpenRouter ? "qwen/qwen-2.5-vl-72b-instruct:free" : "gpt-4o";
+    const model = useOpenRouter ? "google/gemma-3-27b-it:free" : "gpt-4o";
     const response = await fetch("/api/openai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

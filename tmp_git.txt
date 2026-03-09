@@ -1,0 +1,490 @@
+﻿commit 7daabb06b903738ba0014fe59297a61569bded21
+Author: hamzadamoh <hamzadamoh06@gmail.com>
+Date:   Fri Feb 6 20:06:38 2026 +0100
+
+    Add Koyeb deployment support with unified production server
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+diff --git a/KOYEB_SETUP.md b/KOYEB_SETUP.md
+new file mode 100644
+index 0000000..4f3b090
+--- /dev/null
++++ b/KOYEB_SETUP.md
+@@ -0,0 +1,186 @@
++# Koyeb Deployment Guide
++
++This guide will help you deploy your application to Koyeb.
++
++## Overview
++
++Koyeb is a serverless platform that can run Node.js applications. This project has been configured to:
++- Build the Vite frontend (`npm run build`)
++- Serve static files and API routes using a unified Node.js server (`server.js`)
++
++## Prerequisites
++
++1. A Koyeb account (sign up at https://www.koyeb.com)
++2. Your code pushed to GitHub (already done Ô£à)
++
++## Deployment Steps
++
++### Option 1: Deploy via Koyeb Dashboard (Recommended)
++
++1. **Go to Koyeb Dashboard**
++   - Visit https://app.koyeb.com
++   - Sign in or create an account
++
++2. **Create a New Service**
++   - Click "Create Service" or "New Service"
++   - Select "GitHub" as your source
++   - Authorize Koyeb to access your GitHub if needed
++
++3. **Select Your Repository**
++   - Choose `hamzadamoh/junkjounral` from the list
++   - Select the `main` branch
++
++4. **Configure Build Settings**
++   - **Build Command**: `npm run build`
++   - **Run Command**: `npm start`
++   - **Root Directory**: Leave empty (or set to `junkjounral` if deploying from monorepo root)
++   - **Port**: `3000` (Koyeb will set PORT env var automatically)
++
++5. **Set Environment Variables**
++   Click "Environment Variables" and add:
++   
++   **Required (based on features you use):**
++   - `OPENAI_API_KEY` - For OpenAI chat completions
++   - `ETSY_API_KEY` - For Etsy API operations
++   - `TTAPI_API_KEY` - For Midjourney/TTAPI operations
++   - `TTAPI_DOMAIN` - Optional, defaults to `https://api.ttapi.io`
++
++   **Google Drive (if used):**
++   - `GOOGLE_DRIVE_CLIENT_ID`
++   - `GOOGLE_DRIVE_CLIENT_SECRET`
++   - `GOOGLE_DRIVE_REFRESH_TOKEN`
++   - `GOOGLE_DRIVE_PARENT_FOLDER_ID` (optional)
++
++   **WordPress (if used):**
++   - `WP_URL` or `WORDPRESS_URL` or `VITE_WP_URL`
++   - `WP_USERNAME` or `WORDPRESS_USERNAME` or `VITE_WP_USERNAME`
++   - `WP_APP_PASSWORD` or `WORDPRESS_APPLICATION_PASSWORD` or `VITE_WP_APP_PASSWORD`
++
++   **Dropbox (if used):**
++   - `DROPBOX_ACCESS_TOKEN` or `VITE_DROPBOX_ACCESS_TOKEN`
++
++   **Note**: Remove `VITE_` prefix for server-side environment variables. The `VITE_` prefix is only needed for client-side variables in Vite, but since API routes run server-side, use the non-prefixed versions.
++
++6. **Deploy**
++   - Click "Deploy" or "Create Service"
++   - Koyeb will build and deploy your application
++   - Wait for the deployment to complete (usually 2-5 minutes)
++
++7. **Access Your App**
++   - Once deployed, Koyeb will provide a URL like `https://your-app-name.koyeb.app`
++   - Your app should be live!
++
++### Option 2: Deploy via Koyeb CLI
++
++1. **Install Koyeb CLI**
++   ```bash
++   # macOS/Linux
++   curl -fsSL https://cli.koyeb.com/install.sh | sh
++   
++   # Windows (using PowerShell)
++   iwr https://cli.koyeb.com/install.ps1 -useb | iex
++   ```
++
++2. **Login to Koyeb**
++   ```bash
++   koyeb login
++   ```
++
++3. **Deploy**
++   ```bash
++   koyeb service create \
++     --name gothic-journal-artificer \
++     --git github.com/hamzadamoh/junkjounral \
++     --git-branch main \
++     --build-command "npm run build" \
++     --run-command "npm start" \
++     --ports 3000:http
++   ```
++
++4. **Set Environment Variables**
++   ```bash
++   koyeb service update gothic-journal-artificer \
++     --env OPENAI_API_KEY=your_key \
++     --env ETSY_API_KEY=your_key
++   # Add more env vars as needed
++   ```
++
++## How It Works
++
++1. **Build Phase**: Koyeb runs `npm run build` which uses Vite to build your React app into static files in the `dist` directory.
++
++2. **Run Phase**: Koyeb runs `npm start` which executes `server.js`. This server:
++   - Serves static files from the `dist` directory
++   - Handles API routes (`/api/*`) using your existing Vercel-style handlers
++   - Provides SPA routing support (all non-API routes serve `index.html`)
++
++## File Structure
++
++```
++junkjounral/
++Ôö£ÔöÇÔöÇ server.js              # Production server (serves frontend + API)
++Ôö£ÔöÇÔöÇ server/
++Ôöé   ÔööÔöÇÔöÇ local-api.js      # Development API server
++Ôö£ÔöÇÔöÇ api/                  # API route handlers (Vercel format)
++Ôöé   Ôö£ÔöÇÔöÇ google-drive.js
++Ôöé   Ôö£ÔöÇÔöÇ etsy.js
++Ôöé   Ôö£ÔöÇÔöÇ ttapi.js
++Ôöé   ÔööÔöÇÔöÇ ...
++Ôö£ÔöÇÔöÇ dist/                 # Built frontend (created by `npm run build`)
++ÔööÔöÇÔöÇ koyeb.toml           # Koyeb configuration (optional)
++```
++
++## Troubleshooting
++
++### Build Fails
++- Check that all dependencies are in `package.json`
++- Ensure Node.js version is compatible (18+)
++- Check build logs in Koyeb dashboard
++
++### API Routes Return 404
++- Verify `server.js` is running (check logs)
++- Ensure API route handlers are in the `api/` directory
++- Check that routes are listed in `ROUTES` array in `server.js`
++
++### Static Files Not Loading
++- Verify `dist` directory exists after build
++- Check that `dist/index.html` exists
++- Ensure `server.js` is pointing to the correct `distDir`
++
++### Environment Variables Not Working
++- Remove `VITE_` prefix for server-side variables
++- Restart the service after adding env vars
++- Check logs to see if env vars are loaded
++
++### Port Issues
++- Koyeb automatically sets `PORT` environment variable
++- `server.js` uses `process.env.PORT || 3000`
++- Don't hardcode port numbers
++
++## Differences from Vercel/Netlify
++
++- **Single Server**: Instead of separate serverless functions, Koyeb runs one Node.js server
++- **Static + API**: The same server handles both static files and API routes
++- **Environment Variables**: No `VITE_` prefix needed for server-side variables
++- **Deployment**: Uses Git-based deployment with build/run commands
++
++## Updating Your Deployment
++
++1. Push changes to GitHub
++2. Koyeb will automatically detect changes and redeploy
++3. Or manually trigger redeploy from Koyeb dashboard
++
++## Cost
++
++Koyeb offers a free tier with:
++- 2 services
++- 512 MB RAM per service
++- Sufficient for small to medium applications
++
++For production, consider upgrading based on your traffic needs.
++
++## Support
++
++- Koyeb Docs: https://www.koyeb.com/docs
++- Koyeb Community: https://www.koyeb.com/community
++- Check application logs in Koyeb dashboard for debugging
+diff --git a/koyeb.toml b/koyeb.toml
+new file mode 100644
+index 0000000..599680c
+--- /dev/null
++++ b/koyeb.toml
+@@ -0,0 +1,17 @@
++# Koyeb deployment configuration
++# This file tells Koyeb how to build and run your application
++
++[build]
++  # Build command - builds the Vite frontend
++  command = "npm run build"
++
++[run]
++  # Start command - runs the production server
++  command = "npm start"
++  
++  # Port that Koyeb will use (Koyeb sets PORT env var automatically)
++  port = 3000
++
++[env]
++  # Node.js version
++  NODE_VERSION = "18"
+diff --git a/package.json b/package.json
+index c56f237..de9fe94 100644
+--- a/package.json
++++ b/package.json
+@@ -9,6 +9,7 @@
+     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev\"",
+     "build": "vite build",
+     "preview": "vite preview",
++    "start": "node server.js",
+     "test": "jest",
+     "test:watch": "jest --watch"
+   },
+diff --git a/server.js b/server.js
+new file mode 100644
+index 0000000..351a371
+--- /dev/null
++++ b/server.js
+@@ -0,0 +1,249 @@
++/**
++ * Production server for Koyeb deployment
++ * Serves the built Vite frontend and handles API routes
++ */
++
++import { createServer } from 'http';
++import { readFileSync, existsSync } from 'fs';
++import { fileURLToPath, pathToFileURL } from 'url';
++import { dirname, join, extname } from 'path';
++import { createReadStream } from 'fs';
++
++const __dirname = dirname(fileURLToPath(import.meta.url));
++const rootDir = __dirname;
++const distDir = join(rootDir, 'dist');
++
++const PORT = process.env.PORT || 3000;
++
++// Route table: path -> handler module path (relative to project root)
++const ROUTES = [
++  { path: '/api/google-drive', module: './api/google-drive.js' },
++  { path: '/api/openai/chat', module: './api/openai/chat.js' },
++  { path: '/api/wordpress/upload', module: './api/wordpress/upload.js' },
++  { path: '/api/dropbox/upload-grid', module: './api/dropbox/upload-grid.js' },
++  { path: '/api/ttapi', module: './api/ttapi.js' },
++  { path: '/api/etsy', module: './api/etsy.js' },
++  { path: '/api/pollinations/generate', module: './api/pollinations/generate.js' },
++];
++
++// MIME types for static files
++const mimeTypes = {
++  '.html': 'text/html',
++  '.js': 'application/javascript',
++  '.css': 'text/css',
++  '.json': 'application/json',
++  '.png': 'image/png',
++  '.jpg': 'image/jpeg',
++  '.jpeg': 'image/jpeg',
++  '.gif': 'image/gif',
++  '.svg': 'image/svg+xml',
++  '.ico': 'image/x-icon',
++  '.woff': 'font/woff',
++  '.woff2': 'font/woff2',
++  '.ttf': 'font/ttf',
++  '.eot': 'application/vnd.ms-fontobject',
++};
++
++function parseBody(raw) {
++  try {
++    return JSON.parse(raw);
++  } catch {
++    return {};
++  }
++}
++
++function serveStaticFile(filePath, res) {
++  if (!existsSync(filePath)) {
++    return false;
++  }
++
++  const ext = extname(filePath);
++  const contentType = mimeTypes[ext] || 'application/octet-stream';
++
++  res.setHeader('Content-Type', contentType);
++  res.setHeader('Cache-Control', ext === '.html' ? 'no-cache' : 'public, max-age=31536000');
++
++  const stream = createReadStream(filePath);
++  stream.pipe(res);
++  return true;
++}
++
++const server = createServer(async (req, res) => {
++  const url = new URL(req.url || '/', `http://${req.headers.host}`);
++  const pathname = url.pathname;
++  const method = req.method;
++
++  // CORS headers
++  res.setHeader('Access-Control-Allow-Origin', '*');
++  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
++  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
++
++  if (method === 'OPTIONS') {
++    res.writeHead(200).end();
++    return;
++  }
++
++  // Etsy proxy-image: handle directly so it works regardless of handler res.send/res.end
++  if (pathname === '/api/etsy' && method === 'GET') {
++    const operation = url.searchParams.get('operation');
++    const imageUrl = url.searchParams.get('url');
++    if (operation === 'proxy-image' && imageUrl) {
++      try {
++        const decodedUrl = decodeURIComponent(imageUrl);
++        const imageResponse = await fetch(decodedUrl, {
++          headers: {
++            'User-Agent': 'Mozilla/5.0 (compatible; Etsy-Image-Proxy/1.0)',
++            Referer: 'https://www.etsy.com/',
++          },
++        });
++        if (!imageResponse.ok) {
++          res.writeHead(imageResponse.status, { 'Content-Type': 'application/json' });
++          res.end(JSON.stringify({ error: `Failed to fetch image: ${imageResponse.statusText}` }));
++          return;
++        }
++        const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
++        const buffer = Buffer.from(await imageResponse.arrayBuffer());
++        res.writeHead(200, {
++          'Content-Type': contentType,
++          'Cache-Control': 'public, max-age=31536000, immutable',
++        });
++        res.end(buffer);
++        return;
++      } catch (err) {
++        console.error('[Server] Etsy proxy-image error:', err.message);
++        res.writeHead(500, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
++        return;
++      }
++    }
++  }
++
++  // Handle API routes
++  const route = ROUTES.find((r) => pathname === r.path || pathname.startsWith(r.path + '?'));
++  if (route) {
++    try {
++      const modulePath = join(rootDir, route.module);
++      const mod = await import(pathToFileURL(modulePath).href);
++      const handler = mod.default;
++
++      if (typeof handler !== 'function') {
++        res.writeHead(500, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ error: 'Handler not a function' }));
++        return;
++      }
++
++      let body = {};
++      if (method === 'POST' && req.headers['content-type']?.includes('application/json')) {
++        const chunks = [];
++        for await (const chunk of req) chunks.push(chunk);
++        const raw = Buffer.concat(chunks).toString('utf8');
++        if (raw) body = parseBody(raw);
++      } else {
++        await new Promise((resolve, reject) => {
++          req.on('end', resolve);
++          req.on('error', reject);
++          req.resume();
++        });
++      }
++
++      const query = {};
++      url.searchParams.forEach((v, k) => { query[k] = v; });
++
++      const nodeReq = {
++        method,
++        url: url.pathname + url.search,
++        query,
++        body: method === 'POST' ? body : { ...query },
++        headers: req.headers,
++      };
++
++      let ended = false;
++      const nodeRes = {};
++      nodeRes._headers = {};
++      nodeRes.statusCode = 200;
++      nodeRes.setHeader = function (name, value) {
++        nodeRes._headers[name.toLowerCase()] = value;
++      };
++      nodeRes.getHeader = function (name) {
++        return nodeRes._headers[name.toLowerCase()];
++      };
++      nodeRes.status = function (code) {
++        nodeRes.statusCode = code;
++        return nodeRes;
++      };
++      nodeRes.json = function (obj) {
++        if (ended) return nodeRes;
++        ended = true;
++        nodeRes.setHeader('content-type', 'application/json');
++        res.writeHead(nodeRes.statusCode, nodeRes._headers);
++        res.end(JSON.stringify(obj));
++        return nodeRes;
++      };
++      nodeRes.send = function (data) {
++        if (ended) return nodeRes;
++        ended = true;
++        if (Buffer.isBuffer(data) && !nodeRes.getHeader('content-type')) {
++          nodeRes.setHeader('content-type', 'application/octet-stream');
++        }
++        const payload = Buffer.isBuffer(data) ? data : (data != null ? Buffer.from(String(data)) : Buffer.alloc(0));
++        res.writeHead(nodeRes.statusCode, nodeRes._headers);
++        res.end(payload);
++        return nodeRes;
++      };
++      nodeRes.end = function (data) {
++        if (ended) return nodeRes;
++        ended = true;
++        const payload = data != null ? (Buffer.isBuffer(data) ? data : Buffer.from(String(data))) : Buffer.alloc(0);
++        res.writeHead(nodeRes.statusCode, nodeRes._headers);
++        res.end(payload);
++        return nodeRes;
++      };
++
++      await handler(nodeReq, nodeRes);
++      if (!ended) {
++        nodeRes.end('');
++      }
++    } catch (err) {
++      console.error(`[API] ${pathname} error:`, err.message || err);
++      if (err.stack) console.error(err.stack);
++      if (!res.writableEnded) {
++        res.writeHead(500, { 'Content-Type': 'application/json' });
++        res.end(JSON.stringify({ error: err.message || 'Internal server error' }));
++      }
++    }
++    return;
++  }
++
++  // Handle static files
++  let filePath = join(distDir, pathname === '/' ? 'index.html' : pathname);
++
++  // Security: prevent directory traversal
++  if (!filePath.startsWith(distDir)) {
++    res.writeHead(403, { 'Content-Type': 'text/plain' });
++    res.end('Forbidden');
++    return;
++  }
++
++  // Try to serve the file
++  if (serveStaticFile(filePath, res)) {
++    return;
++  }
++
++  // If file not found and it's not an API route, try index.html for SPA routing
++  if (!pathname.startsWith('/api')) {
++    const indexPath = join(distDir, 'index.html');
++    if (serveStaticFile(indexPath, res)) {
++      return;
++    }
++  }
++
++  // 404
++  res.writeHead(404, { 'Content-Type': 'application/json' });
++  res.end(JSON.stringify({ error: 'Not found' }));
++});
++
++server.listen(PORT, () => {
++  console.log(`[Server] Running on port ${PORT}`);
++  console.log(`[Server] Serving static files from ${distDir}`);
++  console.log(`[Server] API routes: ${ROUTES.map(r => r.path).join(', ')}`);
++});

@@ -70,7 +70,7 @@ function serveStaticFile(filePath, res) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
-  const pathname = url.pathname;
+  const pathname = url.pathname.endsWith('/') && url.pathname.length > 1 ? url.pathname.slice(0, -1) : url.pathname;
   const method = req.method;
 
   // CORS headers
