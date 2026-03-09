@@ -373,25 +373,26 @@ export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
 ];
 
 async function extractVisualIdentity(imageUrl: string, useOpenRouter: boolean): Promise<string> {
-    const model = useOpenRouter ? "google/gemma-3-27b-it:free" : "gpt-4o";
-    const response = await fetch("/api/openai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            model: model,
-            isOpenRouter: useOpenRouter,
-            max_tokens: 800,
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "image_url",
-                            image_url: { url: imageUrl }
-                        },
-                        {
-                            type: "text",
-                            text: `You are analyzing an Etsy product listing image for SEO purposes.
+    try {
+        const model = useOpenRouter ? "google/gemma-3-27b-it:free" : "gpt-4o";
+        const response = await fetch("/api/openai/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                model: model,
+                isOpenRouter: useOpenRouter,
+                max_tokens: 800,
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            {
+                                type: "image_url",
+                                image_url: { url: imageUrl }
+                            },
+                            {
+                                type: "text",
+                                text: `You are analyzing an Etsy product listing image for SEO purposes.
               
 Describe exactly what you see. Be specific and literal — no guessing.
 Focus on:
@@ -415,21 +416,25 @@ Return ONLY a JSON object:
   "productType": "printable junk journal ephemera kit",
   "targetBuyer": "scrapbookers and mixed media artists"
 }`
-                        }
-                    ]
-                }
-            ]
-        })
-    });
+                            }
+                        ]
+                    }
+                ]
+            })
+        });
 
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMsg = data.error?.message || data.error || "Unknown Error";
-        throw new Error(`[${response.status}] ${errorMsg}`);
+        const data = await response.json();
+        if (!response.ok) {
+            console.warn("Vision extraction failed, proceeding without visual identity:", data);
+            return "Visual analysis unavailable (proceeding with text description)";
+        }
+        const raw = data.choices[0].message.content;
+        const clean = raw.replace(/```json|```/g, "").trim();
+        return clean;
+    } catch (err) {
+        console.warn("Graceful degradation: Vision extraction failed:", err);
+        return "Visual analysis unavailable (proceeding with text description)";
     }
-    const raw = data.choices[0].message.content;
-    const clean = raw.replace(/```json|```/g, "").trim();
-    return clean;
 }
 
 interface EtsySEOOptimizerProps {
@@ -525,6 +530,9 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             }
 
             const data = await response.json();
+            // --- DEFENSIVE TAGS START ---
+            data.tags = Array.isArray(data.tags) ? data.tags : [];
+            // --- DEFENSIVE TAGS END ---
             setScrapedData(data);
 
             // Kick off original listing evaluation
@@ -559,6 +567,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     let idContent = idResult.choices[0].message.content;
                     if (idContent.includes('```')) idContent = idContent.replace(/```json|```/g, '').trim();
                     const identity = JSON.parse(idContent) as JunkJournalPagesIdentity;
+                    console.log("extractedIdentity:", identity);
 
                     // Sanitize synonyms
                     const { valid } = sanitizeSynonyms(identity.theme_synonyms || []);
@@ -1033,9 +1042,9 @@ Analyze this listing and return a strictly formatted JSON object.
                             </section>
 
                             <section>
-                                <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags ({scrapedData.tags.length})</label>
+                                <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags ({(scrapedData.tags || []).length})</label>
                                 <div className="flex flex-wrap gap-2">
-                                    {scrapedData.tags.map((tag, i) => (
+                                    {(scrapedData.tags || []).map((tag, i) => (
                                         <span key={i} className="text-xs px-2 py-1 bg-slate-700/50 rounded border border-slate-600/50">{tag}</span>
                                     ))}
                                 </div>

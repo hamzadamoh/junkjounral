@@ -31,7 +31,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
 
     const lowerTitle = (title || "").toLowerCase();
     const lowerDesc = (description || "").toLowerCase();
-    const lowerTags = (tags || []).map(t => t.toLowerCase());
+    const safeTags = Array.isArray(tags) ? tags : [];
+    const lowerTags = safeTags.map(t => String(t || "").toLowerCase());
     const allTagsText = lowerTags.join(' ');
 
     // --- PILLAR 1: TITLE ENGINEERING (Max 30) ---

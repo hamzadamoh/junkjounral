@@ -38,8 +38,8 @@ export default async function handler(req, res) {
       headers['X-Title'] = 'Etsy SEO Optimizer';
     }
 
-    const fetchAI = async (currentModel, retryCount = 0) => {
-      console.log(`[AI Proxy] Request to ${currentModel} (Attempt ${retryCount + 1})`);
+    const fetchAI = async (currentModel, attempt = 1) => {
+      console.log(`[AI Proxy] ${currentModel} - Attempt ${attempt}`);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -54,27 +54,55 @@ export default async function handler(req, res) {
 
       // Handle Rate Limits (429) or Temporary Service Issues (503/502)
       if ((response.status === 429 || response.status === 503 || response.status === 502) && isOpenRouter) {
-        console.warn(`[AI Proxy] ${currentModel} returned ${response.status}. retryCount: ${retryCount}`);
+        console.warn(`[AI Proxy] ${currentModel} returned ${response.status} on attempt ${attempt}`);
 
-        // Define fallback map for free models
-        const fallbacks = {
-          'google/gemma-3-27b-it:free': 'nvidia/nemotron-nano-12b-v2-vl:free',
-          'meta-llama/llama-3.3-70b-instruct:free': 'qwen/qwen3-coder:free'
-        };
+        // --- TEXT FALLBACK CHAIN ---
+        const textChain = [
+          'meta-llama/llama-3.3-70b-instruct:free',
+          'qwen/qwen-2.5-72b-instruct:free',
+          'mistralai/mistral-7b-instruct:free'
+        ];
 
-        const fallbackModel = fallbacks[currentModel];
+        // --- VISION FALLBACK CHAIN ---
+        const visionChain = [
+          'google/gemma-3-27b-it:free',
+          'google/gemma-3-12b-it:free'
+        ];
 
-        if (retryCount < 2) {
-          // Attempt 1 & 2: Wait and retry SAME model
-          const delay = (retryCount + 1) * 2000;
-          console.log(`[AI Proxy] Retrying ${currentModel} in ${delay}ms...`);
-          await new Promise(r => setTimeout(r, delay));
-          return fetchAI(currentModel, retryCount + 1);
-        } else if (fallbackModel) {
-          // Third attempt failed: Swap to FALLBACK model
-          console.log(`[AI Proxy] Exceeded retries for ${currentModel}. Failing over to: ${fallbackModel}`);
-          await new Promise(r => setTimeout(r, 1000));
-          return fetchAI(fallbackModel, 0); // Reset retry count for fallback
+        const isVision = currentModel.includes('gemma') || (messages[0]?.content && Array.isArray(messages[0].content) && messages[0].content.some(c => c.type === 'image_url'));
+
+        if (isVision) {
+          // Vision specific logic
+          if (attempt < visionChain.length) {
+            const nextVisionModel = visionChain[attempt]; // attempt 1 -> index 1
+            console.log(`[AI Proxy] Vision Fallback: ${currentModel} -> ${nextVisionModel}`);
+            return fetchAI(nextVisionModel, attempt + 1);
+          } else {
+            console.error(`[AI Proxy] All vision models failed. Signaling skip to frontend.`);
+            // Return a 202 "Accepted" with a flag so frontend knows to degrade gracefully
+            return {
+              status: 202,
+              ok: true,
+              json: async () => ({
+                choices: [{ message: { content: "Visual analysis unavailable (all models busy)" } }],
+                usage: { total_tokens: 0 }
+              })
+            };
+          }
+        } else {
+          // Text specific logic with explicit delays
+          const delays = [1000, 2000, 5000]; // 1s, 2s, 5s
+          const currentDelay = delays[attempt - 1] || 5000;
+
+          if (attempt < textChain.length) {
+            const nextTextModel = textChain[attempt];
+            console.log(`[AI Proxy] Text Retry/Fallback in ${currentDelay}ms: ${currentModel} -> ${nextTextModel}`);
+            await new Promise(r => setTimeout(r, currentDelay));
+            return fetchAI(nextTextModel, attempt + 1);
+          } else {
+            console.error(`[AI Proxy] All text models failed after ${attempt} attempts.`);
+            return response; // Return the final 429/503
+          }
         }
       }
 
@@ -84,13 +112,13 @@ export default async function handler(req, res) {
     const response = await fetchAI(model);
     const data = await response.json();
 
-    if (!response.ok) {
+    if (!response.ok && response.status !== 202) {
       console.error('AI Proxy API error:', data);
       return res.status(response.status).json(data);
     }
 
     // Return the response to the frontend
-    res.status(200).json(data);
+    res.status(response.status || 200).json(data);
 
   } catch (error) {
     console.error('AI proxy error:', error);
