@@ -381,7 +381,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [url, setUrl] = useState('');
     const [isScraping, setIsScraping] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
-    
+
     const [isEvaluatingOriginal, setIsEvaluatingOriginal] = useState(false);
     const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapedDetails | null>(null);
@@ -499,17 +499,34 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         const prompt = `You are an Etsy SEO expert executing the "Nick Method".
 
 ==== LISTING DATA ====
-Title: ${scrapedData.title}
-Tags: ${scrapedData.tags.join(', ')}
-Description: ${scrapedData.description.substring(0, 1000)}
+Title: \${scrapedData.title}
+Tags: \${scrapedData.tags.join(', ')}
+Description: \${scrapedData.description.substring(0, 1000)}
 
-Analyze this listing and return a strictly formatted JSON object matching the NickMethodReport interface.
+==== NICK METHOD INSTRUCTIONS ====
+1. BRAINSTORM CLOUD:
+   - "descriptive": Generate 15-20 highly descriptive, aesthetic, and specific words that describe the vibe, theme, and style in the listing.
+   - "anchors": Generate 4-6 strong product anchor phrases (2-3 words each) that define exactly what the core item is.
+
+2. SEO SCORING (Grade out of 65 points):
+   - "titleScore": Grade the ORIGINAL title out of 30. Provide a 2-3 bullet point breakdown.
+   - "tagScore": Grade the ORIGINAL tags out of 35. Provide a 2-3 bullet point breakdown.
+   - "totalScore": Sum of titleScore and tagScore (X/65). Provide a rating string.
+
+3. OPTIMIZATION:
+   - "improvedTitle": Create a new title strictly between 120-140 characters. FORMAT REQUIRED: Flowing descriptive phrase utilizing anchor words + comma + secondary anchor phrase. DO NOT USE COLONS. Use natural connectors.
+   - "improvedTags": Generate EXACTLY 13 unique tags. Each tag must be maximum 20 characters long. DO NOT return fewer than 13 tags.
+
+4. WARNING:
+   - "badAdviceWarning": If the original title was under 80 characters, provide a warning. Otherwise, omit.
+
+Analyze this listing and return a strictly formatted JSON object.
 
 ==== Output Requirement (JSON ONLY) ====  
 {
     "brainstorm": {
-        "descriptive": ["word1", "word2"],
-        "anchors": ["word1", "word2"]
+        "descriptive": ["word1", "word2", "word3", "...15 to 20 words"],
+        "anchors": ["phrase1", "phrase2", "...4 to 6 phrases"]
     },
     "titleScore": {
         "total": 20,
@@ -523,8 +540,8 @@ Analyze this listing and return a strictly formatted JSON object matching the Ni
         "score": 50,
         "rating": "Needs Work"
     },
-    "improvedTitle": "Your new optimized title here max 140 chars",
-    "improvedTags": ["tag1", "tag2"],
+    "improvedTitle": "Your new optimized title here max 140 chars with commas not colons",
+    "improvedTags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11", "tag12", "tag13"],
     "badAdviceWarning": "Optional warning message if needed"
 }
 `;
@@ -540,7 +557,8 @@ Analyze this listing and return a strictly formatted JSON object matching the Ni
                         { role: 'user', content: prompt }
                     ],
                     response_format: { type: 'json_object' },
-                    temperature: 0.7
+                    temperature: 0.7,
+                    max_tokens: 2500
                 }),
             });
 
@@ -892,7 +910,7 @@ Analyze this listing and return a strictly formatted JSON object matching the Ni
                         )}
                     </div>
 
-                    
+
                     {/* Optimized Metadata */}
                     <div className={`bg-slate-800 p-6 rounded-xl border-2 ${optimizedData ? 'border-amber-500/50 shadow-amber-900/10' : 'border-dashed border-slate-700'} flex flex-col justify-center`}>
                         {!optimizedData && !isOptimizing ? (
@@ -931,7 +949,7 @@ Analyze this listing and return a strictly formatted JSON object matching the Ni
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-700/50 text-sm text-slate-300">
                                             <div className="text-xs text-slate-500 font-bold uppercase mb-2 flex justify-between">
-                                                <span>Title Score</span> 
+                                                <span>Title Score</span>
                                                 <span className={optimizedData.titleScore?.total >= 25 ? 'text-emerald-400' : 'text-amber-400'}>{optimizedData.titleScore?.total}/30</span>
                                             </div>
                                             <ul className="space-y-1 text-xs text-slate-400">
@@ -940,7 +958,7 @@ Analyze this listing and return a strictly formatted JSON object matching the Ni
                                         </div>
                                         <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-700/50 text-sm text-slate-300">
                                             <div className="text-xs text-slate-500 font-bold uppercase mb-2 flex justify-between">
-                                                <span>Tag Score</span> 
+                                                <span>Tag Score</span>
                                                 <span className={optimizedData.tagScore?.total >= 30 ? 'text-emerald-400' : 'text-amber-400'}>{optimizedData.tagScore?.total}/35</span>
                                             </div>
                                             <ul className="space-y-1 text-xs text-slate-400">
