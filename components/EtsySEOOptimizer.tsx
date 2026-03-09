@@ -340,11 +340,14 @@ interface ScrapedDetails {
     score?: SEOScore;
 }
 
-interface OptimizedDetails {
-    title: string;
-    description: string;
-    tags: string[];
-    score?: SEOScore;
+export interface NickMethodReport {
+    brainstorm: { descriptive: string[], anchors: string[] };
+    titleScore: { total: number, breakdown: string[] };
+    tagScore: { total: number, breakdown: string[] };
+    totalScore: { score: number, rating: string };
+    improvedTitle: string;
+    improvedTags: string[];
+    badAdviceWarning?: string;
 }
 
 export interface ReferenceShop {
@@ -378,11 +381,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [url, setUrl] = useState('');
     const [isScraping, setIsScraping] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
-    const [isRefining, setIsRefining] = useState(false);
+    
     const [isEvaluatingOriginal, setIsEvaluatingOriginal] = useState(false);
     const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapedDetails | null>(null);
-    const [optimizedData, setOptimizedData] = useState<OptimizedDetails | null>(null);
+    const [optimizedData, setOptimizedData] = useState<NickMethodReport | null>(null);
     const [extractedIdentity, setExtractedIdentity] = useState<JunkJournalPagesIdentity | null>(null);
     const [showIdentityConfirmation, setShowIdentityConfirmation] = useState(false);
     const [isAnalyzingProduct, setIsAnalyzingProduct] = useState(false);
@@ -1103,182 +1106,6 @@ Return ONLY a JSON object:
         }
     };
 
-    const handleRefine = async () => {
-        if (!scrapedData || !optimizedData || !optimizedData.score) return;
-
-        setIsRefining(true);
-        setError(null);
-
-        const originalViolations = getFormatViolations(scrapedData.title, scrapedData.tags);
-
-        const dynamicWarning = originalViolations.length > 0
-            ? `BEFORE YOU WRITE ANYTHING: Read this first.\nThe words [${originalViolations.join(', ')}] appear in the original listing.\nThese words are FACTUALLY INCORRECT for this product.\nThis product is PAGES ONLY. Test every word you generate against this list before outputting.\nIf you are about to write "kit" — STOP. Replace it with "pages".\nIf you are about to write "set" — STOP. Replace it with "pages" or remove it.\n`
-            : '';
-
-        const swatchbookWarning = (extractedIdentity?.primary_theme?.toLowerCase().includes('swatch') || extractedIdentity?.primary_theme?.toLowerCase().includes('swatchbook'))
-            ? 'This product contains colorful swatch and paint chip style pages. The correct search terms are "swatchbook journal pages", "color swatch printable", "paint chip journal pages" — NOT ephemera.\n'
-            : '';
-
-        const promptLines = [
-            'You are an Etsy SEO Expert operating under the 2026 Etsy AI Search Model.',
-            '',
-            dynamicWarning,
-            swatchbookWarning,
-            '=== 0. PRODUCT CONSTRAINTS (MANDATORY IDENTITY LOCK) ===',
-            buildIdentityLockPrompt(extractedIdentity!),
-            '',
-            '',
-            'You previously optimized this listing, but our internal grader found the following weaknesses:',
-            ...optimizedData.score.weaknesses.map((w: string) => `- ${w}`),
-            '',
-            'Your task is to REWRITE the title, tags, and description to EXPLICITLY fix these weaknesses while maintaining all previous structural rules.',
-            '',
-            '=== PREVIOUS OUTPUT ===',
-            'Title: ' + optimizedData.title,
-            'Tags: ' + optimizedData.tags.join(', '),
-            'Description:',
-            optimizedData.description.substring(0, 2000),
-            '',
-            '=== STRICT CONSTRAINTS ===',
-            'TITLE RULES (NLP SENTENCE STRUCTURE):',
-            '- EXTENDED SENTENCE: You MUST generate a highly detailed, extended sentence. Include the Primary Theme, Product Type, at least two Aesthetic Adjectives, and the Use Case/Audience. Do not return short summaries.',
-            '- Structure: 2-3 flowing phrases connected with "with", "for", and commas — NOT a keyword list.',
-            '- FORMULA: [Adjective] [Theme] Junk Journal [Product Type] with [Style/Aesthetic] [Niche Noun], Printable [Use Case] [Format]',
-            '- 60-CHARACTER ANCHOR: State the main product clearly within the first 60 characters.',
-            '- NATURAL CONNECTORS: Use "with" or "for" to connect context naturally.',
-            '- DENSITY CAP: Never repeat the exact same root word more than twice.',
-            '- Do NOT use filler words: beautiful, perfect, amazing, high quality, lovely.',
-            '- BANNED: any "[word] Magic" combo, "160+", "300 DPI", "8.5x11", dashes (-). Specs go in description only.',
-            '- GOOD: "Vintage Swatchbook Junk Journal Pages with Color Swatch Ephemera, Printable Paint Chip Collage Sheets"',
-            '- BAD: "Vintage Swatchbook Junk Journal Pages, Vintage Swatch Collage, Swatchbook Ephemera, Vintage Papers"',
-            '- Weave competitor phrases naturally into the sentence. Do not append them as isolated comma segments.',
-            '- Tags: EXACTLY 13 tags. MAX 20 chars per tag. CRITICAL: At least 5 tags MUST contain a core product noun (e.g. "junk journal", "scrapbook", "paper pack", "journal pages"). Formula: Product + Theme + Use Case.',
-            '- TAG RULE: Never end a tag with a noun that has no product signal. "art journaling", "creative journaling", "cat art" are BANNED patterns. Every tag MUST contain one of: pages, journal, printable, papers, download.',
-            '- TITLE RULE: NEVER include "Commercial Use" or license language in the title. The title is for search discovery only.',
-            '- Description: OVER 800 chars. Pick ONE dominant market cluster. MUST USE \\n for line breaks to preserve formatting.',
-            '',
-            '=== OUTPUT (JSON ONLY) ===',
-            'Respond ONLY with a valid JSON object matching the exact structure previously requested: {"title": "", "description": "", "tags": []}.',
-            '',
-            'FINAL REMINDER BEFORE YOU OUTPUT:',
-            'Do not write "kit". Write "pages" instead.',
-            'Do not write "journal kit". Write "journal pages" instead.',
-            'Do not write "ephemera". Do not write "ephemera collage". Do not write "digital ephemera". Write "journal pages" or "collage pages" or "digital journal pages" instead.',
-            'Do not put "Commercial Use" in the title.',
-            'Every tag must contain one of: pages, journal, printable, papers, download.',
-            'Never repeat a tag. All 13 tags must be completely unique — no duplicates, no near-duplicates like "whimsical cat" and "whimsical cats".',
-            'Never repeat a tag concept. If you use "rustic greenhouse" as a tag, do not use "greenhouse pages", "rustic pages", or any other tag that shares a root word with a tag you already wrote. Treat each tag as a unique signal — no overlapping roots.',
-            'Check every tag before outputting. If any two tags share the same root word, delete one. Examples: "printable journal" and "printable pages" both start with "printable" — keep only one. "vintage journal" and "vintage papers" both start with "vintage" — keep only one. Output 13 completely unique tags with no shared root words.',
-            'Do not repeat "pages" more than once in the title. If "journal pages" is already present, do not add "printable pages" at the end.',
-            'Check your output one final time before returning it.'
-        ].join('\n');
-
-        try {
-            let bestOptimizedData: OptimizedDetails | null = null;
-            let bestScoreObj: SEOScore | null = null;
-            let currentPromptLines = [...promptLines];
-
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                console.log(`Refinement Attempt ${attempt}/3...`);
-
-                const response = await fetch('/api/openai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'gpt-4o',
-                        messages: [
-                            { role: 'system', content: 'You are a Pro Seller Level Etsy SEO expert optimizing for the 2026 Etsy AI Search Model. Respond only with valid JSON. Use the keys: "title", "description", and "tags". CRITICAL: In the description field, use \\n (actual newline characters) to preserve formatting.' },
-                            { role: 'user', content: currentPromptLines.join('\n') }
-                        ],
-                        response_format: { type: 'json_object' },
-                        temperature: attempt === 1 ? 0.7 : Math.min(0.9, 0.7 + (attempt * 0.1))
-                    }),
-                });
-
-                if (!response.ok) throw new Error(`Failed to refine with AI on attempt ${attempt}`);
-                const result = await response.json();
-                let content = result.choices[0].message.content;
-
-                if (content.includes('```')) {
-                    content = content.replace(/```json|```/g, '').trim();
-                }
-
-                let aiResponse = JSON.parse(content);
-
-                if (aiResponse.title && aiResponse.title.length > 140) {
-                    let text = aiResponse.title.substring(0, 140);
-                    if (aiResponse.title[140] && aiResponse.title[140] !== ' ') {
-                        const lastSpaceIndex = text.lastIndexOf(' ');
-                        if (lastSpaceIndex > 0) text = text.substring(0, lastSpaceIndex);
-                    }
-                    aiResponse.title = text.replace(/[,-\s]+$/, '').trim();
-                }
-
-                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
-                    aiResponse.tags = aiResponse.tags.map((tag: string) => {
-                        if (tag.length <= 20) return tag;
-                        let truncated = tag.substring(0, 20);
-                        const lastSpace = truncated.lastIndexOf(' ');
-                        if (lastSpace > 5) truncated = truncated.substring(0, lastSpace);
-                        return truncated.trim();
-                    });
-                }
-
-                // SILENT POST-PROCESSING
-                aiResponse.title = removeFillerSegments(aiResponse.title);
-                aiResponse.title = applyReplacements(aiResponse.title);
-                aiResponse.title = removeTitleDuplicates(aiResponse.title);
-                aiResponse.title = ensureTitleLength(aiResponse.title, extractedIdentity!, competitorInsights?.extractedPattern?.themePhrases);
-                aiResponse.title = truncateTo140(aiResponse.title);
-                if (aiResponse.tags && Array.isArray(aiResponse.tags)) {
-                    aiResponse.tags = aiResponse.tags.map((tag: string) => applyReplacements(tag));
-                }
-
-                setIsEvaluatingOptimized(true);
-                const evalScore = await evaluateListing({
-                    title: aiResponse.title,
-                    description: aiResponse.description,
-                    tags: aiResponse.tags
-                }, extractedIdentity || undefined, competitorInsights?.extractedPattern?.themePhrases);
-                setIsEvaluatingOptimized(false);
-
-                if (!bestScoreObj || evalScore.overallScore > bestScoreObj.overallScore) {
-                    bestScoreObj = evalScore;
-                    bestOptimizedData = { ...aiResponse, score: evalScore };
-                }
-
-                if (evalScore.overallScore >= 100) {
-                    break;
-                }
-
-                if (attempt < 3 && evalScore.weaknesses.length > 0) {
-                    currentPromptLines = [
-                        'You are a Pro Seller Level Etsy SEO expert.',
-                        `Your previous refinement attempt scored ${evalScore.overallScore}/100.`,
-                        buildViolationReport(
-                            evalScore.weaknesses,
-                            extractedIdentity!,
-                            ["The page count", "The file format", "The delivery method", "The license type"]
-                        ),
-                        '=== PREVIOUS OUTPUT ===',
-                        'Title: ' + aiResponse.title,
-                        'Tags: ' + (aiResponse.tags || []).join(', '),
-                        '',
-                        ...promptLines
-                    ];
-                }
-            }
-
-            setOptimizedData(bestOptimizedData);
-
-        } catch (err: any) {
-            setError('AI Refinement failed: ' + err.message);
-        } finally {
-            setIsRefining(false);
-            setIsEvaluatingOptimized(false);
-        }
-    };
-
     const copyToClipboard = (text: string, field: string) => {
         navigator.clipboard.writeText(text);
         setCopiedField(field);
@@ -1609,149 +1436,97 @@ Return ONLY a JSON object:
                         )}
                     </div>
 
+                    
                     {/* Optimized Metadata */}
                     <div className={`bg-slate-800 p-6 rounded-xl border-2 ${optimizedData ? 'border-amber-500/50 shadow-amber-900/10' : 'border-dashed border-slate-700'} flex flex-col justify-center`}>
                         {!optimizedData && !isOptimizing ? (
                             <div className="text-center space-y-3 opacity-50">
                                 <Sparkles className="w-12 h-12 mx-auto text-slate-600" />
-                                <p>Click optimize to see AI recommendations</p>
+                                <p>Click optimize to run Nick Method SEO Analysis</p>
                             </div>
                         ) : optimizedData ? (
                             <div className="space-y-6 animate-in zoom-in-95 duration-300">
                                 <div className="flex justify-between items-start">
                                     <h2 className="text-xl font-semibold flex items-center gap-2 text-amber-400">
                                         <Sparkles className="w-5 h-5" />
-                                        Optimized Result
+                                        Nick Method SEO Report
                                     </h2>
-                                    {optimizedData.score ? (
-                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${optimizedData.score.overallScore >= 80 ? 'bg-emerald-900/40 border-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)] text-emerald-400' : optimizedData.score.overallScore >= 60 ? 'bg-amber-900/30 border-amber-500/50 text-amber-400' : 'bg-red-900/30 border-red-500/50 text-red-400'}`}>
-                                            <span className="text-sm font-bold">New Score: {optimizedData.score.overallScore}/100</span>
-                                        </div>
-                                    ) : isEvaluatingOptimized ? (
-                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/20 text-amber-400/70">
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                            <span className="text-xs">Verifying Quality...</span>
-                                        </div>
-                                    ) : null}
+                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${optimizedData.totalScore?.score >= 50 ? 'bg-emerald-900/40 border-emerald-400 text-emerald-400' : 'bg-amber-900/30 border-amber-500/50 text-amber-400'}`}>
+                                        <span className="text-sm font-bold">Score: {optimizedData.totalScore?.score}/65 ({optimizedData.totalScore?.rating})</span>
+                                    </div>
                                 </div>
 
-                                {optimizedData.score && optimizedData.score.overallScore < 70 && (
-                                    <div className="p-3 bg-red-900/40 border border-red-500/50 rounded-lg text-red-400 text-xs font-bold flex items-start gap-2 animate-in slide-in-from-top-2 duration-300">
+                                {optimizedData.badAdviceWarning && (
+                                    <div className="p-3 bg-red-900/40 border border-red-500/50 rounded-lg text-red-400 text-xs font-bold flex items-start gap-2">
                                         <span className="text-sm mt-0.5">⚠️</span>
-                                        <p>This listing could not reach the quality threshold. Review weaknesses manually.</p>
+                                        <p>{optimizedData.badAdviceWarning}</p>
                                     </div>
-                                )}
-
-                                {optimizedData.score && (
-                                    <div className="space-y-2 mb-4">
-                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-emerald-900/50">
-                                            <div className="text-xs text-slate-500 font-bold uppercase mb-2">Resolved</div>
-                                            <ul className="space-y-1 text-xs text-emerald-400">
-                                                {optimizedData.score.strengths.slice(0, 3).map((s, i) => (
-                                                    <li key={i} className="flex items-start gap-1"><Check className="w-3 h-3 mt-0.5 shrink-0" /> {s}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                        <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-700/50 flex flex-col gap-2 text-xs text-slate-400">
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Title Core</strong> <span className={optimizedData.score.pillars.title >= 25 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.title}/30</span></div>
-                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Tag Quality</strong> <span className={optimizedData.score.pillars.tags >= 28 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.tags}/35</span></div>
-                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">Description</strong> <span className={optimizedData.score.pillars.description >= 15 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.description}/20</span></div>
-                                                <div className="flex flex-col"><strong className="text-slate-500 text-[10px] uppercase">CTR Safety</strong> <span className={optimizedData.score.pillars.ctrRisk >= 10 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{optimizedData.score.pillars.ctrRisk}/15</span></div>
-                                            </div>
-                                            {optimizedData.score.ctrRiskReasons && optimizedData.score.ctrRiskReasons.length > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-slate-700/50">
-                                                    <strong className="text-slate-500 uppercase text-[10px] block mb-1">CTR Risk Factors detected:</strong>
-                                                    <ul className="space-y-1 text-[10px] text-slate-400">
-                                                        {optimizedData.score.ctrRiskReasons.map((r, i) => <li key={i}>• {r}</li>)}
-                                                    </ul>
-                                                </div>
-                                            )}
-                                            {optimizedData.score.tagSubPillars && (
-                                                <div className="mt-2 pt-2 border-t border-slate-700/50">
-                                                    <strong className="text-slate-500 uppercase text-[10px] block mb-1">Tag Score Breakdown ({optimizedData.score.pillars.tags}/35)</strong>
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                                                        {Object.values(optimizedData.score.tagSubPillars).map((sp: any, i: number) => (
-                                                            <div key={i} className="flex justify-between">
-                                                                <span className="text-slate-500">{sp.label}</span>
-                                                                <span className={sp.score >= sp.max ? 'text-emerald-400 font-bold' : sp.score > 0 ? 'text-amber-400' : 'text-red-400'}>{sp.score}/{sp.max}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {optimizedData.score && optimizedData.score.weaknesses && optimizedData.score.weaknesses.length > 0 && (
-                                    <button
-                                        onClick={handleRefine}
-                                        disabled={isRefining}
-                                        className="w-full py-2.5 bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-amber-50 border border-amber-500/50"
-                                    >
-                                        {isRefining ? <Loader2 className="animate-spin w-5 h-5" /> : <><Sparkles className="w-5 h-5 text-amber-300" /> Auto-Fix Weaknesses to Improve Score</>}
-                                    </button>
                                 )}
 
                                 <div className="space-y-4">
+                                    {/* Brainstorm Cloud */}
+                                    <div className="p-4 rounded-lg bg-slate-900/80 border border-purple-900/50 text-sm text-slate-300">
+                                        <div className="text-xs text-purple-400 font-bold uppercase mb-2">Brainstorm Cloud</div>
+                                        <div className="mb-2"><strong>Descriptive:</strong> <span className="text-slate-400">{optimizedData.brainstorm?.descriptive?.join(', ')}</span></div>
+                                        <div><strong>Anchors:</strong> <span className="text-slate-400">{optimizedData.brainstorm?.anchors?.join(', ')}</span></div>
+                                    </div>
+
+                                    {/* Score Breakdowns */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-700/50 text-sm text-slate-300">
+                                            <div className="text-xs text-slate-500 font-bold uppercase mb-2 flex justify-between">
+                                                <span>Title Score</span> 
+                                                <span className={optimizedData.titleScore?.total >= 25 ? 'text-emerald-400' : 'text-amber-400'}>{optimizedData.titleScore?.total}/30</span>
+                                            </div>
+                                            <ul className="space-y-1 text-xs text-slate-400">
+                                                {optimizedData.titleScore?.breakdown?.map((item, i) => <li key={i}>• {item}</li>)}
+                                            </ul>
+                                        </div>
+                                        <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-700/50 text-sm text-slate-300">
+                                            <div className="text-xs text-slate-500 font-bold uppercase mb-2 flex justify-between">
+                                                <span>Tag Score</span> 
+                                                <span className={optimizedData.tagScore?.total >= 30 ? 'text-emerald-400' : 'text-amber-400'}>{optimizedData.tagScore?.total}/35</span>
+                                            </div>
+                                            <ul className="space-y-1 text-xs text-slate-400">
+                                                {optimizedData.tagScore?.breakdown?.map((item, i) => <li key={i}>• {item}</li>)}
+                                            </ul>
+                                        </div>
+                                    </div>
+
                                     <section>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <Type className="w-3 h-3" /> Optimized Title
+                                                <Type className="w-3 h-3" /> Improved Title
                                             </label>
-                                            <button onClick={() => copyToClipboard(optimizedData.title, 'title')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                            <button onClick={() => copyToClipboard(optimizedData.improvedTitle, 'title')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
                                                 {copiedField === 'title' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                                                 {copiedField === 'title' ? 'Copied' : 'Copy'}
                                             </button>
                                         </div>
-                                        <p className="text-sm p-3 bg-slate-900 border border-amber-500/20 rounded-lg text-amber-50 shadow-inner">{optimizedData.title}</p>
-                                        <span className={`text-xs mt-1 inline-block ${(optimizedData.title?.length || 0) > 140 ? 'text-red-400' : (optimizedData.title?.length || 0) >= 125 ? 'text-emerald-400' : 'text-yellow-400'}`}>
-                                            {optimizedData.title?.length || 0}/140 characters
-                                        </span>
+                                        <p className="text-sm p-3 bg-slate-900 border border-amber-500/20 rounded-lg text-amber-50 shadow-inner">{optimizedData.improvedTitle}</p>
                                     </section>
 
                                     <section>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <Tag className="w-3 h-3" /> Optimized Tags ({optimizedData.tags?.length || 0}/13)
+                                                <Tag className="w-3 h-3" /> Improved Tags ({optimizedData.improvedTags?.length || 0}/13)
                                             </label>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xs text-slate-500">Click a tag to copy it</span>
-                                                <button onClick={() => copyToClipboard(optimizedData.tags.join(', '), 'all-tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
-                                                    {copiedField === 'all-tags' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                                    {copiedField === 'all-tags' ? 'Copied' : 'Copy All'}
-                                                </button>
-                                            </div>
+                                            <button onClick={() => copyToClipboard(optimizedData.improvedTags?.join(', '), 'all-tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                                {copiedField === 'all-tags' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                                {copiedField === 'all-tags' ? 'Copied' : 'Copy All'}
+                                            </button>
                                         </div>
                                         <div className="flex flex-wrap gap-2 p-3 bg-slate-900 border border-amber-500/20 rounded-lg">
-                                            {optimizedData.tags.map((tag, i) => (
+                                            {optimizedData.improvedTags?.map((tag, i) => (
                                                 <button
                                                     key={i}
                                                     onClick={() => copyToClipboard(tag, `tag-${i}`)}
                                                     className="text-xs px-2 py-1 bg-amber-500/10 text-amber-200 rounded border border-amber-500/20 hover:bg-amber-500/30 hover:border-amber-400/40 transition-all cursor-pointer flex items-center gap-1"
-                                                    title={`Copy: ${tag}`}
                                                 >
                                                     {copiedField === `tag-${i}` ? <Check className="w-3 h-3 text-emerald-400" /> : null}
                                                     {tag}
-                                                    {tag.length > 20 && <span className="text-red-400 ml-1">({tag.length})</span>}
                                                 </button>
                                             ))}
-                                        </div>
-                                    </section>
-
-                                    <section className="flex-1">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
-                                                <FileText className="w-3 h-3" /> Optimized Description
-                                            </label>
-                                            <button onClick={() => copyToClipboard(optimizedData.description, 'description')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
-                                                {copiedField === 'description' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                                                {copiedField === 'description' ? 'Copied' : 'Copy'}
-                                            </button>
-                                        </div>
-                                        <div className="text-xs p-3 bg-slate-900 border border-amber-500/20 rounded-lg text-slate-300 h-64 overflow-y-auto whitespace-pre-wrap shadow-inner leading-relaxed">
-                                            {optimizedData.description}
                                         </div>
                                     </section>
                                 </div>
@@ -1759,14 +1534,13 @@ Return ONLY a JSON object:
                         ) : (
                             <div className="text-center space-y-4">
                                 <Loader2 className="w-12 h-12 mx-auto animate-spin text-purple-500" />
-                                <p className="text-slate-400 animate-pulse">Consulting 2026 SEO Guidelines...</p>
+                                <p className="text-slate-400 animate-pulse">Running Nick Method SEO Brainstorm & Audit...</p>
                             </div>
                         )}
                     </div>
                 </div>
-            )
-            }
-        </div >
+            )}
+        </div>
     );
 };
 
