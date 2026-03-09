@@ -612,6 +612,9 @@ TITLE RULES ADDITION:
   - "digital download" — this is a fulfillment method, not a product anchor
   - "instant download" — same reason  
   - "printable download" — redundant
+- ABSOLUTELY BANNED IN FINAL STRING:
+  - "printable download", "digital download", "instant download"
+  - These will NEVER appear as the anchor of any keyword string. Ever.
 - VALID ANCHOR EXAMPLES (from Nick's method):
   - "junk journal kit" ✅ — what the item IS
   - "playing card ephemera" ✅ — what the item IS  
