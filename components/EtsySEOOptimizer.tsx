@@ -692,10 +692,18 @@ Analyze this listing and return a strictly formatted JSON object.
                 // Trim the last keyword string until under 140
                 const strings = aiResponse.improvedTitle.split(",");
                 while (strings.join(",").length > 140 && strings.length > 1) {
-                    strings[strings.length - 1] = strings[strings.length - 1]
-                        .split(" ").slice(0, -1).join(" ");
+                    const lastString = strings[strings.length - 1].trim();
+                    const words = lastString.split(" ");
+
+                    if (words.length <= 2) {
+                        // Drop the entire fragment if it falls below 2 words
+                        strings.pop();
+                    } else {
+                        // Trim the last word off the string
+                        strings[strings.length - 1] = words.slice(0, -1).join(" ");
+                    }
                 }
-                aiResponse.improvedTitle = strings.join(",").trim();
+                aiResponse.improvedTitle = strings.join(",").trim().replace(/,\s*$/, "");
             }
 
             setOptimizedData(aiResponse);
