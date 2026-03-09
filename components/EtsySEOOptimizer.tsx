@@ -342,9 +342,8 @@ interface ScrapedDetails {
 
 export interface NickMethodReport {
     brainstorm: { descriptive: string[], anchors: string[] };
-    titleScore: { total: number, breakdown: string[] };
-    tagScore: { total: number, breakdown: string[] };
-    totalScore: { score: number, rating: string };
+    originalScore: { titleScore: number, tagScore: number, total: number, rating: string, breakdown: string[] };
+    optimizedScore: { titleScore: number, tagScore: number, total: number, rating: string, breakdown: string[] };
     improvedTitle: string;
     improvedTags: string[];
     badAdviceWarning?: string;
@@ -372,6 +371,56 @@ export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
     { shopId: "BontikVintageDesigns", verified: false },
     { shopId: "ArtemisJournals", verified: false }
 ];
+
+async function extractVisualIdentity(imageUrl: string): Promise<string> {
+    const response = await fetch("/api/openai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            model: "gpt-4o",
+            max_tokens: 800,
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "image_url",
+                            image_url: { url: imageUrl }
+                        },
+                        {
+                            type: "text",
+                            text: `You are analyzing an Etsy product listing image for SEO purposes.
+              
+Describe exactly what you see. Be specific and literal — no guessing.
+Focus on:
+1. VISUAL MOTIFS: What objects, symbols, patterns are visible?
+2. COLOR PALETTE: What are the dominant colors and tones?
+3. STYLE/AESTHETIC: What artistic style is this? (e.g. Victorian, watercolor, grunge)
+4. MOOD/ATMOSPHERE: What feeling does this evoke? (e.g. spooky, elegant, rustic)
+5. PRODUCT TYPE: What is this product exactly based on visual evidence alone?
+6. TARGET BUYER: Who would buy this based on what you see?
+
+Return ONLY a JSON object:
+{
+  "motifs": ["playing cards", "spades", "hearts", ...],
+  "colors": ["deep red", "black", "aged parchment", ...],
+  "style": "vintage grunge watercolor",
+  "mood": ["nostalgic", "artistic", "bohemian"],
+  "productType": "printable junk journal ephemera kit",
+  "targetBuyer": "scrapbookers and mixed media artists"
+}`
+                        }
+                    ]
+                }
+            ]
+        })
+    });
+
+    const data = await response.json();
+    const raw = data.choices[0].message.content;
+    const clean = raw.replace(/```json|```/g, "").trim();
+    return clean;
+}
 
 interface EtsySEOOptimizerProps {
     onClose?: () => void;
@@ -498,7 +547,23 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         setIsOptimizing(true);
         setOptimizedData(null);
 
-        const prompt = `You are an Etsy SEO expert executing the "Nick Method".
+        try {
+            // 1. Get visual identity from first listing image
+            let visualIdentity = "None provided";
+            if (scrapedData.imageUrl) {
+                visualIdentity = await extractVisualIdentity(scrapedData.imageUrl);
+            }
+
+            // 2. Merge with existing text-based identity
+            const fullIdentity = `
+TEXT IDENTITY:
+${extractedIdentity ? JSON.stringify(extractedIdentity, null, 2) : "Assume this is a printable junk journal kit/pages product."}
+
+VISUAL IDENTITY (from image analysis):
+${visualIdentity}
+`;
+
+            const prompt = `You are an Etsy SEO expert executing the "Nick Method".
 
 ==== LISTING DATA ====
 Title: ${scrapedData.title}
@@ -506,17 +571,33 @@ Tags: ${scrapedData.tags.join(', ')}
 Description: ${scrapedData.description.substring(0, 1000)}
 
 ==== PRODUCT IDENTITY ====
-${extractedIdentity ? JSON.stringify(extractedIdentity, null, 2) : "Assume this is a printable junk journal kit/pages product."}
+${fullIdentity}
+
+PRODUCT IDENTITY includes both a text-based identity extracted from the 
+listing description AND a visual identity extracted directly from the 
+product images by a vision model. 
+
+The visual identity is ground truth — it overrides any assumptions. 
+If the visual identity says the product contains playing cards and grunge 
+paper, every brainstorm word and keyword must reflect that accurately.
 
 ==== NICK METHOD INSTRUCTIONS ====
 1. BRAINSTORM CLOUD:
    - "descriptive": Generate 15-20 highly descriptive, aesthetic, and specific words that describe the vibe, theme, and style in the listing.
    - "anchors": Generate 4-6 strong product anchor phrases (2-3 words each) that define exactly what the core item is.
 
-2. SEO SCORING (Grade out of 65 points):
-   - "titleScore": Grade the ORIGINAL title out of 30. Provide a 2-3 bullet point breakdown.
-   - "tagScore": Grade the ORIGINAL tags out of 35. Provide a 2-3 bullet point breakdown.
-   - "totalScore": Sum of titleScore and tagScore (X/65). Provide a rating string.
+2. SEO SCORING:
+The JSON must include TWO score objects:
+
+"originalScore": {
+  Grade the ORIGINAL title and tags using the Nick Method rubric.
+  titleScore: out of 30, tagScore: out of 35, total: out of 65, rating: string, breakdown: array of strings
+},
+
+"optimizedScore": {
+  Grade YOUR OWN improved title and improved tags using the same rubric.
+  titleScore: out of 30, tagScore: out of 35, total: out of 65, rating: string, breakdown: array of strings
+}
 
 3. OPTIMIZATION:
    - "improvedTitle": 
@@ -561,17 +642,19 @@ Analyze this listing and return a strictly formatted JSON object.
         "descriptive": ["word1", "word2", "word3", "...15 to 20 words"],
         "anchors": ["phrase1", "phrase2", "...4 to 6 phrases"]
     },
-    "titleScore": {
-        "total": 20,
+    "originalScore": {
+        "titleScore": 20,
+        "tagScore": 30,
+        "total": 50,
+        "rating": "Needs Work",
         "breakdown": ["Good point", "Bad point"]
     },
-    "tagScore": {
-        "total": 30,
+    "optimizedScore": {
+        "titleScore": 28,
+        "tagScore": 34,
+        "total": 62,
+        "rating": "Excellent",
         "breakdown": ["Good point", "Bad point"]
-    },
-    "totalScore": {
-        "score": 50,
-        "rating": "Needs Work"
     },
     "improvedTitle": "Your new optimized title here max 140 chars with commas not colons",
     "improvedTags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11", "tag12", "tag13"],
@@ -579,7 +662,6 @@ Analyze this listing and return a strictly formatted JSON object.
 }
 `;
 
-        try {
             const response = await fetch('/api/openai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -970,8 +1052,14 @@ Analyze this listing and return a strictly formatted JSON object.
                                         <Sparkles className="w-5 h-5" />
                                         Nick Method SEO Report
                                     </h2>
-                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${optimizedData.totalScore?.score >= 50 ? 'bg-emerald-900/40 border-emerald-400 text-emerald-400' : 'bg-amber-900/30 border-amber-500/50 text-amber-400'}`}>
-                                        <span className="text-sm font-bold">Score: {optimizedData.totalScore?.score}/65 ({optimizedData.totalScore?.rating})</span>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${optimizedData.originalScore?.total >= 50 ? 'bg-emerald-900/40 border-emerald-400 text-emerald-400' : 'bg-slate-900/30 border-slate-500/50 text-slate-400'}`}>
+                                            <span className="text-xs font-bold">Original: {optimizedData.originalScore?.total}/65</span>
+                                        </div>
+                                        <span className="text-slate-500 font-bold">→</span>
+                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${optimizedData.optimizedScore?.total >= 50 ? 'bg-emerald-900/40 border-emerald-400 text-emerald-400' : 'bg-amber-900/30 border-amber-500/50 text-amber-400'}`}>
+                                            <span className="text-sm font-bold">Optimized: {optimizedData.optimizedScore?.total}/65 ({optimizedData.optimizedScore?.rating})</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -994,20 +1082,26 @@ Analyze this listing and return a strictly formatted JSON object.
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-700/50 text-sm text-slate-300">
                                             <div className="text-xs text-slate-500 font-bold uppercase mb-2 flex justify-between">
-                                                <span>Title Score</span>
-                                                <span className={optimizedData.titleScore?.total >= 25 ? 'text-emerald-400' : 'text-amber-400'}>{optimizedData.titleScore?.total}/30</span>
+                                                <span>Original Listing Breakdown</span>
+                                                <div className="flex gap-3">
+                                                    <span className={optimizedData.originalScore?.titleScore >= 25 ? 'text-emerald-400' : 'text-amber-400'}>Title: {optimizedData.originalScore?.titleScore}/30</span>
+                                                    <span className={optimizedData.originalScore?.tagScore >= 30 ? 'text-emerald-400' : 'text-amber-400'}>Tags: {optimizedData.originalScore?.tagScore}/35</span>
+                                                </div>
                                             </div>
                                             <ul className="space-y-1 text-xs text-slate-400">
-                                                {optimizedData.titleScore?.breakdown?.map((item, i) => <li key={i}>• {item}</li>)}
+                                                {optimizedData.originalScore?.breakdown?.map((item, i) => <li key={i}>• {item}</li>)}
                                             </ul>
                                         </div>
-                                        <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-700/50 text-sm text-slate-300">
-                                            <div className="text-xs text-slate-500 font-bold uppercase mb-2 flex justify-between">
-                                                <span>Tag Score</span>
-                                                <span className={optimizedData.tagScore?.total >= 30 ? 'text-emerald-400' : 'text-amber-400'}>{optimizedData.tagScore?.total}/35</span>
+                                        <div className="p-4 rounded-lg bg-slate-900/80 border border-emerald-900/50 text-sm text-slate-300">
+                                            <div className="text-xs text-emerald-500 font-bold uppercase mb-2 flex justify-between">
+                                                <span>Optimized Listing Breakdown</span>
+                                                <div className="flex gap-3">
+                                                    <span className={optimizedData.optimizedScore?.titleScore >= 25 ? 'text-emerald-400' : 'text-amber-400'}>Title: {optimizedData.optimizedScore?.titleScore}/30</span>
+                                                    <span className={optimizedData.optimizedScore?.tagScore >= 30 ? 'text-emerald-400' : 'text-amber-400'}>Tags: {optimizedData.optimizedScore?.tagScore}/35</span>
+                                                </div>
                                             </div>
                                             <ul className="space-y-1 text-xs text-slate-400">
-                                                {optimizedData.tagScore?.breakdown?.map((item, i) => <li key={i}>• {item}</li>)}
+                                                {optimizedData.optimizedScore?.breakdown?.map((item, i) => <li key={i}>• {item}</li>)}
                                             </ul>
                                         </div>
                                     </div>
