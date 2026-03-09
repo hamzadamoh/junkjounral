@@ -582,7 +582,17 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     const { valid } = sanitizeSynonyms(identity.theme_synonyms || []);
                     identity.theme_synonyms = valid;
 
-                    setExtractedIdentity(identity);
+                    // Standardize identity with safe defaults to prevent render crashes
+                    const normalizedIdentity: JunkJournalPagesIdentity = {
+                        ...identity,
+                        secondary_themes: Array.isArray(identity.secondary_themes) ? identity.secondary_themes : [],
+                        theme_synonyms: Array.isArray(identity.theme_synonyms) ? identity.theme_synonyms : [],
+                        file_types: Array.isArray(identity.file_types) ? identity.file_types : [],
+                        color_palette: Array.isArray(identity.color_palette) ? identity.color_palette : [],
+                        locked_identity_terms: Array.isArray(identity.locked_identity_terms) ? identity.locked_identity_terms : [],
+                    };
+
+                    setExtractedIdentity(normalizedIdentity);
                     setSynonymInput((Array.isArray(valid) ? valid : []).join(', '));
                     setShowIdentityConfirmation(true);
                 }
@@ -1001,7 +1011,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                     <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50">
                                         <div className="text-xs text-slate-500 font-bold uppercase mb-2">Weaknesses</div>
                                         <ul className="space-y-1 text-xs text-red-400">
-                                            {scrapedData.score.weaknesses.slice(0, 2).map((w, i) => (
+                                            {(Array.isArray(scrapedData.score.weaknesses) ? scrapedData.score.weaknesses : []).slice(0, 2).map((w, i) => (
                                                 <li key={i} className="flex items-start gap-1"><span className="text-[10px] mt-0.5 shrink-0">⚠️</span> {w}</li>
                                             ))}
                                         </ul>
@@ -1019,7 +1029,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                         <div className="mt-2 pt-2 border-t border-slate-700/50">
                                             <strong className="text-slate-500 uppercase text-[10px] block mb-1">CTR Risk Factors detected:</strong>
                                             <ul className="space-y-1 text-[10px] text-slate-400">
-                                                {scrapedData.score.ctrRiskReasons.map((r, i) => <li key={i}>• {r}</li>)}
+                                                {(Array.isArray(scrapedData.score.ctrRiskReasons) ? scrapedData.score.ctrRiskReasons : []).map((r, i) => <li key={i}>• {r}</li>)}
                                             </ul>
                                         </div>
                                     )}
@@ -1027,7 +1037,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                         <div className="mt-2 pt-2 border-t border-slate-700/50">
                                             <strong className="text-slate-500 uppercase text-[10px] block mb-1">Tag Score Breakdown ({scrapedData.score.pillars.tags}/35)</strong>
                                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                                                {Object.values(scrapedData.score.tagSubPillars).map((sp: any, i: number) => (
+                                                {Object.values(scrapedData.score.tagSubPillars || {}).map((sp: any, i: number) => (
                                                     <div key={i} className="flex justify-between">
                                                         <span className="text-slate-500">{sp.label}</span>
                                                         <span className={sp.score >= sp.max ? 'text-emerald-400 font-bold' : sp.score > 0 ? 'text-amber-400' : 'text-red-400'}>{sp.score}/{sp.max}</span>
@@ -1087,7 +1097,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Secondary Themes (Comma separated)</label>
                                         <input
                                             type="text"
-                                            value={extractedIdentity.secondary_themes.join(', ')}
+                                            value={(Array.isArray(extractedIdentity?.secondary_themes) ? extractedIdentity.secondary_themes : []).join(', ')}
                                             onChange={(e) => setExtractedIdentity({ ...extractedIdentity, secondary_themes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
                                             className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
                                         />
@@ -1096,7 +1106,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Theme Synonyms (comma separated)</label>
                                         {rejectedSynonyms.length > 0 && (
                                             <div className="mb-2 p-2 bg-red-900/30 border border-red-500/40 rounded text-[11px] text-red-400">
-                                                ⚠️ These extracted synonyms were rejected (format words or invalid): [{rejectedSynonyms.map(s => `"${s}"`).join(', ')}] — not used in scoring
+                                                ⚠️ These extracted synonyms were rejected (format words or invalid): [{(Array.isArray(rejectedSynonyms) ? rejectedSynonyms : []).map(s => `"${s}"`).join(', ')}] — not used in scoring
                                             </div>
                                         )}
                                         {extractedIdentity.theme_synonyms.length === 0 && (
@@ -1116,7 +1126,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                     <div>
                                         <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Format Specs</label>
                                         <p className="text-xs text-slate-400 bg-slate-900/50 p-2 rounded border border-slate-700/50">
-                                            {extractedIdentity.page_count}+ Pages • {extractedIdentity.file_types.join(', ')} • {extractedIdentity.print_size} • Commercial Use
+                                            {extractedIdentity.page_count}+ Pages • {(Array.isArray(extractedIdentity?.file_types) ? extractedIdentity.file_types : []).join(', ')} • {extractedIdentity.print_size} • Commercial Use
                                         </p>
                                     </div>
                                 </div>
@@ -1222,8 +1232,8 @@ Analyze this listing and return a strictly formatted JSON object.
                                     {/* Brainstorm Cloud */}
                                     <div className="p-4 rounded-lg bg-slate-900/80 border border-purple-900/50 text-sm text-slate-300">
                                         <div className="text-xs text-purple-400 font-bold uppercase mb-2">Brainstorm Cloud</div>
-                                        <div className="mb-2"><strong>Descriptive:</strong> <span className="text-slate-400">{optimizedData.brainstorm?.descriptive?.join(', ')}</span></div>
-                                        <div><strong>Anchors:</strong> <span className="text-slate-400">{optimizedData.brainstorm?.anchors?.join(', ')}</span></div>
+                                        <div className="mb-2"><strong>Descriptive:</strong> <span className="text-slate-400">{(Array.isArray(optimizedData.brainstorm?.descriptive) ? optimizedData.brainstorm.descriptive : []).join(', ')}</span></div>
+                                        <div><strong>Anchors:</strong> <span className="text-slate-400">{(Array.isArray(optimizedData.brainstorm?.anchors) ? optimizedData.brainstorm.anchors : []).join(', ')}</span></div>
                                     </div>
 
                                     {/* Score Breakdowns */}

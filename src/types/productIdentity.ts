@@ -2,7 +2,7 @@ export interface JunkJournalPagesIdentity {
     core_product_type: "junk_journal_pages";
     format: "digital_printable";
     delivery_method: "pdf_google_drive_link";
-    file_types: ["JPG"];
+    file_types: string[];
     print_size: "8.5x11";
     page_count: number | null;        // Always 160+
     dpi: string | null;               // e.g. "300 DPI"
