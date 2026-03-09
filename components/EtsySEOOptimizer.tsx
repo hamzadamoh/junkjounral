@@ -608,14 +608,24 @@ TITLE RULES (non-negotiable):
 - Example structure: "Spooky dark junk journal kit printable pages, vintage grunge poker ephemera digital, retro playing card scrapbook paper, antique craft journal download"
 - NO "and", NO colons, NO natural sentences.
 TITLE RULES ADDITION:
-- The final keyword string must follow the same [descriptor] [descriptor] [anchor noun] 
-  pattern as all other strings. Never end with a weak 1-2 word fragment.
+- BANNED ANCHOR PHRASES:
+  - "digital download" — this is a fulfillment method, not a product anchor
+  - "instant download" — same reason  
+  - "printable download" — redundant
+- VALID ANCHOR EXAMPLES (from Nick's method):
+  - "junk journal kit" ✅ — what the item IS
+  - "playing card ephemera" ✅ — what the item IS  
+  - "scrapbook paper pack" ✅ — what the item IS
+- Each keyword string must follow this exact pattern:
+  [descriptor] [descriptor] [anchor noun phrase]
+  Nick's example: "soft marmalade tabby cat plush toy"
+  - "soft marmalade tabby" = descriptors
+  - "cat plush toy" = anchor (what it IS)
+- Your strings must mirror this. Never end a string on a lone adjective.
+- Never start a string with an anchor before its descriptors.
 - After writing the title, count the exact characters.
 - If the count is below 130, you MUST add descriptive words to the weakest string 
   until you reach 130-140. Do not submit a title under 130 characters.
-- Example of a weak final string (BANNED): "antique poker pages"
-- Example of a strong final string: "antique distressed poker ephemera kit"
-
    - "improvedTags": 
 TAG RULES:
 - Generate EXACTLY 13 unique tags (max 20 chars each). DO NOT return fewer than 13.
