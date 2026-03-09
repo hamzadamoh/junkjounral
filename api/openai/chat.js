@@ -38,7 +38,9 @@ export default async function handler(req, res) {
       headers['X-Title'] = 'Etsy SEO Optimizer';
     }
 
-    const fetchAI = async (currentModel, isRetry = false) => {
+    const fetchAI = async (currentModel, retryCount = 0) => {
+      console.log(`[AI Proxy] Request to ${currentModel} (Attempt ${retryCount + 1})`);
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
@@ -52,7 +54,7 @@ export default async function handler(req, res) {
 
       // Handle Rate Limits (429) or Temporary Service Issues (503/502)
       if ((response.status === 429 || response.status === 503 || response.status === 502) && isOpenRouter) {
-        console.warn(`[Proxy] ${currentModel} returned ${response.status}. Attempting fallback/retry...`);
+        console.warn(`[AI Proxy] ${currentModel} returned ${response.status}. retryCount: ${retryCount}`);
 
         // Define fallback map for free models
         const fallbacks = {
@@ -62,15 +64,17 @@ export default async function handler(req, res) {
 
         const fallbackModel = fallbacks[currentModel];
 
-        if (!isRetry) {
-          // First attempt: Wait 1.5s and retry SAME model
-          await new Promise(r => setTimeout(r, 1500));
-          return fetchAI(currentModel, true);
+        if (retryCount < 2) {
+          // Attempt 1 & 2: Wait and retry SAME model
+          const delay = (retryCount + 1) * 2000;
+          console.log(`[AI Proxy] Retrying ${currentModel} in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          return fetchAI(currentModel, retryCount + 1);
         } else if (fallbackModel) {
-          // Second attempt failed: Swap to FALLBACK model
-          console.log(`[Proxy] Retrying with fallback: ${fallbackModel}`);
-          await new Promise(r => setTimeout(r, 500));
-          return fetchAI(fallbackModel, true); // Mark as retry so we don't loop forever
+          // Third attempt failed: Swap to FALLBACK model
+          console.log(`[AI Proxy] Exceeded retries for ${currentModel}. Failing over to: ${fallbackModel}`);
+          await new Promise(r => setTimeout(r, 1000));
+          return fetchAI(fallbackModel, 0); // Reset retry count for fallback
         }
       }
 
@@ -93,4 +97,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }
-

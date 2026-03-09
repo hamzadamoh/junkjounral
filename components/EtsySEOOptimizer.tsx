@@ -536,11 +536,45 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     tags: data.tags
                 });
                 setScrapedData(prev => prev ? { ...prev, score } : null);
+
+                // --- IDENTITY GUARD START ---
+                setIsAnalyzingProduct(true);
+                const identityPrompt = buildIdentityLockPrompt(data.description);
+                const identityResponse = await fetch('/api/openai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: useOpenRouter ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o',
+                        isOpenRouter: useOpenRouter,
+                        messages: [
+                            { role: 'system', content: 'You are an Etsy SEO expert. Respond ONLY with valid JSON.' },
+                            { role: 'user', content: identityPrompt }
+                        ],
+                        response_format: { type: 'json_object' }
+                    })
+                });
+
+                if (identityResponse.ok) {
+                    const idResult = await identityResponse.json();
+                    let idContent = idResult.choices[0].message.content;
+                    if (idContent.includes('```')) idContent = idContent.replace(/```json|```/g, '').trim();
+                    const identity = JSON.parse(idContent) as JunkJournalPagesIdentity;
+
+                    // Sanitize synonyms
+                    const { valid } = sanitizeSynonyms(identity.theme_synonyms || []);
+                    identity.theme_synonyms = valid;
+
+                    setExtractedIdentity(identity);
+                    setSynonymInput(valid.join(', '));
+                    setShowIdentityConfirmation(true);
+                }
             } catch (evalErr) {
-                console.error("Failed to evaluate original listing:", evalErr);
+                console.error("Failed to evaluate/analyze listing:", evalErr);
             } finally {
                 setIsEvaluatingOriginal(false);
+                setIsAnalyzingProduct(false);
             }
+            // --- IDENTITY GUARD END ---
 
         } catch (err: any) {
             setError(err.message);
