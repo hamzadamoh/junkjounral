@@ -1,0 +1,130 @@
+App.tsx(52,34): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+App.tsx(542,17): error TS2339: Property 'type' does not exist on type 'unknown'.
+App.tsx(543,24): error TS2339: Property 'name' does not exist on type 'unknown'.
+App.tsx(547,16): error TS2339: Property 'size' does not exist on type 'unknown'.
+App.tsx(548,24): error TS2339: Property 'name' does not exist on type 'unknown'.
+App.tsx(560,39): error TS2339: Property 'name' does not exist on type 'unknown'.
+App.tsx(563,28): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'Blob'.
+  Type '{}' is missing the following properties from type 'Blob': size, type, arrayBuffer, bytes, and 3 more.
+App.tsx(967,24): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+App.tsx(968,24): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+App.tsx(998,15): error TS2304: Cannot find name 'useHuggingFace'.
+App.tsx(2243,19): error TS2339: Property 'originalUrl' does not exist on type 'unknown'.
+App.tsx(2245,89): error TS2339: Property 'originalUrl' does not exist on type 'unknown'.
+App.tsx(2250,47): error TS2339: Property 'url' does not exist on type 'unknown'.
+App.tsx(2254,45): error TS2339: Property 'url' does not exist on type 'unknown'.
+App.tsx(2256,26): error TS2339: Property 'originalUrl' does not exist on type 'unknown'.
+App.tsx(2258,101): error TS2339: Property 'originalUrl' does not exist on type 'unknown'.
+App.tsx(2262,47): error TS2339: Property 'url' does not exist on type 'unknown'.
+App.tsx(2265,45): error TS2339: Property 'url' does not exist on type 'unknown'.
+App.tsx(2268,43): error TS2339: Property 'url' does not exist on type 'unknown'.
+App.tsx(2465,9): error TS2554: Expected 2-3 arguments, but got 4.
+App.tsx(2947,57): error TS2339: Property 'url' does not exist on type 'unknown'.
+App.tsx(3718,63): error TS2339: Property 'fullAnalysis' does not exist on type 'ImageAnalysisResponse'.
+App.tsx(3731,55): error TS2339: Property 'status' does not exist on type 'string'.
+App.tsx(3731,93): error TS2551: Property 'value' does not exist on type 'string'. Did you mean 'valueOf'?
+App.tsx(3738,44): error TS2339: Property 'status' does not exist on type 'string'.
+App.tsx(3741,57): error TS2551: Property 'value' does not exist on type 'string'. Did you mean 'valueOf'?
+App.tsx(3748,44): error TS2339: Property 'status' does not exist on type 'string'.
+App.tsx(3749,80): error TS2551: Property 'value' does not exist on type 'string'. Did you mean 'valueOf'?
+components/ArcaneSplitter.tsx(310,15): error TS2322: Type '{ id: string; base64: any; row: number; col: number; name: string; isAnalyzing: false; gridId: string; }[]' is not assignable to type '(AnalyzedSlice & { gridId?: string; })[]'.
+  Type '{ id: string; base64: any; row: number; col: number; name: string; isAnalyzing: false; gridId: string; }' is not assignable to type 'AnalyzedSlice & { gridId?: string; }'.
+    Type '{ id: string; base64: any; row: number; col: number; name: string; isAnalyzing: false; gridId: string; }' is missing the following properties from type 'AnalyzedSlice': width, height, originalBounds, croppedBounds
+components/ArcaneSplitter.tsx(363,32): error TS2339: Property 'gridId' does not exist on type 'unknown'.
+components/ArcaneSplitter.tsx(1338,40): error TS2339: Property 'toLowerCase' does not exist on type 'unknown'.
+index.tsx(50,17): error TS2339: Property 'props' does not exist on type 'ErrorBoundary'.
+services/chatgptService.ts(989,26): error TS2367: This comparison appears to be unintentional because the types '"openai" | "openrouter"' and '"huggingface"' have no overlap.
+services/chatgptService.ts(1846,7): error TS2345: Argument of type 'number' is not assignable to parameter of type 'boolean'.
+services/chatgptService.ts(2021,22): error TS2367: This comparison appears to be unintentional because the types '"Muted" | "Normal" | "Colorful" | "Multicolored"' and '"Custom / Override"' have no overlap.
+services/chatgptService.ts(2160,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'boolean'.
+services/env.ts(22,25): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(43,25): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(64,25): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(95,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(134,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(191,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(231,25): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(252,25): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/env.ts(290,29): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/replicateService.ts(5,22): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/ttapiService.ts(7,22): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/ttapiService.ts(12,22): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/ttapiService.ts(17,22): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/ttapiService.ts(1112,35): error TS2339: Property 'message_id' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1112,61): error TS2339: Property 'messageId' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1112,86): error TS2339: Property 'id' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1113,37): error TS2339: Property 'message_hash' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1113,65): error TS2339: Property 'messageHash' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1113,92): error TS2339: Property 'hash' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1114,35): error TS2339: Property 'channel_id' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1114,61): error TS2339: Property 'channelId' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1114,86): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/ttapiService.ts(1137,27): error TS2339: Property 'components' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1137,67): error TS2339: Property 'components' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1138,75): error TS2339: Property 'components' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1140,27): error TS2339: Property 'variations' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1140,67): error TS2339: Property 'variations' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1141,75): error TS2339: Property 'variations' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1143,27): error TS2339: Property 'buttons' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1143,64): error TS2339: Property 'buttons' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1144,72): error TS2339: Property 'buttons' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1161,48): error TS2339: Property 'image_urls' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1161,75): error TS2339: Property 'image_urls' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1162,37): error TS2339: Property 'image_urls' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1185,27): error TS2339: Property 'cdnImage' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1186,38): error TS2339: Property 'cdnImage' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1188,34): error TS2339: Property 'discordImage' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1189,38): error TS2339: Property 'discordImage' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1238,36): error TS2339: Property 'image_url' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1239,40): error TS2339: Property 'image_url' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1243,55): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1244,38): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1244,88): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1245,47): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1245,81): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1246,43): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1248,54): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1248,84): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1249,43): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1251,40): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1252,44): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1255,52): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1256,41): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1260,45): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1260,80): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1261,42): error TS2339: Property 'output' does not exist on type '{ images?: string[]; image?: string; url?: string; urls?: string[]; }'.
+services/ttapiService.ts(1271,69): error TS2339: Property 'startsWith' does not exist on type 'never'.
+services/ttapiService.ts(1356,23): error TS2554: Expected 1-4 arguments, but got 6.
+services/ttapiService.ts(1408,93): error TS2554: Expected 1-4 arguments, but got 6.
+services/ttapiService.ts(1621,45): error TS2339: Property 'env' does not exist on type 'ImportMeta'.
+services/ttapiService.ts(1724,9): error TS2339: Property 'imageSmoothingEnabled' does not exist on type 'RenderingContext'.
+  Property 'imageSmoothingEnabled' does not exist on type 'ImageBitmapRenderingContext'.
+services/ttapiService.ts(1725,9): error TS2339: Property 'imageSmoothingQuality' does not exist on type 'RenderingContext'.
+  Property 'imageSmoothingQuality' does not exist on type 'ImageBitmapRenderingContext'.
+services/ttapiService.ts(1736,13): error TS2339: Property 'clearRect' does not exist on type 'RenderingContext'.
+  Property 'clearRect' does not exist on type 'ImageBitmapRenderingContext'.
+services/ttapiService.ts(1739,13): error TS2339: Property 'drawImage' does not exist on type 'RenderingContext'.
+  Property 'drawImage' does not exist on type 'ImageBitmapRenderingContext'.
+src/app/api/generate/route.ts(1,43): error TS2307: Cannot find module 'next/server' or its corresponding type declarations.
+src/app/api/generate/route.ts(2,87): error TS2307: Cannot find module '@/lib/midjourney' or its corresponding type declarations.
+src/app/api/generate/route.ts(3,29): error TS2307: Cannot find module '@/lib/prompts' or its corresponding type declarations.
+src/app/api/generate/route.ts(4,36): error TS2307: Cannot find module '@/lib/types' or its corresponding type declarations.
+src/app/api/wordpress/upload/route.ts(1,43): error TS2307: Cannot find module 'next/server' or its corresponding type declarations.
+src/app/generate/page.tsx(4,44): error TS2307: Cannot find module 'next/navigation' or its corresponding type declarations.
+src/app/generate/page.tsx(5,38): error TS2307: Cannot find module '@/lib/themes' or its corresponding type declarations.
+src/app/generate/page.tsx(6,65): error TS2307: Cannot find module '@/lib/types' or its corresponding type declarations.
+src/app/generate/page.tsx(7,40): error TS2307: Cannot find module '@/lib/prompts' or its corresponding type declarations.
+src/app/generate/page.tsx(8,24): error TS2307: Cannot find module 'framer-motion' or its corresponding type declarations.
+src/app/generate/page.tsx(10,18): error TS2307: Cannot find module 'next/link' or its corresponding type declarations.
+src/app/generate/page.tsx(11,35): error TS2307: Cannot find module '@/components/SynestheticButton' or its corresponding type declarations.
+src/app/page.tsx(4,18): error TS2307: Cannot find module 'next/link' or its corresponding type declarations.
+src/app/page.tsx(5,24): error TS2307: Cannot find module 'framer-motion' or its corresponding type declarations.
+src/app/page.tsx(7,33): error TS2307: Cannot find module '@/components/BiomorphicShape' or its corresponding type declarations.
+src/app/page.tsx(8,35): error TS2307: Cannot find module '@/components/SynestheticButton' or its corresponding type declarations.
+src/app/page.tsx(9,28): error TS2307: Cannot find module '@/components/OrganicNav' or its corresponding type declarations.
+src/app/page.tsx(175,57): error TS2339: Property 'url' does not exist on type 'unknown'.
+src/app/preview/page.tsx(4,44): error TS2307: Cannot find module 'next/navigation' or its corresponding type declarations.
+src/app/preview/page.tsx(5,41): error TS2307: Cannot find module 'framer-motion' or its corresponding type declarations.
+src/app/preview/page.tsx(7,18): error TS2307: Cannot find module 'next/link' or its corresponding type declarations.
+src/app/preview/page.tsx(8,19): error TS2307: Cannot find module 'next/image' or its corresponding type declarations.
+src/app/preview/page.tsx(332,15): error TS2322: Type 'unknown' is not assignable to type 'string'.

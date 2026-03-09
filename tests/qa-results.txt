@@ -1,0 +1,37 @@
+﻿ÔòÉÔòÉÔòÉ TEST 1: VINTAGE SWATCHBOOK ÔòÉÔòÉÔòÉ
+
+OLD FORMAT (comma keywords):
+  "Vintage Swatchbook Junk Journal Pages, Vintage Swatch Collage, Vintage Color Swatch Printable, Vintage Paint Chip Papers" (120 chars)
+[Theme Coverage Debug] primary_theme="vintage swatchbook" | synonyms=["color swatch","paint chip","color palette"] | expanded=[vintage, swatchbook, color swatch, paint chip, color palette] | matching tags (2): [ 'vintage journal', 'book journal' ]
+  Score: 73/100 | Title: 21
+  Strengths: Core intent 'junk journal pages' found in first 60 chars (strong anchor). | Primary theme 'vintage swatchbook' anchored in first 60 chars. | Title length in ideal 120-140 character range.
+  Weaknesses: No natural connectors found ('with', 'for', 'and'). Title reads like a keyword list, not a product name. | Redundancy detected (-2pts): root word repeated 4├ù ('vintage') ÔÇö max allowed is 2 | Zero competitor phrases in title (-5pts). Title ignores proven market vocabulary.
+
+NEW FORMAT (NLP sentence):
+  "Vintage Swatchbook Junk Journal Pages with Color Swatch Ephemera, Printable Paint Chip Collage Sheets for Art Journals" (118 chars)
+[Theme Coverage Debug] primary_theme="vintage swatchbook" | synonyms=["color swatch","paint chip","color palette"] | expanded=[vintage, swatchbook, color swatch, paint chip, color palette] | matching tags (2): [ 'vintage journal', 'book journal' ]
+  Score: 84/100 | Title: 32
+  Strengths: Core intent 'junk journal pages' found in first 60 chars (strong anchor). | Primary theme 'vintage swatchbook' anchored in first 60 chars. | Strong NLP sentence structure with multiple natural connectors.
+  Weaknesses: Only 2 competitor phrase(s) in title (+2pts). Use more proven theme vocabulary. | Title is only 118 chars. Target 120-140 for maximum search coverage.
+
+
+ÔòÉÔòÉÔòÉ TEST 2: SHABBY CHIC ROSE ÔòÉÔòÉÔòÉ
+
+OLD FORMAT (comma keywords):
+  "Shabby Chic Rose Junk Journal Pages, Shabby Rose Ephemera, Rose Collage Sheets, Rose Scrapbook, Vintage Rose Papers" (115 chars)
+[Theme Coverage Debug] primary_theme="shabby chic rose" | synonyms=["romantic floral","cottage rose","pink roses"] | expanded=[shabby, chic, rose, romantic floral, cottage rose, pink ro] | matching tags (0): []
+  Score: 75/100 | Title: 18
+  Strengths: Core intent 'junk journal pages' found in first 60 chars (strong anchor). | Primary theme 'shabby chic rose' anchored in first 60 chars.
+  Weaknesses: Missing format signal ('printable' or 'digital download') in title. | No natural connectors found ('with', 'for', 'and'). Title reads like a keyword list, not a product name. | Redundancy detected (-2pts): root word repeated 5├ù ('rose') ÔÇö max allowed is 2 | Zero competitor phrases in title (-5pts). Title ignores proven market vocabulary. | Title is only 115 chars. Target 120-140 for maximum search coverage.
+
+NEW FORMAT (NLP sentence):
+  "Shabby Chic Rose Junk Journal Pages with Floral Ephemera Collage, Printable Cottagecore Scrapbook Sheets for Crafters" (117 chars)
+[Theme Coverage Debug] primary_theme="shabby chic rose" | synonyms=["romantic floral","cottage rose","pink roses"] | expanded=[shabby, chic, rose, romantic floral, cottage rose, pink ro] | matching tags (0): []
+  Score: 89/100 | Title: 32
+  Strengths: Core intent 'junk journal pages' found in first 60 chars (strong anchor). | Primary theme 'shabby chic rose' anchored in first 60 chars. | Strong NLP sentence structure with multiple natural connectors.
+  Weaknesses: Only 1 competitor phrase(s) in title (+2pts). Use more proven theme vocabulary. | Title is only 117 chars. Target 120-140 for maximum search coverage.
+
+
+ÔòÉÔòÉÔòÉ SUMMARY ÔòÉÔòÉÔòÉ
+Vintage Swatchbook  ÔÇö Old: 73 ÔåÆ New: 84 (+11)
+Shabby Chic Rose    ÔÇö Old: 75 ÔåÆ New: 89 (+14)
