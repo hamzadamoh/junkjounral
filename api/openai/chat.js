@@ -8,30 +8,40 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Get the request body from the frontend
+    const { model, messages, max_tokens, temperature, isOpenRouter } = req.body;
+
     // Use server-side environment variable (NO VITE_ prefix)
-    const apiKey = process.env.OPENAI_API_KEY;
-    
+    const apiKey = isOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY;
+    const apiUrl = isOpenRouter
+      ? 'https://openrouter.ai/api/v1/chat/completions'
+      : 'https://api.openai.com/v1/chat/completions';
+
     if (!apiKey) {
-      console.error('OpenAI API key missing');
-      return res.status(500).json({ 
-        error: 'OpenAI API key not configured. Set OPENAI_API_KEY in Vercel environment variables.' 
+      console.error(`${isOpenRouter ? 'OpenRouter' : 'OpenAI'} API key missing`);
+      return res.status(500).json({
+        error: `${isOpenRouter ? 'OpenRouter' : 'OpenAI'} API key not configured. Set it in Vercel environment variables.`
       });
     }
-
-    // Get the request body from the frontend
-    const { model, messages, max_tokens, temperature } = req.body;
 
     if (!model || !messages) {
       return res.status(400).json({ error: 'Missing model or messages parameters' });
     }
 
-    // Call OpenAI API from the server (no CORS issues, API key hidden)
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = req.headers.referer || 'http://localhost:3000';
+      headers['X-Title'] = 'Etsy SEO Optimizer';
+    }
+
+    // Call API from the server (no CORS issues, API key hidden)
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages,

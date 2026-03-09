@@ -372,12 +372,14 @@ export const DEFAULT_REFERENCE_SHOPS: ReferenceShop[] = [
     { shopId: "ArtemisJournals", verified: false }
 ];
 
-async function extractVisualIdentity(imageUrl: string): Promise<string> {
+async function extractVisualIdentity(imageUrl: string, useOpenRouter: boolean): Promise<string> {
+    const model = useOpenRouter ? "qwen/qwen-2.5-vl-72b-instruct:free" : "gpt-4o";
     const response = await fetch("/api/openai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            model: "gpt-4o",
+            model: model,
+            isOpenRouter: useOpenRouter,
             max_tokens: 800,
             messages: [
                 {
@@ -434,6 +436,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [url, setUrl] = useState('');
     const [isScraping, setIsScraping] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
+    const [useOpenRouter, setUseOpenRouter] = useState(false);
 
     const [isEvaluatingOriginal, setIsEvaluatingOriginal] = useState(false);
     const [isEvaluatingOptimized, setIsEvaluatingOptimized] = useState(false);
@@ -555,7 +558,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
             // 1. Get visual identity from first listing image
             let visualIdentity = "None provided";
             if (scrapedData.imageUrl) {
-                visualIdentity = await extractVisualIdentity(scrapedData.imageUrl);
+                visualIdentity = await extractVisualIdentity(scrapedData.imageUrl, useOpenRouter);
             }
 
             // 2. Merge with existing text-based identity
@@ -719,7 +722,8 @@ Analyze this listing and return a strictly formatted JSON object.
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    model: 'gpt-4o',
+                    model: useOpenRouter ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o',
+                    isOpenRouter: useOpenRouter,
                     messages: [
                         { role: 'system', content: 'You are an Etsy SEO expert. Respond ONLY with valid JSON matching the exact schema requested.' },
                         { role: 'user', content: prompt }
@@ -794,6 +798,18 @@ Analyze this listing and return a strictly formatted JSON object.
             </header>
 
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl space-y-4">
+                <div className="flex items-center justify-end mb-2">
+                    <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-700">
+                        <span className={`text-xs font-medium ${!useOpenRouter ? 'text-blue-400' : 'text-slate-500'}`}>OpenAI (GPT-4o)</span>
+                        <button
+                            onClick={() => setUseOpenRouter(!useOpenRouter)}
+                            className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${useOpenRouter ? 'bg-purple-600' : 'bg-slate-600'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${useOpenRouter ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                        <span className={`text-xs font-medium ${useOpenRouter ? 'text-purple-400' : 'text-slate-500'}`}>OpenRouter (Free Models)</span>
+                    </div>
+                </div>
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-3 text-slate-500 w-5 h-5" />
