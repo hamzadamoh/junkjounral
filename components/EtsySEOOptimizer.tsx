@@ -519,8 +519,20 @@ ${extractedIdentity ? JSON.stringify(extractedIdentity, null, 2) : "Assume this 
    - "totalScore": Sum of titleScore and tagScore (X/65). Provide a rating string.
 
 3. OPTIMIZATION:
-   - "improvedTitle": Create a new title STRICTLY between 130-140 characters. You MUST count the characters to ensure it is at least 130 characters long before returning. FORMAT REQUIRED: Flowing descriptive phrase utilizing anchor words + comma + secondary anchor phrase. DO NOT USE COLONS. Use natural connectors.
-   - "improvedTags": Generate EXACTLY 13 unique tags. Each tag must be maximum 20 characters long. Focus intensely on BUYER INTENT: include specific WHO (target audience) and WHEN (seasonal/occasions) tags. Avoid broad, generic, or weak terms like "decorative pages" or "unique design". DO NOT return fewer than 13 tags.
+   - "improvedTitle": 
+TITLE RULES (non-negotiable):
+- Must be between 130-140 characters. Count before outputting.
+- Must contain exactly 3-4 keyword strings separated by commas.
+- Each string format: [descriptor] [descriptor] [anchor noun]
+- Example structure: "Spooky dark junk journal kit printable pages, vintage grunge poker ephemera digital, retro playing card scrapbook paper, antique craft journal download"
+- NO "and", NO colons, NO natural sentences.
+
+   - "improvedTags": 
+TAG RULES:
+- Generate EXACTLY 13 unique tags (max 20 chars each). DO NOT return fewer than 13.
+- Focus intensely on BUYER INTENT (WHO and WHEN).
+- MUST include at least one tag explicitly naming the buyer type (e.g., "scrapbooker", "crafter teen", "junk journaler", "paper crafter").
+- Avoid broad, generic terms like "decorative pages" or "unique design".
 
 4. WARNING:
    - "badAdviceWarning": If the original title was under 80 characters, provide a warning. Otherwise, omit.
