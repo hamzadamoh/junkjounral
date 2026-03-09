@@ -32,8 +32,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     const lowerTitle = (title || "").toLowerCase();
     const lowerDesc = (description || "").toLowerCase();
     const safeTags = Array.isArray(tags) ? tags : [];
-    const lowerTags = safeTags.map(t => String(t || "").toLowerCase());
-    const allTagsText = lowerTags.join(' ');
+    const lowerTags = safeTags.map(t => typeof t === 'string' ? t.toLowerCase() : String(t || "").toLowerCase());
+    const allTagsText = (Array.isArray(lowerTags) ? lowerTags : []).join(' ');
 
     // --- PILLAR 1: TITLE ENGINEERING (Max 30) ---
     let titleScore = 0;
@@ -160,7 +160,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     if (redundantPairs.length > 0) {
         const deduction = Math.min(6, redundantPairs.length * 2);
         titleScore -= deduction;
-        weaknesses.push(`Redundancy detected (-${deduction}pts): ${redundantPairs.join(', ')}`);
+        weaknesses.push(`Redundancy detected (-${deduction}pts): ${(Array.isArray(redundantPairs) ? redundantPairs : []).join(', ')}`);
     }
 
     // Title Phrase Match (bonus/penalty based on competitor vocabulary usage)
@@ -223,8 +223,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     // Theme Coverage (10 pts)
     if (identityContract && identityContract.primary_theme !== "unthemed") {
         const stemWord = (w: string) => w.replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
-        const themeWords = identityContract.primary_theme.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-        const stemmedThemeWords = themeWords.map(stemWord);
+        const themeWords = (identityContract.primary_theme || "").toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        const stemmedThemeWords = (Array.isArray(themeWords) ? themeWords : []).map(stemWord);
 
         // Use GPT-extracted theme synonyms instead of hardcoded map
         const expandedThemeWords = new Set<string>(stemmedThemeWords);
@@ -233,7 +233,8 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
         }
 
         const themeTags = lowerTags.filter(t => {
-            const tagWords = t.split(/\s+/).map(stemWord);
+            const splitWords = (t || "").split(/\s+/);
+            const tagWords = (Array.isArray(splitWords) ? splitWords : []).map(stemWord);
             return Array.from(expandedThemeWords).some(sw => tagWords.some(tw => tw.includes(sw) || sw.includes(tw)));
         });
 

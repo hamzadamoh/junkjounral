@@ -531,9 +531,9 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 
             const data = await response.json();
             // --- DEFENSIVE TAGS START ---
-            data.tags = Array.isArray(data.tags) ? data.tags : [];
+            const sanitizedTags = Array.isArray(data.tags) ? data.tags : [];
+            setScrapedData({ ...data, tags: sanitizedTags });
             // --- DEFENSIVE TAGS END ---
-            setScrapedData(data);
 
             // Kick off original listing evaluation
             setIsEvaluatingOriginal(true);
@@ -541,9 +541,9 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                 const score = await evaluateListing({
                     title: data.title,
                     description: data.description,
-                    tags: data.tags
+                    tags: Array.isArray(data.tags) ? data.tags : []
                 });
-                setScrapedData(prev => prev ? { ...prev, score } : null);
+                setScrapedData(prev => prev ? { ...prev, score, tags: Array.isArray(data.tags) ? data.tags : [] } : null);
 
                 // --- IDENTITY GUARD START ---
                 setIsAnalyzingProduct(true);
@@ -1042,9 +1042,9 @@ Analyze this listing and return a strictly formatted JSON object.
                             </section>
 
                             <section>
-                                <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags ({(scrapedData.tags || []).length})</label>
+                                <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Tags ({(Array.isArray(scrapedData.tags) ? scrapedData.tags : []).length})</label>
                                 <div className="flex flex-wrap gap-2">
-                                    {(scrapedData.tags || []).map((tag, i) => (
+                                    {(Array.isArray(scrapedData.tags) ? scrapedData.tags : []).map((tag, i) => (
                                         <span key={i} className="text-xs px-2 py-1 bg-slate-700/50 rounded border border-slate-600/50">{tag}</span>
                                     ))}
                                 </div>

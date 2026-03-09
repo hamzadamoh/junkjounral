@@ -59,14 +59,15 @@ export default async function handler(req, res) {
         // --- TEXT FALLBACK CHAIN ---
         const textChain = [
           'meta-llama/llama-3.3-70b-instruct:free',
-          'qwen/qwen-2.5-72b-instruct:free',
-          'mistralai/mistral-7b-instruct:free'
+          'mistralai/mistral-7b-instruct:free',
+          'openrouter/free'
         ];
 
         // --- VISION FALLBACK CHAIN ---
         const visionChain = [
           'google/gemma-3-27b-it:free',
-          'google/gemma-3-12b-it:free'
+          'google/gemma-3-12b-it:free',
+          'openrouter/free'
         ];
 
         const isVision = currentModel.includes('gemma') || (messages[0]?.content && Array.isArray(messages[0].content) && messages[0].content.some(c => c.type === 'image_url'));
@@ -101,7 +102,13 @@ export default async function handler(req, res) {
             return fetchAI(nextTextModel, attempt + 1);
           } else {
             console.error(`[AI Proxy] All text models failed after ${attempt} attempts.`);
-            return response; // Return the final 429/503
+            return {
+              status: 503,
+              ok: false,
+              json: async () => ({
+                error: "All free models are currently busy. Please wait 60 seconds and try again."
+              })
+            };
           }
         }
       }
