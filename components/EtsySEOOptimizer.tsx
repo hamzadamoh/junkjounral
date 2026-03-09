@@ -637,6 +637,15 @@ TITLE RULES ADDITION:
 - After writing the title, count the exact characters.
 - If the count is below 130, you MUST add descriptive words to the weakest string 
   until you reach 130-140. Do not submit a title under 130 characters.
+- FINAL WORD RULE (non-negotiable):
+  The very last word of the entire title MUST be an anchor noun.
+  Never end the title on a descriptive or vibe word.
+
+  BANNED final words: elegant, artistic, vintage, rustic, bohemian, 
+  charming, nostalgic, evocative, serene, whimsical, decorative, unique
+
+  VALID final words: kit, pages, supplies, collection, ephemera, 
+  journal, pack, bundle, sheets, prints, art, craft, design
    - "improvedTags": 
 TAG RULES:
 - Generate EXACTLY 13 unique tags (max 20 chars each). DO NOT return fewer than 13.
@@ -656,9 +665,22 @@ TAG RULES ADDITION:
     - "scrapbook poker" ← odd pairing, completely valid
 - Before returning the tags array, count the items. 
   There must be exactly 13. Not 12, not 14. Exactly 13.
-- You MUST include at least one WHEN tag representing a season, 
-  occasion, or gifting moment. Examples for this product type:
-  "halloween crafts", "autumn journal", "holiday gifting", "fall crafting"
+- WHEN TAG RULE:
+  Before adding any seasonal tag, check the Visual Identity for 
+  explicit seasonal indicators:
+  - Autumn/Fall: pumpkins, falling leaves, orange tones, harvest themes
+  - Winter/Christmas: snow, holly, red/green palette, ornaments
+  - Summer: tropical, beach, bright sunshine, sea life
+  - Spring: pastel florals, eggs, fresh green growth
+
+  If NO explicit seasonal indicator exists in the Visual Identity,
+  DO NOT use season names (autumn, fall, winter, spring, summer).
+
+  Instead use time-of-mind crafting terms:
+  "weekend crafting", "relaxing art", "evening journaling", 
+  "mindful crafting", "creative escape"
+
+  If explicit seasonal indicators DO exist, seasonal tags are mandatory.
 - Replace any "nostalgic theme" or similar vague atmospheric tags 
   with a concrete WHEN or WHO tag.
 
