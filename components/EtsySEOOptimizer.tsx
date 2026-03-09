@@ -519,8 +519,8 @@ ${extractedIdentity ? JSON.stringify(extractedIdentity, null, 2) : "Assume this 
    - "totalScore": Sum of titleScore and tagScore (X/65). Provide a rating string.
 
 3. OPTIMIZATION:
-   - "improvedTitle": Create a new title strictly between 120-140 characters. FORMAT REQUIRED: Flowing descriptive phrase utilizing anchor words + comma + secondary anchor phrase. DO NOT USE COLONS. Use natural connectors.
-   - "improvedTags": Generate EXACTLY 13 unique tags. Each tag must be maximum 20 characters long. DO NOT return fewer than 13 tags.
+   - "improvedTitle": Create a new title STRICTLY between 130-140 characters. You MUST count the characters to ensure it is at least 130 characters long before returning. FORMAT REQUIRED: Flowing descriptive phrase utilizing anchor words + comma + secondary anchor phrase. DO NOT USE COLONS. Use natural connectors.
+   - "improvedTags": Generate EXACTLY 13 unique tags. Each tag must be maximum 20 characters long. Focus intensely on BUYER INTENT: include specific WHO (target audience) and WHEN (seasonal/occasions) tags. Avoid broad, generic, or weak terms like "decorative pages" or "unique design". DO NOT return fewer than 13 tags.
 
 4. WARNING:
    - "badAdviceWarning": If the original title was under 80 characters, provide a warning. Otherwise, omit.
