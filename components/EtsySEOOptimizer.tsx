@@ -424,7 +424,8 @@ Return ONLY a JSON object:
 
     const data = await response.json();
     if (!response.ok) {
-        throw new Error(data.error?.message || data.error || `Error ${response.status}: Failed to extract visual identity`);
+        const errorMsg = data.error?.message || data.error || "Unknown Error";
+        throw new Error(`[${response.status}] ${errorMsg}`);
     }
     const raw = data.choices[0].message.content;
     const clean = raw.replace(/```json|```/g, "").trim();
@@ -739,7 +740,8 @@ Analyze this listing and return a strictly formatted JSON object.
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error?.message || errorData.error || `Error ${response.status}: Failed to optimize with AI`);
+                const errorMsg = errorData.error?.message || errorData.error || "Unknown error";
+                throw new Error(`[${response.status}] ${errorMsg}`);
             }
             const result = await response.json();
             let content = result.choices[0].message.content;
