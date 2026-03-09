@@ -59,15 +59,15 @@ export default async function handler(req, res) {
         // --- TEXT FALLBACK CHAIN ---
         const textChain = [
           'meta-llama/llama-3.3-70b-instruct:free',
-          'mistralai/mistral-7b-instruct:free',
-          'openrouter/free'
+          'mistralai/mistral-small-3.1-24b-instruct:free',
+          'openrouter/auto'
         ];
 
         // --- VISION FALLBACK CHAIN ---
         const visionChain = [
           'google/gemma-3-27b-it:free',
           'google/gemma-3-12b-it:free',
-          'openrouter/free'
+          'openrouter/auto'
         ];
 
         const isVision = currentModel.includes('gemma') || (messages[0]?.content && Array.isArray(messages[0].content) && messages[0].content.some(c => c.type === 'image_url'));

@@ -13,11 +13,11 @@ FROZEN PRODUCT FACTS (do not alter these under any circumstance):
 - Print size: 8.5 x 11 inches
 - Delivery: PDF file containing a Google Drive download link
 - License: Commercial use included
-- Primary theme: ${identity.primary_theme}
-- Secondary themes: ${identity.secondary_themes.join(", ") || "none"}
-- Color palette: ${identity.color_palette.join(", ") || "not specified"}
-- Mood: ${identity.mood}
-- Non-negotiable identity terms: ${identity.locked_identity_terms.join(", ")}
+- Primary theme: ${identity.primary_theme || "not specified"}
+- Secondary themes: ${(Array.isArray(identity.secondary_themes) ? identity.secondary_themes : []).join(", ") || "none"}
+- Color palette: ${(Array.isArray(identity.color_palette) ? identity.color_palette : []).join(", ") || "not specified"}
+- Mood: ${identity.mood || "not specified"}
+- Non-negotiable identity terms: ${(Array.isArray(identity.locked_identity_terms) ? identity.locked_identity_terms : []).join(", ")}
 
 SEO OPTIMIZATION RULES FOR THIS NICHE:
 1. The title MUST contain "junk journal pages" or "journal pages printable"

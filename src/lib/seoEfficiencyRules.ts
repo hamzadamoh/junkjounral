@@ -35,7 +35,7 @@ export function checkTailEfficiency(title: string): boolean {
     const words = title.split(" ").filter(Boolean);
     if (words.length === 0) return false;
 
-    const tailWords = words.slice(Math.floor(words.length * 0.6)).join(" ").toLowerCase();
+    const tailWords = (Array.isArray(words) ? words.slice(Math.floor(words.length * 0.6)) : []).join(" ").toLowerCase();
 
     return LOW_EFFICIENCY_TITLE_WORDS.some(word =>
         tailWords.includes(word)

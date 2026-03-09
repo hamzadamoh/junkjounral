@@ -24,7 +24,7 @@ export interface SEOScore {
     ctrRiskReasons: string[];
 }
 
-export function evaluateListingSEO(title: string, tags: string[], description: string, identityContract?: JunkJournalPagesIdentity, competitorPhrases?: string[]): SEOScore {
+export function evaluateListingSEO(title: string = "", tags: string[] = [], description: string = "", identityContract?: JunkJournalPagesIdentity, competitorPhrases: string[] = []): SEOScore {
     let strengths: string[] = [];
     let weaknesses: string[] = [];
     let ctrRiskReasons: string[] = [];
@@ -32,7 +32,7 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     const lowerTitle = (title || "").toLowerCase();
     const lowerDesc = (description || "").toLowerCase();
     const safeTags = Array.isArray(tags) ? tags : [];
-    const lowerTags = safeTags.map(t => typeof t === 'string' ? t.toLowerCase() : String(t || "").toLowerCase());
+    const lowerTags = (Array.isArray(safeTags) ? safeTags : []).map(t => typeof t === 'string' ? t.toLowerCase() : String(t || "").toLowerCase());
     const allTagsText = (Array.isArray(lowerTags) ? lowerTags : []).join(' ');
 
     // --- PILLAR 1: TITLE ENGINEERING (Max 30) ---
@@ -164,8 +164,9 @@ export function evaluateListingSEO(title: string, tags: string[], description: s
     }
 
     // Title Phrase Match (bonus/penalty based on competitor vocabulary usage)
-    if (competitorPhrases && competitorPhrases.length > 0) {
-        const matchedPhrases = competitorPhrases.filter(phrase => lowerTitle.includes(phrase.toLowerCase()));
+    const safeCompetitorPhrases = Array.isArray(competitorPhrases) ? competitorPhrases : [];
+    if (safeCompetitorPhrases.length > 0) {
+        const matchedPhrases = (Array.isArray(safeCompetitorPhrases) ? safeCompetitorPhrases : []).filter(phrase => lowerTitle.includes((phrase || "").toLowerCase()));
         if (matchedPhrases.length >= 3) {
             titleScore += 5;
             strengths.push(`Strong competitor vocabulary: ${matchedPhrases.length} proven phrases found in title (+5pts).`);

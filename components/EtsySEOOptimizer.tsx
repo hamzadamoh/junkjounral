@@ -107,7 +107,7 @@ const removeTitleDuplicates = (title: string): string => {
         if (!shouldDrop) kept.push(phrase);
     }
 
-    return kept.join(', ');
+    return (Array.isArray(kept) ? kept : []).join(', ');
 };
 
 const truncateTo140 = (title: string): string => {
@@ -547,7 +547,16 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
 
                 // --- IDENTITY GUARD START ---
                 setIsAnalyzingProduct(true);
-                const identityPrompt = buildIdentityLockPrompt(data.description);
+                // Pass a partial object to avoid .join() errors on string input
+                const identityPrompt = buildIdentityLockPrompt({
+                    primary_theme: "EXTRACT FROM DESCRIPTION BELOW",
+                    secondary_themes: [],
+                    color_palette: [],
+                    locked_identity_terms: [],
+                    mood: "unknown",
+                    page_count: "unknown",
+                    theme_cluster: "unthemed"
+                } as any) + `\n\nListing Description for Extraction:\n${data.description}`;
                 const identityResponse = await fetch('/api/openai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -574,7 +583,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     identity.theme_synonyms = valid;
 
                     setExtractedIdentity(identity);
-                    setSynonymInput(valid.join(', '));
+                    setSynonymInput((Array.isArray(valid) ? valid : []).join(', '));
                     setShowIdentityConfirmation(true);
                 }
             } catch (evalErr) {
@@ -1263,7 +1272,7 @@ Analyze this listing and return a strictly formatted JSON object.
                                             <label className="text-xs font-bold uppercase text-slate-500 flex items-center gap-1">
                                                 <Tag className="w-3 h-3" /> Improved Tags ({optimizedData.improvedTags?.length || 0}/13)
                                             </label>
-                                            <button onClick={() => copyToClipboard(optimizedData.improvedTags?.join(', '), 'all-tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                            <button onClick={() => copyToClipboard((Array.isArray(optimizedData.improvedTags) ? optimizedData.improvedTags : []).join(', '), 'all-tags')} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
                                                 {copiedField === 'all-tags' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                                                 {copiedField === 'all-tags' ? 'Copied' : 'Copy All'}
                                             </button>
