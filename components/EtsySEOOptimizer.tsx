@@ -604,6 +604,18 @@ Analyze this listing and return a strictly formatted JSON object.
             }
 
             const aiResponse = JSON.parse(content) as NickMethodReport;
+
+            // Enforce title character limit in code, not in the prompt
+            if (aiResponse.improvedTitle.length > 140) {
+                // Trim the last keyword string until under 140
+                const strings = aiResponse.improvedTitle.split(",");
+                while (strings.join(",").length > 140 && strings.length > 1) {
+                    strings[strings.length - 1] = strings[strings.length - 1]
+                        .split(" ").slice(0, -1).join(" ");
+                }
+                aiResponse.improvedTitle = strings.join(",").trim();
+            }
+
             setOptimizedData(aiResponse);
 
         } catch (err: any) {
