@@ -394,6 +394,10 @@ async function extractVisualIdentity(imageUrl: string): Promise<string> {
 Describe exactly what you see. Be specific and literal — no guessing.
 Focus on:
 1. VISUAL MOTIFS: What objects, symbols, patterns are visible?
+   CRITICAL: Identify the PRIMARY SUBJECT of the product.
+   The primary subject is the most dominant visual element that defines 
+   what this product IS (e.g., doors, cats, roses, playing cards).
+   List it first in the motifs array.
 2. COLOR PALETTE: What are the dominant colors and tones?
 3. STYLE/AESTHETIC: What artistic style is this? (e.g. Victorian, watercolor, grunge)
 4. MOOD/ATMOSPHERE: What feeling does this evoke? (e.g. spooky, elegant, rustic)
@@ -608,6 +612,10 @@ TITLE RULES (non-negotiable):
 - Example structure: "Spooky dark junk journal kit printable pages, vintage grunge poker ephemera digital, retro playing card scrapbook paper, antique craft journal download"
 - NO "and", NO colons, NO natural sentences.
 TITLE RULES ADDITION:
+- IDENTITY LOCK: The primary subject identified in the Visual Identity 
+  (e.g., "rustic doors") MUST appear as a keyword in the improved title.
+  If it does not appear, the title fails the accuracy test regardless 
+  of character count or structure.
 - BANNED ANCHOR PHRASES:
   - "digital download" — this is a fulfillment method, not a product anchor
   - "instant download" — same reason  
