@@ -636,6 +636,16 @@ TAG RULES:
 - MUST include at least one tag explicitly naming the buyer type (e.g., "scrapbooker", "crafter teen", "junk journaler", "paper crafter").
 - Avoid broad, generic terms like "decorative pages" or "unique design".
 TAG RULES ADDITION:
+- CRITICAL TAG RULE: Tags do NOT need to make grammatical sense.
+  - Two completely unrelated keywords in one tag box is valid and encouraged.
+  - Your goal is maximum word diversity across 13 tags.
+  - Prioritize unique words over logical phrases.
+  - Never sacrifice a new keyword just to make a tag sound natural.
+  - EXAMPLES (from Nick's method):
+    - "napping styling" ← nonsensical but feeds two unrelated keywords
+    - "refresh revamp" ← no logical connection, both valid search words
+    - "autumn journal" ← logical, also fine
+    - "scrapbook poker" ← odd pairing, completely valid
 - Before returning the tags array, count the items. 
   There must be exactly 13. Not 12, not 14. Exactly 13.
 - You MUST include at least one WHEN tag representing a season, 
