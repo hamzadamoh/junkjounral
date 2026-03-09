@@ -549,14 +549,14 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                 setIsAnalyzingProduct(true);
                 // Pass a partial object to avoid .join() errors on string input
                 const identityPrompt = buildIdentityLockPrompt({
-                    primary_theme: "EXTRACT FROM DESCRIPTION BELOW",
+                    primary_theme: "EXTRACT FROM TITLE/DESCRIPTION",
                     secondary_themes: [],
                     color_palette: [],
                     locked_identity_terms: [],
                     mood: "unknown",
                     page_count: "unknown",
                     theme_cluster: "unthemed"
-                } as any) + `\n\nListing Description for Extraction:\n${data.description}`;
+                } as any) + `\n\nListing Title: ${data.title}\n\nListing Description for Extraction:\n${data.description}\n\nCRITICAL EXTRACTION RULE: Extract the product identity into the required JSON format. If the primary theme is uncertain, extract it directly from the listing TITLE provided above, as it is the most reliable signal.`;
                 const identityResponse = await fetch('/api/openai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
