@@ -526,6 +526,14 @@ TITLE RULES (non-negotiable):
 - Each string format: [descriptor] [descriptor] [anchor noun]
 - Example structure: "Spooky dark junk journal kit printable pages, vintage grunge poker ephemera digital, retro playing card scrapbook paper, antique craft journal download"
 - NO "and", NO colons, NO natural sentences.
+TITLE RULES ADDITION:
+- The final keyword string must follow the same [descriptor] [descriptor] [anchor noun] 
+  pattern as all other strings. Never end with a weak 1-2 word fragment.
+- After writing the title, count the exact characters.
+- If the count is below 130, you MUST add descriptive words to the weakest string 
+  until you reach 130-140. Do not submit a title under 130 characters.
+- Example of a weak final string (BANNED): "antique poker pages"
+- Example of a strong final string: "antique distressed poker ephemera kit"
 
    - "improvedTags": 
 TAG RULES:
@@ -533,6 +541,14 @@ TAG RULES:
 - Focus intensely on BUYER INTENT (WHO and WHEN).
 - MUST include at least one tag explicitly naming the buyer type (e.g., "scrapbooker", "crafter teen", "junk journaler", "paper crafter").
 - Avoid broad, generic terms like "decorative pages" or "unique design".
+TAG RULES ADDITION:
+- Before returning the tags array, count the items. 
+  There must be exactly 13. Not 12, not 14. Exactly 13.
+- You MUST include at least one WHEN tag representing a season, 
+  occasion, or gifting moment. Examples for this product type:
+  "halloween crafts", "autumn journal", "holiday gifting", "fall crafting"
+- Replace any "nostalgic theme" or similar vague atmospheric tags 
+  with a concrete WHEN or WHO tag.
 
 4. WARNING:
    - "badAdviceWarning": If the original title was under 80 characters, provide a warning. Otherwise, omit.
