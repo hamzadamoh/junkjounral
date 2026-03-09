@@ -44,6 +44,7 @@ import { getGoogleDriveConfig } from './services/env';
 import ArcaneSplitter from './components/ArcaneSplitter';
 import EtsyShopAnalyzer from './components/EtsyShopAnalyzer';
 import EtsySEOOptimizer from './components/EtsySEOOptimizer';
+import EtsyKeywordAnalyzer from './components/EtsyKeywordAnalyzer';
 import EtsyClusterAnalyzer from './components/EtsyClusterAnalyzer';
 import EtsySalesTracker from './components/EtsySalesTracker';
 
@@ -84,6 +85,7 @@ const App: React.FC = () => {
   const [showEtsySEOOptimizer, setShowEtsySEOOptimizer] = useState<boolean>(false); // Show Etsy SEO Optimizer
   const [showClusterAnalyzer, setShowClusterAnalyzer] = useState<boolean>(false); // Show Cluster Intelligence Engine
   const [showEtsySalesTracker, setShowEtsySalesTracker] = useState<boolean>(false); // Show Etsy Sales Tracker
+  const [showEtsyKeywordAnalyzer, setShowEtsyKeywordAnalyzer] = useState<boolean>(false); // Show Keyword Research
   const [showGoogleDriveGridGenerator, setShowGoogleDriveGridGenerator] = useState<boolean>(false); // Show Google Drive Grid Generator
   const [customThemePrompt, setCustomThemePrompt] = useState<string>('');
   const [singleImageForTheme, setSingleImageForTheme] = useState<{ id: string; base64: string; theme?: string; style?: string; colors?: string; vibe?: string; styleRefUrl?: string; fullAnalysis?: any } | null>(null);
@@ -3364,6 +3366,17 @@ const App: React.FC = () => {
       );
     }
 
+    // If Keyword Research is open, show it
+    if (showEtsyKeywordAnalyzer) {
+      return (
+        <div className="animate-fade-in max-w-7xl mx-auto px-4">
+          <EtsyKeywordAnalyzer
+            onClose={() => setShowEtsyKeywordAnalyzer(false)}
+          />
+        </div>
+      );
+    }
+
     // If Arcane Splitter is open, show it
     if (showArcaneSplitter) {
       return (
@@ -4525,6 +4538,22 @@ A silver-furred fox with luminous eyes, playfully chasing fireflies under the mo
               <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">Sales Tracker</h3>
               <p className="text-sm text-slate-400">
                 Track per-listing sales from stock counts, compare snapshots, and export data
+              </p>
+            </div>
+          </button>
+
+          {/* Keyword Research Option */}
+          <button
+            onClick={() => setShowEtsyKeywordAnalyzer(true)}
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-gothic-800 to-slate-900 border-2 border-dashed border-slate-600 hover:border-gothic-gold transition-all duration-300 text-left h-80 flex flex-col items-center justify-center p-6"
+          >
+            <div className="text-center space-y-4 z-10">
+              <div className="w-16 h-16 mx-auto bg-gothic-gold/20 rounded-full flex items-center justify-center group-hover:bg-gothic-gold/30 transition-colors">
+                <BarChart3 className="text-gothic-gold" size={32} />
+              </div>
+              <h3 className="text-xl font-serif text-slate-100 group-hover:text-gothic-gold transition-colors">📊 Keyword Research</h3>
+              <p className="text-sm text-slate-400">
+                Analyze high-volume Etsy keywords and build Nick Method titles
               </p>
             </div>
           </button>

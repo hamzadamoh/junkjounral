@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft } from 'lucide-react';
+import { Search, Loader2, Sparkles, Copy, Check, ExternalLink, Wand2, Tag, FileText, Type, ChevronLeft, X, Plus, Trash2, Sprout } from 'lucide-react';
 import { evaluateListingSEO } from '../src/lib/seoScoringEngine';
 import { JunkJournalPagesIdentity } from '../src/types/productIdentity';
 import { buildIdentityLockPrompt } from '../src/lib/buildIdentityLockPrompt';
@@ -459,6 +459,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
     const [rejectedSynonyms, setRejectedSynonyms] = useState<string[]>([]);
     const [synonymInput, setSynonymInput] = useState('');
 
+    // --- SEED KEYWORDS STATE ---
+    const [seedKeywords, setSeedKeywords] = useState<string[]>([]);
+    const [isGeneratingSeeds, setIsGeneratingSeeds] = useState(false);
+    const [seedInput, setSeedInput] = useState("");
+
     // Competitor Insights State
     const [referenceShops, setReferenceShops] = useState<ReferenceShop[]>(DEFAULT_REFERENCE_SHOPS);
     const [competitorInsights, setCompetitorInsights] = useState<CompetitorInsights | null>(null);
@@ -508,6 +513,73 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         return Promise.resolve(evaluateListingSEO(listing.title, listing.tags || [], listing.description, identityContract, competitorPhrases));
     };
 
+    const generateSeedKeywords = async (data: any, identity: JunkJournalPagesIdentity) => {
+        setIsGeneratingSeeds(true);
+        const seedPrompt = `
+You are an Etsy keyword research assistant.
+
+Based on this product identity:
+TITLE: ${data.title}
+TAGS: ${Array.isArray(data.tags) ? data.tags.join(', ') : ''}
+PRIMARY THEME: ${identity.primary_theme}
+VISUAL MOTIFS: ${Array.isArray(identity.motifs) ? identity.motifs.join(', ') : identity.motifs}
+STYLE: ${identity.style}
+TARGET BUYER: ${identity.targetBuyer}
+
+Generate seed keywords for Etsy autocomplete research.
+
+Return ONLY a JSON object:
+{
+  "seeds": [
+    "seed keyword 1",
+    "seed keyword 2",
+    ...
+  ]
+}
+
+Rules:
+- Generate exactly 15 seed keywords
+- Mix broad and specific phrases
+- Include: product type, aesthetic/style, buyer intent, 
+  format (printable/digital), seasonal variants
+- Each seed should be 2-4 words maximum
+- These will be fed into Etsy autocomplete to expand 
+  into hundreds of long-tail keywords
+- Base seeds ONLY on the actual product identity
+- Do not invent themes not present in the product
+`;
+
+        try {
+            const response = await fetch('/api/openai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: useOpenRouter ? 'meta-llama/llama-3.3-70b-instruct:free' : 'gpt-4o',
+                    isOpenRouter: useOpenRouter,
+                    messages: [
+                        { role: 'system', content: 'You are an Etsy keyword research assistant. Respond ONLY with valid JSON.' },
+                        { role: 'user', content: seedPrompt }
+                    ],
+                    response_format: { type: 'json_object' }
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                let content = result.choices[0].message.content;
+                if (content.includes('```')) content = content.replace(/```json|```/g, '').trim();
+                const json = JSON.parse(content);
+                if (Array.isArray(json.seeds)) {
+                    setSeedKeywords(json.seeds);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to generate seeds:", err);
+        } finally {
+            setIsGeneratingSeeds(false);
+        }
+    };
+
     const handleScrape = async () => {
         if (!url.trim()) return;
 
@@ -516,6 +588,7 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
         setScrapedData(null);
         setOptimizedData(null);
         setExtractedIdentity(null);
+        setSeedKeywords([]);
 
         try {
             const response = await fetch('/api/etsy', {
@@ -555,8 +628,11 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                     locked_identity_terms: [],
                     mood: "unknown",
                     page_count: "unknown",
-                    theme_cluster: "unthemed"
-                } as any) + `\n\nListing Title: ${data.title}\n\nListing Description for Extraction:\n${data.description}\n\nCRITICAL EXTRACTION RULE: Extract the product identity into the required JSON format. If the primary theme is uncertain, extract it directly from the listing TITLE provided above, as it is the most reliable signal.`;
+                    theme_cluster: "unthemed",
+                    motifs: [],
+                    style: "unknown",
+                    targetBuyer: "unknown"
+                } as any) + `\n\nListing Title: ${data.title}\n\nListing Description for Extraction:\n${data.description}\n\nCRITICAL EXTRACTION RULE: Extract the product identity into the required JSON format. If the primary theme is uncertain, extract it directly from the listing TITLE provided above, as it is the most reliable signal. Include "motifs" (array of strings), "style" (string), and "targetBuyer" (string) in your extraction based on visual and textual context.`;
                 const identityResponse = await fetch('/api/openai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -590,11 +666,17 @@ const EtsySEOOptimizer: React.FC<EtsySEOOptimizerProps> = ({ onClose }) => {
                         file_types: Array.isArray(identity.file_types) ? identity.file_types : [],
                         color_palette: Array.isArray(identity.color_palette) ? identity.color_palette : [],
                         locked_identity_terms: Array.isArray(identity.locked_identity_terms) ? identity.locked_identity_terms : [],
+                        motifs: Array.isArray(identity.motifs) ? identity.motifs : [],
+                        style: identity.style || "unknown",
+                        targetBuyer: identity.targetBuyer || "unknown"
                     };
 
                     setExtractedIdentity(normalizedIdentity);
                     setSynonymInput((Array.isArray(valid) ? valid : []).join(', '));
                     setShowIdentityConfirmation(true);
+
+                    // Trigger seed keywords generation automatically
+                    generateSeedKeywords(data, normalizedIdentity);
                 }
             } catch (evalErr) {
                 console.error("Failed to evaluate/analyze listing:", evalErr);
@@ -1074,6 +1156,87 @@ Analyze this listing and return a strictly formatted JSON object.
                                 <p className="text-xs p-3 bg-slate-900/50 rounded-lg border border-slate-700/50 line-clamp-4">{scrapedData.description}</p>
                             </section>
                         </div>
+
+                        {/* Seed Keywords Panel */}
+                        {(seedKeywords.length > 0 || isGeneratingSeeds) && (
+                            <div className="mt-8 p-6 bg-slate-900/80 border border-slate-700 rounded-xl shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50"></div>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-lg font-serif text-emerald-400 flex items-center gap-2">
+                                        <Sprout size={20} /> 🌱 Seed Keywords for Research
+                                    </h3>
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(seedKeywords.join('\n'));
+                                            setCopiedField('seeds');
+                                            setTimeout(() => setCopiedField(null), 2000);
+                                        }}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold transition-all"
+                                    >
+                                        {copiedField === 'seeds' ? <Check size={14} /> : <Copy size={14} />}
+                                        {copiedField === 'seeds' ? 'Copied!' : 'Copy All Seeds'}
+                                    </button>
+                                </div>
+
+                                {isGeneratingSeeds && seedKeywords.length === 0 ? (
+                                    <div className="flex items-center gap-3 text-slate-400 text-sm py-8 justify-center">
+                                        <Loader2 className="animate-spin text-emerald-500" size={20} />
+                                        <span>Cultivating high-value seeds...</span>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div className="flex flex-wrap gap-2">
+                                            {seedKeywords.map((seed, idx) => (
+                                                <div key={idx} className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-xs text-emerald-300 group hover:border-emerald-500/50 transition-all">
+                                                    <span>{seed}</span>
+                                                    <button
+                                                        onClick={() => setSeedKeywords(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="text-emerald-500/50 hover:text-red-400 transition-colors"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Add custom seed..."
+                                                value={seedInput}
+                                                onChange={(e) => setSeedInput(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && seedInput.trim()) {
+                                                        const newSeeds = seedInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                                                        setSeedKeywords(prev => [...prev, ...newSeeds]);
+                                                        setSeedInput("");
+                                                    }
+                                                }}
+                                                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    if (seedInput.trim()) {
+                                                        const newSeeds = seedInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                                                        setSeedKeywords(prev => [...prev, ...newSeeds]);
+                                                        setSeedInput("");
+                                                    }
+                                                }}
+                                                className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-emerald-500 hover:bg-emerald-500/10 transition-all"
+                                            >
+                                                <Plus size={20} />
+                                            </button>
+                                        </div>
+
+                                        <p className="text-[10px] text-slate-500 italic">
+                                            Paste these into your keyword research tool to find high-volume, low-competition phrases for your listing.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+
 
                         {showIdentityConfirmation && extractedIdentity ? (
                             <div className="p-4 bg-amber-900/30 border border-amber-500/50 rounded-lg space-y-4 shadow-lg shadow-amber-900/20">

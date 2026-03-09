@@ -12,6 +12,9 @@ export interface JunkJournalPagesIdentity {
     secondary_themes: string[];       // Complementary themes only
     color_palette: string[];          // e.g. ["muted", "earthy", "sepia"]
     mood: string;                     // e.g. "romantic", "dark", "whimsical"
+    motifs: string[];                 // e.g. ["playing cards", "roses"]
+    style: string;                    // e.g. "vintage grunge watercolor"
+    targetBuyer: string;              // e.g. "scrapbookers"
     locked_identity_terms: string[];  // Non-negotiable terms for validation
     theme_cluster: ThemeCluster;      // See clusters below
     confidence: number;               // 0–1, pause generation if below 0.7
