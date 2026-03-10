@@ -537,16 +537,30 @@ Return ONLY a JSON object:
   ]
 }
 
-Rules:
-- Generate exactly 15 seed keywords
-- Mix broad and specific phrases
-- Include: product type, aesthetic/style, buyer intent, 
-  format (printable/digital), seasonal variants
-- Each seed should be 2-4 words maximum
-- These will be fed into Etsy autocomplete to expand 
-  into hundreds of long-tail keywords
-- Base seeds ONLY on the actual product identity
-- Do not invent themes not present in the product
+CRITICAL SEED KEYWORD RULES:
+- Every seed must be MAXIMUM 2 words. No exceptions.
+- Seeds are ROOT phrases that Etsy autocomplete will expand
+- Think of the shortest version of a search phrase
+
+GOOD examples (1-2 words):
+"gothic journal"
+"junk journal"  
+"skull ephemera"
+"gothic printable"
+"dark journal"
+"spooky journal"
+"gothic paper"
+"journal kit"
+"gothic stickers"
+"ephemera kit"
+
+BAD examples (too long, do not use):
+"gothic journal kit" ← 3 words, too specific
+"skull journal pages" ← 3 words, too specific
+"gothic ephemera printable" ← 3 words, too specific
+
+Generate exactly 15 seeds of maximum 2 words each.
+Mix: product type + aesthetic + format + buyer intent roots
 `;
 
         try {
